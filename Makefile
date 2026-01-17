@@ -1,0 +1,52 @@
+.PHONY: run build test migrate-up migrate-down generate-models lint clean
+
+# Development
+init:
+	go mod tidy
+
+run:
+	go run cmd/server/main.go
+
+build:
+	go build -o bin/server cmd/server/main.go
+
+# Testing
+test:
+	go test -v ./...
+
+test-coverage:
+	go test -v -coverprofile=coverage.out ./...
+	go tool cover -html=coverage.out -o coverage.html
+
+# Database
+migrate-up:
+	migrate -path migrations -database "$(DATABASE_URL)" up
+
+migrate-down:
+	migrate -path migrations -database "$(DATABASE_URL)" down 1
+
+migrate-create:
+	migrate create -ext sql -dir migrations -seq $(name)
+
+# SQLBoiler
+generate-models:
+	sqlboiler psql --wipe --no-tests
+
+# Linting
+lint:
+	golangci-lint run ./...
+
+# Docker
+docker-build:
+	docker build -t pay-chain-backend:latest -f docker/Dockerfile .
+
+docker-run:
+	docker-compose -f docker/docker-compose.yml up -d
+
+docker-stop:
+	docker-compose -f docker/docker-compose.yml down
+
+# Clean
+clean:
+	rm -rf bin/
+	rm -rf coverage.out coverage.html
