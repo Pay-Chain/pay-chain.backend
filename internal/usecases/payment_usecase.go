@@ -35,9 +35,9 @@ func NewPaymentUsecase(
 
 // FeeConfig holds fee configuration
 type FeeConfig struct {
-	BaseFeeCents    int64   // Base fee in cents (e.g., 50 = $0.50)
-	PercentageFee   float64 // Percentage fee (e.g., 0.003 = 0.3%)
-	BridgeFeeFlat   int64   // Flat bridge fee in cents
+	BaseFeeCents     int64   // Base fee in cents (e.g., 50 = $0.50)
+	PercentageFee    float64 // Percentage fee (e.g., 0.003 = 0.3%)
+	BridgeFeeFlat    int64   // Flat bridge fee in cents
 	MerchantDiscount float64 // Merchant discount percentage
 }
 
@@ -58,10 +58,10 @@ func (u *PaymentUsecase) CalculateFees(amount *big.Int, decimals int, isCrossCha
 	amountFloat = amountFloat / float64(divisor.Acc())
 
 	config := DefaultFeeConfig()
-	
+
 	// Platform fee: base + percentage
 	platformFee := float64(config.BaseFeeCents)/100 + amountFloat*config.PercentageFee
-	
+
 	// Apply merchant discount
 	if merchantDiscount > 0 {
 		platformFee = platformFee * (1 - merchantDiscount)
@@ -77,10 +77,11 @@ func (u *PaymentUsecase) CalculateFees(amount *big.Int, decimals int, isCrossCha
 	netAmount := amountFloat - totalFee
 
 	return &entities.FeeBreakdown{
-		PlatformFee: platformFee,
-		BridgeFee:   bridgeFee,
-		TotalFee:    totalFee,
-		NetAmount:   netAmount,
+		PlatformFee: formatAmount(platformFee, decimals),
+		BridgeFee:   formatAmount(bridgeFee, decimals),
+		GasFee:      "0", // Gas is handled separately
+		TotalFee:    formatAmount(totalFee, decimals),
+		NetAmount:   formatAmount(netAmount, decimals),
 	}
 }
 
@@ -88,18 +89,18 @@ func (u *PaymentUsecase) CalculateFees(amount *big.Int, decimals int, isCrossCha
 func (u *PaymentUsecase) SelectBridge(sourceChainID, destChainID string) string {
 	// Bridge selection logic based on chain types
 	// Priority: CCIP > Hyperlane > Hyperbridge
-	
+
 	// For EVM chains, prefer CCIP
 	if isEVMChain(sourceChainID) && isEVMChain(destChainID) {
 		return "CCIP"
 	}
-	
+
 	// For Solana <-> EVM, use Hyperlane
 	if (isSolanaChain(sourceChainID) && isEVMChain(destChainID)) ||
 		(isEVMChain(sourceChainID) && isSolanaChain(destChainID)) {
 		return "Hyperlane"
 	}
-	
+
 	// Default to Hyperbridge
 	return "Hyperbridge"
 }
@@ -138,13 +139,14 @@ func (u *PaymentUsecase) CreatePayment(ctx context.Context, userID uuid.UUID, in
 		SourceTokenAddress: input.SourceTokenAddress,
 		DestTokenAddress:   input.DestTokenAddress,
 		SourceAmount:       input.Amount,
-		DestAmount:         formatAmount(feeBreakdown.NetAmount, input.Decimals),
-		FeeAmount:          formatAmount(feeBreakdown.TotalFee, input.Decimals),
+		FeeAmount:          feeBreakdown.TotalFee,
 		BridgeType:         bridgeType,
 		ReceiverAddress:    input.ReceiverAddress,
 		Decimals:           input.Decimals,
 		Status:             entities.PaymentStatusPending,
 	}
+	// Set nullable DestAmount
+	payment.DestAmount.SetValid(feeBreakdown.NetAmount)
 
 	// Save payment
 	if err := u.paymentRepo.Create(ctx, payment); err != nil {
@@ -160,13 +162,13 @@ func (u *PaymentUsecase) CreatePayment(ctx context.Context, userID uuid.UUID, in
 	_ = u.paymentEventRepo.Create(ctx, event)
 
 	return &entities.CreatePaymentResponse{
-		PaymentID:    payment.ID.String(),
-		Status:       string(payment.Status),
+		PaymentID:    payment.ID,
+		Status:       payment.Status,
 		SourceAmount: payment.SourceAmount,
-		DestAmount:   payment.DestAmount,
+		DestAmount:   payment.DestAmount.String,
 		FeeAmount:    payment.FeeAmount,
 		BridgeType:   payment.BridgeType,
-		FeeBreakdown: feeBreakdown,
+		FeeBreakdown: *feeBreakdown,
 	}, nil
 }
 

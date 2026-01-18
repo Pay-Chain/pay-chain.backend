@@ -32,7 +32,11 @@ func (h *PaymentHandler) CreatePayment(c *gin.Context) {
 		return
 	}
 
-	userID := middleware.GetUserID(c)
+	userID, ok := middleware.GetUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
 
 	response, err := h.paymentUsecase.CreatePayment(c.Request.Context(), userID, &input)
 	if err != nil {
@@ -73,7 +77,11 @@ func (h *PaymentHandler) GetPayment(c *gin.Context) {
 // ListPayments lists payments for the current user
 // GET /api/v1/payments
 func (h *PaymentHandler) ListPayments(c *gin.Context) {
-	userID := middleware.GetUserID(c)
+	userID, ok := middleware.GetUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
 
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))

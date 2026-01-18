@@ -31,7 +31,11 @@ func (h *WalletHandler) ConnectWallet(c *gin.Context) {
 		return
 	}
 
-	userID := middleware.GetUserID(c)
+	userID, ok := middleware.GetUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
 
 	wallet, err := h.walletUsecase.ConnectWallet(c.Request.Context(), userID, &input)
 	if err != nil {
@@ -56,7 +60,11 @@ func (h *WalletHandler) ConnectWallet(c *gin.Context) {
 // ListWallets lists wallets for the current user
 // GET /api/v1/wallets
 func (h *WalletHandler) ListWallets(c *gin.Context) {
-	userID := middleware.GetUserID(c)
+	userID, ok := middleware.GetUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
 
 	wallets, err := h.walletUsecase.GetWallets(c.Request.Context(), userID)
 	if err != nil {
@@ -81,7 +89,11 @@ func (h *WalletHandler) SetPrimaryWallet(c *gin.Context) {
 		return
 	}
 
-	userID := middleware.GetUserID(c)
+	userID, ok := middleware.GetUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
 
 	if err := h.walletUsecase.SetPrimaryWallet(c.Request.Context(), userID, walletID); err != nil {
 		if err == domainerrors.ErrNotFound {
@@ -105,7 +117,11 @@ func (h *WalletHandler) DisconnectWallet(c *gin.Context) {
 		return
 	}
 
-	userID := middleware.GetUserID(c)
+	userID, ok := middleware.GetUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
 
 	if err := h.walletUsecase.DisconnectWallet(c.Request.Context(), userID, walletID); err != nil {
 		if err == domainerrors.ErrNotFound {

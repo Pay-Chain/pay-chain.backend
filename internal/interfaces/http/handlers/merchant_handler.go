@@ -30,7 +30,11 @@ func (h *MerchantHandler) ApplyMerchant(c *gin.Context) {
 		return
 	}
 
-	userID := middleware.GetUserID(c)
+	userID, ok := middleware.GetUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
 
 	response, err := h.merchantUsecase.ApplyMerchant(c.Request.Context(), userID, &input)
 	if err != nil {
@@ -48,7 +52,11 @@ func (h *MerchantHandler) ApplyMerchant(c *gin.Context) {
 // GetMerchantStatus gets merchant status for the current user
 // GET /api/v1/merchants/status
 func (h *MerchantHandler) GetMerchantStatus(c *gin.Context) {
-	userID := middleware.GetUserID(c)
+	userID, ok := middleware.GetUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
 
 	response, err := h.merchantUsecase.GetMerchantStatus(c.Request.Context(), userID)
 	if err != nil {

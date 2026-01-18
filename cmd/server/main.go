@@ -1,14 +1,19 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"log"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 
 	"pay-chain.backend/internal/config"
+	"pay-chain.backend/internal/infrastructure/jobs"
 	"pay-chain.backend/internal/infrastructure/repositories"
 	"pay-chain.backend/internal/interfaces/http/handlers"
 	"pay-chain.backend/internal/interfaces/http/middleware"
@@ -60,12 +65,14 @@ func main() {
 	chainRepo := repositories.NewChainRepository(db)
 	tokenRepo := repositories.NewTokenRepository(db)
 	smartContractRepo := repositories.NewSmartContractRepository(db)
+	paymentRequestRepo := repositories.NewPaymentRequestRepository(db)
 
 	// Initialize usecases
-	authUsecase := usecases.NewAuthUsecase(userRepo, emailVerifRepo, jwtService)
+	authUsecase := usecases.NewAuthUsecase(userRepo, emailVerifRepo, walletRepo, jwtService)
 	paymentUsecase := usecases.NewPaymentUsecase(paymentRepo, paymentEventRepo, walletRepo, merchantRepo)
 	merchantUsecase := usecases.NewMerchantUsecase(merchantRepo, userRepo)
-	walletUsecase := usecases.NewWalletUsecase(walletRepo)
+	walletUsecase := usecases.NewWalletUsecase(walletRepo, userRepo)
+	paymentRequestUsecase := usecases.NewPaymentRequestUsecase(paymentRequestRepo, merchantRepo, walletRepo, smartContractRepo)
 
 	// Initialize handlers
 	authHandler := handlers.NewAuthHandler(authUsecase)
@@ -75,9 +82,17 @@ func main() {
 	chainHandler := handlers.NewChainHandler(chainRepo)
 	tokenHandler := handlers.NewTokenHandler(tokenRepo)
 	smartContractHandler := handlers.NewSmartContractHandler(smartContractRepo)
+	paymentRequestHandler := handlers.NewPaymentRequestHandler(paymentRequestUsecase)
 
 	// Create auth middleware
 	authMiddleware := middleware.AuthMiddleware(jwtService)
+
+	// Start background jobs
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	expiryJob := jobs.NewPaymentRequestExpiryJob(paymentRequestRepo)
+	go expiryJob.Start(ctx)
 
 	// Initialize router
 	r := gin.Default()
@@ -102,7 +117,7 @@ func main() {
 		c.JSON(200, gin.H{
 			"status":  "ok",
 			"service": "pay-chain-backend",
-			"version": "0.1.0",
+			"version": "0.2.0",
 		})
 	})
 
@@ -127,6 +142,18 @@ func main() {
 			payments.GET("", paymentHandler.ListPayments)
 			payments.GET("/:id/events", paymentHandler.GetPaymentEvents)
 		}
+
+		// Payment Request routes (protected for merchants)
+		paymentRequests := v1.Group("/payment-requests")
+		paymentRequests.Use(authMiddleware)
+		{
+			paymentRequests.POST("", paymentRequestHandler.CreatePaymentRequest)
+			paymentRequests.GET("", paymentRequestHandler.ListPaymentRequests)
+			paymentRequests.GET("/:id", paymentRequestHandler.GetPaymentRequest)
+		}
+
+		// Public payment request route (for payers)
+		v1.GET("/pay/:id", paymentRequestHandler.GetPublicPaymentRequest)
 
 		// Wallet routes (protected)
 		wallets := v1.Group("/wallets")
@@ -174,7 +201,36 @@ func main() {
 			contractsAdmin.POST("", smartContractHandler.CreateSmartContract)
 			contractsAdmin.DELETE("/:id", smartContractHandler.DeleteSmartContract)
 		}
+
+		// Webhook for indexer (internal)
+		webhooks := v1.Group("/webhooks")
+		{
+			webhooks.POST("/payment-status", func(c *gin.Context) {
+				var req struct {
+					RequestID string `json:"requestId"`
+					TxHash    string `json:"txHash"`
+					Status    string `json:"status"`
+				}
+				if err := c.ShouldBindJSON(&req); err != nil {
+					c.JSON(400, gin.H{"error": err.Error()})
+					return
+				}
+				// Handle payment status update from indexer
+				log.Printf("📥 Webhook received: requestId=%s, status=%s", req.RequestID, req.Status)
+				c.JSON(200, gin.H{"received": true})
+			})
+		}
 	}
+
+	// Graceful shutdown
+	go func() {
+		quit := make(chan os.Signal, 1)
+		signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+		<-quit
+		log.Println("🛑 Shutting down server...")
+		expiryJob.Stop()
+		cancel()
+	}()
 
 	// Start server
 	log.Printf("🚀 Pay-Chain Backend starting on port %s", cfg.Server.Port)

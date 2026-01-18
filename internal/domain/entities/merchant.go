@@ -61,6 +61,7 @@ type MerchantStatusResponse struct {
 	Status          MerchantStatus `json:"status"`
 	MerchantType    MerchantType   `json:"merchantType"`
 	BusinessName    string         `json:"businessName"`
+	Message         string         `json:"message,omitempty"`
 	RejectionReason null.String    `json:"rejectionReason,omitempty"`
 	SubmittedAt     time.Time      `json:"submittedAt"`
 	ReviewedAt      null.Time      `json:"reviewedAt,omitempty"`

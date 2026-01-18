@@ -7,19 +7,20 @@ import (
 
 // Domain errors
 var (
-	ErrNotFound          = errors.New("resource not found")
-	ErrAlreadyExists     = errors.New("resource already exists")
-	ErrInvalidInput      = errors.New("invalid input")
-	ErrUnauthorized      = errors.New("unauthorized")
-	ErrForbidden         = errors.New("forbidden")
+	ErrNotFound           = errors.New("resource not found")
+	ErrAlreadyExists      = errors.New("resource already exists")
+	ErrInvalidInput       = errors.New("invalid input")
+	ErrBadRequest         = errors.New("bad request")
+	ErrUnauthorized       = errors.New("unauthorized")
+	ErrForbidden          = errors.New("forbidden")
 	ErrInvalidCredentials = errors.New("invalid credentials")
-	ErrTokenExpired      = errors.New("token expired")
-	ErrEmailNotVerified  = errors.New("email not verified")
-	ErrMerchantNotActive = errors.New("merchant not active")
-	ErrPaymentFailed     = errors.New("payment failed")
-	ErrInsufficientFunds = errors.New("insufficient funds")
-	ErrUnsupportedChain  = errors.New("unsupported chain")
-	ErrUnsupportedToken  = errors.New("unsupported token")
+	ErrTokenExpired       = errors.New("token expired")
+	ErrEmailNotVerified   = errors.New("email not verified")
+	ErrMerchantNotActive  = errors.New("merchant not active")
+	ErrPaymentFailed      = errors.New("payment failed")
+	ErrInsufficientFunds  = errors.New("insufficient funds")
+	ErrUnsupportedChain   = errors.New("unsupported chain")
+	ErrUnsupportedToken   = errors.New("unsupported token")
 )
 
 // AppError represents application error with HTTP status
@@ -64,4 +65,13 @@ func Forbidden(message string) *AppError {
 
 func InternalError(err error) *AppError {
 	return NewAppError(http.StatusInternalServerError, "internal server error", err)
+}
+
+// NewError creates a new error with a custom message wrapping an existing error
+func NewError(message string, err error) error {
+	return &AppError{
+		Code:    http.StatusBadRequest,
+		Message: message,
+		Err:     err,
+	}
 }

@@ -1,4 +1,4 @@
-package postgres
+package repositories
 
 import (
 	"context"
@@ -32,7 +32,7 @@ func (r *ChainRepository) GetByID(ctx context.Context, id int) (*entities.Chain,
 		&chain.Namespace,
 		&chain.Name,
 		&chain.ChainType,
-		&chain.RpcURL,
+		&chain.RPCURL,
 		&chain.ExplorerURL,
 		&chain.IsActive,
 		&chain.CreatedAt,
@@ -70,7 +70,7 @@ func (r *ChainRepository) GetByCAIP2(ctx context.Context, caip2 string) (*entiti
 		&chain.Namespace,
 		&chain.Name,
 		&chain.ChainType,
-		&chain.RpcURL,
+		&chain.RPCURL,
 		&chain.ExplorerURL,
 		&chain.IsActive,
 		&chain.CreatedAt,
@@ -109,7 +109,7 @@ func (r *ChainRepository) GetAll(ctx context.Context) ([]*entities.Chain, error)
 			&chain.Namespace,
 			&chain.Name,
 			&chain.ChainType,
-			&chain.RpcURL,
+			&chain.RPCURL,
 			&chain.ExplorerURL,
 			&chain.IsActive,
 			&chain.CreatedAt,
@@ -145,7 +145,7 @@ func (r *ChainRepository) GetActive(ctx context.Context) ([]*entities.Chain, err
 			&chain.Namespace,
 			&chain.Name,
 			&chain.ChainType,
-			&chain.RpcURL,
+			&chain.RPCURL,
 			&chain.ExplorerURL,
 			&chain.IsActive,
 			&chain.CreatedAt,

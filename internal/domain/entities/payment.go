@@ -24,10 +24,16 @@ type Payment struct {
 	SenderID            uuid.UUID     `json:"senderId"`
 	MerchantID          null.String   `json:"merchantId,omitempty"`
 	ReceiverWalletID    uuid.UUID     `json:"receiverWalletId"`
+	SourceChainID       string        `json:"sourceChainId"`
+	DestChainID         string        `json:"destChainId"`
 	SourceTokenID       uuid.UUID     `json:"sourceTokenId"`
 	DestTokenID         uuid.UUID     `json:"destTokenId"`
+	SourceTokenAddress  string        `json:"sourceTokenAddress"`
+	DestTokenAddress    string        `json:"destTokenAddress"`
+	ReceiverAddress     string        `json:"receiverAddress"`
 	SourceAmount        string        `json:"sourceAmount"`
 	DestAmount          null.String   `json:"destAmount,omitempty"`
+	Decimals            int           `json:"decimals"`
 	FeeAmount           string        `json:"feeAmount"`
 	TotalCharged        string        `json:"totalCharged"`
 	BridgeType          string        `json:"bridgeType"`
@@ -37,6 +43,7 @@ type Payment struct {
 	RefundTxHash        null.String   `json:"refundTxHash,omitempty"`
 	CrossChainMessageID null.String   `json:"crossChainMessageId,omitempty"`
 	ExpiresAt           null.Time     `json:"expiresAt,omitempty"`
+	RefundedAt          null.Time     `json:"refundedAt,omitempty"`
 	CreatedAt           time.Time     `json:"createdAt"`
 	UpdatedAt           time.Time     `json:"updatedAt"`
 	DeletedAt           null.Time     `json:"-"`
@@ -77,15 +84,18 @@ type FeeBreakdown struct {
 	PlatformFee string `json:"platformFee"`
 	BridgeFee   string `json:"bridgeFee"`
 	GasFee      string `json:"gasFee"`
+	TotalFee    string `json:"totalFee"`
+	NetAmount   string `json:"netAmount"`
 }
 
 // PaymentEvent represents a payment event
 type PaymentEvent struct {
-	ID        uuid.UUID   `json:"id"`
-	PaymentID uuid.UUID   `json:"paymentId"`
-	EventType string      `json:"eventType"`
-	Chain     string      `json:"chain"`
-	TxHash    string      `json:"txHash"`
-	Metadata  interface{} `json:"metadata,omitempty"`
-	CreatedAt time.Time   `json:"createdAt"`
+	ID          uuid.UUID   `json:"id"`
+	PaymentID   uuid.UUID   `json:"paymentId"`
+	EventType   string      `json:"eventType"`
+	Chain       string      `json:"chain"`
+	TxHash      string      `json:"txHash"`
+	BlockNumber int64       `json:"blockNumber"`
+	Metadata    interface{} `json:"metadata,omitempty"`
+	CreatedAt   time.Time   `json:"createdAt"`
 }

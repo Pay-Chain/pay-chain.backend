@@ -1,4 +1,4 @@
-package postgres
+package repositories
 
 import (
 	"context"
@@ -167,7 +167,9 @@ func (r *TokenRepository) GetSupportedByChain(ctx context.Context, chainID int) 
 
 	var tokens []*entities.SupportedToken
 	for rows.Next() {
-		st := &entities.SupportedToken{}
+		st := &entities.SupportedToken{
+			Token: &entities.Token{},
+		}
 		if err := rows.Scan(
 			&st.ID,
 			&st.ChainID,
@@ -177,9 +179,9 @@ func (r *TokenRepository) GetSupportedByChain(ctx context.Context, chainID int) 
 			&st.MinAmount,
 			&st.MaxAmount,
 			&st.CreatedAt,
-			&st.Symbol,
-			&st.Name,
-			&st.Decimals,
+			&st.Token.Symbol,
+			&st.Token.Name,
+			&st.Token.Decimals,
 		); err != nil {
 			return nil, err
 		}

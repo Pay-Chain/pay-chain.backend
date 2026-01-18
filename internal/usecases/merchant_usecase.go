@@ -41,14 +41,17 @@ func (u *MerchantUsecase) ApplyMerchant(ctx context.Context, userID uuid.UUID, i
 	}
 	if existingMerchant != nil {
 		return &entities.MerchantStatusResponse{
-			Status:       string(existingMerchant.Status),
-			MerchantType: string(existingMerchant.MerchantType),
+			MerchantID:   existingMerchant.ID,
+			Status:       existingMerchant.Status,
+			MerchantType: existingMerchant.MerchantType,
+			BusinessName: existingMerchant.BusinessName,
 			Message:      "Merchant application already exists",
+			SubmittedAt:  existingMerchant.CreatedAt,
 		}, nil
 	}
 
 	// Validate merchant type
-	merchantType := entities.MerchantType(input.MerchantType)
+	merchantType := input.MerchantType
 	if merchantType != entities.MerchantTypePartner &&
 		merchantType != entities.MerchantTypeCorporate &&
 		merchantType != entities.MerchantTypeUMKM &&
@@ -56,15 +59,21 @@ func (u *MerchantUsecase) ApplyMerchant(ctx context.Context, userID uuid.UUID, i
 		return nil, domainerrors.ErrBadRequest
 	}
 
-	// Create merchant
+	// Create merchant with null.String for optional fields
 	merchant := &entities.Merchant{
-		UserID:          user.ID,
-		BusinessName:    input.BusinessName,
-		BusinessEmail:   input.BusinessEmail,
-		MerchantType:    merchantType,
-		Status:          entities.MerchantStatusPending,
-		TaxID:           input.TaxID,
-		BusinessAddress: input.BusinessAddress,
+		UserID:        user.ID,
+		BusinessName:  input.BusinessName,
+		BusinessEmail: input.BusinessEmail,
+		MerchantType:  merchantType,
+		Status:        entities.MerchantStatusPending,
+	}
+
+	// Set optional fields using null.String
+	if input.TaxID != "" {
+		merchant.TaxID.SetValid(input.TaxID)
+	}
+	if input.BusinessAddress != "" {
+		merchant.BusinessAddress.SetValid(input.BusinessAddress)
 	}
 
 	if err := u.merchantRepo.Create(ctx, merchant); err != nil {
@@ -72,9 +81,12 @@ func (u *MerchantUsecase) ApplyMerchant(ctx context.Context, userID uuid.UUID, i
 	}
 
 	return &entities.MerchantStatusResponse{
-		Status:       string(merchant.Status),
-		MerchantType: string(merchant.MerchantType),
+		MerchantID:   merchant.ID,
+		Status:       merchant.Status,
+		MerchantType: merchant.MerchantType,
+		BusinessName: merchant.BusinessName,
 		Message:      "Merchant application submitted successfully",
+		SubmittedAt:  merchant.CreatedAt,
 	}, nil
 }
 
@@ -84,7 +96,7 @@ func (u *MerchantUsecase) GetMerchantStatus(ctx context.Context, userID uuid.UUI
 	if err != nil {
 		if err == domainerrors.ErrNotFound {
 			return &entities.MerchantStatusResponse{
-				Status:  "not_applied",
+				Status:  entities.MerchantStatusPending, // Use pending as default for "not_applied"
 				Message: "No merchant application found",
 			}, nil
 		}
@@ -92,10 +104,13 @@ func (u *MerchantUsecase) GetMerchantStatus(ctx context.Context, userID uuid.UUI
 	}
 
 	return &entities.MerchantStatusResponse{
-		Status:       string(merchant.Status),
-		MerchantType: string(merchant.MerchantType),
+		MerchantID:   merchant.ID,
+		Status:       merchant.Status,
+		MerchantType: merchant.MerchantType,
 		BusinessName: merchant.BusinessName,
 		Message:      getStatusMessage(merchant.Status),
+		SubmittedAt:  merchant.CreatedAt,
+		ReviewedAt:   merchant.VerifiedAt,
 	}, nil
 }
 

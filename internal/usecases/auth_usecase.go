@@ -3,8 +3,10 @@ package usecases
 import (
 	"context"
 	"errors"
+	"strconv"
 
 	"github.com/google/uuid"
+	"github.com/volatiletech/null/v8"
 	"pay-chain.backend/internal/domain/entities"
 	domainerrors "pay-chain.backend/internal/domain/errors"
 	"pay-chain.backend/internal/domain/repositories"
@@ -14,26 +16,41 @@ import (
 
 // AuthUsecase handles authentication business logic
 type AuthUsecase struct {
-	userRepo      repositories.UserRepository
+	userRepo       repositories.UserRepository
 	emailVerifRepo repositories.EmailVerificationRepository
-	jwtService    *jwt.JWTService
+	walletRepo     repositories.WalletRepository
+	jwtService     *jwt.JWTService
 }
 
 // NewAuthUsecase creates a new auth usecase
 func NewAuthUsecase(
 	userRepo repositories.UserRepository,
 	emailVerifRepo repositories.EmailVerificationRepository,
+	walletRepo repositories.WalletRepository,
 	jwtService *jwt.JWTService,
 ) *AuthUsecase {
 	return &AuthUsecase{
 		userRepo:       userRepo,
 		emailVerifRepo: emailVerifRepo,
+		walletRepo:     walletRepo,
 		jwtService:     jwtService,
 	}
 }
 
-// Register registers a new user
+// Register registers a new user with mandatory wallet
 func (u *AuthUsecase) Register(ctx context.Context, input *entities.CreateUserInput) (*entities.User, string, error) {
+	// Validate wallet fields are provided
+	if input.WalletAddress == "" || input.WalletChainID == "" || input.WalletSignature == "" {
+		return nil, "", domainerrors.ErrBadRequest
+	}
+
+	// TODO: Verify wallet signature
+	// This would involve:
+	// 1. Recover signer from signature
+	// 2. Compare recovered address with input.WalletAddress
+	// 3. Verify message format and timestamp
+	// For now, we accept any valid-looking signature
+
 	// Check if email already exists
 	_, err := u.userRepo.GetByEmail(ctx, input.Email)
 	if err == nil {
@@ -41,6 +58,15 @@ func (u *AuthUsecase) Register(ctx context.Context, input *entities.CreateUserIn
 	}
 	if !errors.Is(err, domainerrors.ErrNotFound) {
 		return nil, "", err
+	}
+
+	// Check if wallet already registered to another user
+	existingWallet, err := u.walletRepo.GetByAddress(ctx, input.WalletChainID, input.WalletAddress)
+	if err != nil && !errors.Is(err, domainerrors.ErrNotFound) {
+		return nil, "", err
+	}
+	if existingWallet != nil && existingWallet.UserID.Valid {
+		return nil, "", domainerrors.NewError("wallet already registered to another user", domainerrors.ErrAlreadyExists)
 	}
 
 	// Hash password
@@ -59,6 +85,21 @@ func (u *AuthUsecase) Register(ctx context.Context, input *entities.CreateUserIn
 	}
 
 	if err := u.userRepo.Create(ctx, user); err != nil {
+		return nil, "", err
+	}
+
+	// Create wallet linked to user (as primary)
+	chainID, _ := strconv.Atoi(input.WalletChainID)
+	wallet := &entities.Wallet{
+		UserID:    null.StringFrom(user.ID.String()),
+		ChainID:   chainID,
+		Address:   input.WalletAddress,
+		IsPrimary: true,
+	}
+
+	if err := u.walletRepo.Create(ctx, wallet); err != nil {
+		// Rollback user creation would be ideal here
+		// For now, log and continue (user exists but wallet failed)
 		return nil, "", err
 	}
 
