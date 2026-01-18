@@ -73,6 +73,7 @@ func main() {
 	merchantUsecase := usecases.NewMerchantUsecase(merchantRepo, userRepo)
 	walletUsecase := usecases.NewWalletUsecase(walletRepo, userRepo)
 	paymentRequestUsecase := usecases.NewPaymentRequestUsecase(paymentRequestRepo, merchantRepo, walletRepo, smartContractRepo)
+	webhookUsecase := usecases.NewWebhookUsecase(paymentRepo, paymentEventRepo, paymentRequestRepo)
 
 	// Initialize handlers
 	authHandler := handlers.NewAuthHandler(authUsecase)
@@ -83,6 +84,7 @@ func main() {
 	tokenHandler := handlers.NewTokenHandler(tokenRepo)
 	smartContractHandler := handlers.NewSmartContractHandler(smartContractRepo)
 	paymentRequestHandler := handlers.NewPaymentRequestHandler(paymentRequestUsecase)
+	webhookHandler := handlers.NewWebhookHandler(webhookUsecase)
 
 	// Create auth middleware
 	authMiddleware := middleware.AuthMiddleware(jwtService)
@@ -205,20 +207,7 @@ func main() {
 		// Webhook for indexer (internal)
 		webhooks := v1.Group("/webhooks")
 		{
-			webhooks.POST("/payment-status", func(c *gin.Context) {
-				var req struct {
-					RequestID string `json:"requestId"`
-					TxHash    string `json:"txHash"`
-					Status    string `json:"status"`
-				}
-				if err := c.ShouldBindJSON(&req); err != nil {
-					c.JSON(400, gin.H{"error": err.Error()})
-					return
-				}
-				// Handle payment status update from indexer
-				log.Printf("📥 Webhook received: requestId=%s, status=%s", req.RequestID, req.Status)
-				c.JSON(200, gin.H{"received": true})
-			})
+			webhooks.POST("/indexer", webhookHandler.HandleIndexerWebhook)
 		}
 	}
 
