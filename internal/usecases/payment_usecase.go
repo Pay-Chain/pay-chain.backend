@@ -2,7 +2,11 @@ package usecases
 
 import (
 	"context"
+	"encoding/hex"
+	"encoding/json"
 	"math/big"
+	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"pay-chain.backend/internal/domain/entities"
@@ -16,6 +20,7 @@ type PaymentUsecase struct {
 	paymentEventRepo repositories.PaymentEventRepository
 	walletRepo       repositories.WalletRepository
 	merchantRepo     repositories.MerchantRepository
+	contractRepo     repositories.SmartContractRepository
 }
 
 // NewPaymentUsecase creates a new payment usecase
@@ -24,12 +29,14 @@ func NewPaymentUsecase(
 	paymentEventRepo repositories.PaymentEventRepository,
 	walletRepo repositories.WalletRepository,
 	merchantRepo repositories.MerchantRepository,
+	contractRepo repositories.SmartContractRepository,
 ) *PaymentUsecase {
 	return &PaymentUsecase{
 		paymentRepo:      paymentRepo,
 		paymentEventRepo: paymentEventRepo,
 		walletRepo:       walletRepo,
 		merchantRepo:     merchantRepo,
+		contractRepo:     contractRepo,
 	}
 }
 
@@ -131,6 +138,13 @@ func (u *PaymentUsecase) CreatePayment(ctx context.Context, userID uuid.UUID, in
 		bridgeType = u.SelectBridge(input.SourceChainID, input.DestChainID)
 	}
 
+	// Get smart contract for source chain from database
+	contracts, _ := u.contractRepo.GetByChain(ctx, input.SourceChainID)
+	var contract *entities.SmartContract
+	if len(contracts) > 0 {
+		contract = contracts[0]
+	}
+
 	// Create payment entity
 	payment := &entities.Payment{
 		SenderID:           userID,
@@ -144,6 +158,8 @@ func (u *PaymentUsecase) CreatePayment(ctx context.Context, userID uuid.UUID, in
 		ReceiverAddress:    input.ReceiverAddress,
 		Decimals:           input.Decimals,
 		Status:             entities.PaymentStatusPending,
+		CreatedAt:          time.Now(),
+		UpdatedAt:          time.Now(),
 	}
 	// Set nullable DestAmount
 	payment.DestAmount.SetValid(feeBreakdown.NetAmount)
@@ -158,18 +174,70 @@ func (u *PaymentUsecase) CreatePayment(ctx context.Context, userID uuid.UUID, in
 		PaymentID: payment.ID,
 		EventType: "CREATED",
 		Chain:     "source",
+		CreatedAt: time.Now(),
 	}
 	_ = u.paymentEventRepo.Create(ctx, event)
 
+	// Build transaction data using metadata from DB
+	signatureData := u.buildTransactionData(payment, contract)
+
 	return &entities.CreatePaymentResponse{
-		PaymentID:    payment.ID,
-		Status:       payment.Status,
-		SourceAmount: payment.SourceAmount,
-		DestAmount:   payment.DestAmount.String,
-		FeeAmount:    payment.FeeAmount,
-		BridgeType:   payment.BridgeType,
-		FeeBreakdown: *feeBreakdown,
+		PaymentID:      payment.ID,
+		Status:         payment.Status,
+		SourceChainID:  payment.SourceChainID,
+		DestChainID:    payment.DestChainID,
+		SourceAmount:   payment.SourceAmount,
+		SourceDecimals: payment.Decimals,
+		DestAmount:     payment.DestAmount.String,
+		FeeAmount:      payment.FeeAmount,
+		BridgeType:     payment.BridgeType,
+		FeeBreakdown:   *feeBreakdown,
+		ExpiresAt:      time.Now().Add(1 * time.Hour),
+		SignatureData:  signatureData,
 	}, nil
+}
+
+// buildTransactionData builds transaction data for frontend based on database metadata
+func (u *PaymentUsecase) buildTransactionData(payment *entities.Payment, contract *entities.SmartContract) interface{} {
+	if contract == nil {
+		return nil
+	}
+
+	chainType := getChainTypeFromCAIP2(payment.SourceChainID)
+
+	switch chainType {
+	case "eip155":
+		return map[string]string{
+			"to":   contract.ContractAddress,
+			"data": u.buildEvmPaymentHex(payment),
+		}
+	case "solana":
+		return map[string]string{
+			"programId": contract.ContractAddress,
+			"data":      u.buildSvmPaymentBase64(payment),
+		}
+	}
+
+	return nil
+}
+
+func (u *PaymentUsecase) buildEvmPaymentHex(payment *entities.Payment) string {
+	// function createPayment(bytes32 paymentId, string destChainId, bytes32 destToken, uint256 amount, bytes32 receiver)
+	// keccak256("createPayment(bytes32,string,bytes32,uint256,bytes32)")[:4]
+	selector := "0x7856e7df"
+	paymentId := padLeft(strings.TrimPrefix(payment.ID.String(), "0x"), 64)
+	return selector + paymentId
+}
+
+func (u *PaymentUsecase) buildSvmPaymentBase64(payment *entities.Payment) string {
+	data := map[string]interface{}{
+		"instruction": "create_payment",
+		"payment_id":  payment.ID.String(),
+		"amount":      payment.SourceAmount,
+		"receiver":    payment.ReceiverAddress,
+	}
+	jsonData, _ := json.Marshal(data)
+	return hex.EncodeToString(jsonData)
 }
 
 // GetPayment gets a payment by ID
