@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
-	"math/big"
 	"strings"
 	"time"
 
@@ -16,7 +14,7 @@ import (
 )
 
 const (
-	PaymentRequestExpiryMinutes = 15
+// Removed PaymentRequestExpiryMinutes (moved to constants.go)
 )
 
 type PaymentRequestUsecase struct {
@@ -117,7 +115,7 @@ func (uc *PaymentRequestUsecase) CreatePaymentRequest(ctx context.Context, input
 	}
 
 	// Build transaction data
-	txData := uc.buildTransactionData(paymentRequest, contract, targetWallet.Address)
+	txData := uc.buildTransactionData(paymentRequest, contract)
 
 	return &CreatePaymentRequestOutput{
 		RequestID:     requestID.String(),
@@ -130,7 +128,6 @@ func (uc *PaymentRequestUsecase) CreatePaymentRequest(ctx context.Context, input
 func (uc *PaymentRequestUsecase) buildTransactionData(
 	request *entities.PaymentRequest,
 	contract *entities.SmartContract,
-	receiverAddress string,
 ) *entities.PaymentRequestTxData {
 	txData := &entities.PaymentRequestTxData{
 		RequestID: request.ID.String(),
@@ -148,9 +145,9 @@ func (uc *PaymentRequestUsecase) buildTransactionData(
 
 	switch chainType {
 	case "eip155": // EVM
-		txData.Hex = uc.buildEvmTransactionHex(request, contract, receiverAddress)
+		txData.Hex = uc.buildEvmTransactionHex(request)
 	case "solana": // SVM
-		txData.Base64 = uc.buildSvmTransactionBase64(request, contract, receiverAddress)
+		txData.Base64 = uc.buildSvmTransactionBase64(request)
 	}
 
 	return txData
@@ -158,53 +155,28 @@ func (uc *PaymentRequestUsecase) buildTransactionData(
 
 func (uc *PaymentRequestUsecase) buildEvmTransactionHex(
 	request *entities.PaymentRequest,
-	contract *entities.SmartContract,
-	receiverAddress string,
 ) string {
-	// Function selector for payRequest(bytes32 requestId, address token, uint256 amount, address receiver)
-	// keccak256("payRequest(bytes32,address,uint256,address)")[:4]
-	functionSelector := "0x8a4068dd"
+	// Function selector defined in evm_constants.go
+	functionSelector := PayRequestSelector
 
 	// Encode parameters
-	requestIdBytes := padLeft(strings.TrimPrefix(request.ID.String(), "0x"), 64)
-
-	// Token address (remove 0x prefix and pad)
-	tokenAddress := padLeft(strings.TrimPrefix(request.TokenAddress, "0x"), 64)
-
-	// Amount (convert to hex and pad)
-	amount := new(big.Int)
-	amount.SetString(request.Amount, 10)
-	amountHex := padLeft(fmt.Sprintf("%x", amount), 64)
-
-	// Receiver address
-	receiver := padLeft(strings.TrimPrefix(receiverAddress, "0x"), 64)
+	requestIdBytes := padLeft(strings.TrimPrefix(request.ID.String(), "0x"), EVMWordSizeHex)
 
 	// Combine
-	calldata := functionSelector + requestIdBytes + tokenAddress + amountHex + receiver
+	calldata := functionSelector + requestIdBytes
 
 	return calldata
 }
 
 func (uc *PaymentRequestUsecase) buildSvmTransactionBase64(
 	request *entities.PaymentRequest,
-	contract *entities.SmartContract,
-	receiverAddress string,
 ) string {
-	// For Solana, we need to build a serialized transaction
-	// This is a simplified version - actual implementation would use Solana SDK
-
-	instructionData := map[string]interface{}{
+	data := map[string]interface{}{
 		"instruction": "pay_request",
 		"request_id":  request.ID.String(),
-		"token":       request.TokenAddress,
-		"amount":      request.Amount,
-		"receiver":    receiverAddress,
 	}
 
-	jsonData, _ := json.Marshal(instructionData)
-
-	// Base64 encode the instruction data
-	// In production, this would be a properly serialized Solana transaction
+	jsonData, _ := json.Marshal(data)
 	return hex.EncodeToString(jsonData)
 }
 
@@ -228,13 +200,9 @@ func (uc *PaymentRequestUsecase) GetPaymentRequest(ctx context.Context, requestI
 	}
 
 	// Get wallet
-	wallet, _ := uc.walletRepo.GetByID(ctx, request.WalletID)
-	receiverAddress := ""
-	if wallet != nil {
-		receiverAddress = wallet.Address
-	}
+	_, _ = uc.walletRepo.GetByID(ctx, request.WalletID)
 
-	txData := uc.buildTransactionData(request, contract, receiverAddress)
+	txData := uc.buildTransactionData(request, contract)
 
 	return request, txData, nil
 }
@@ -253,32 +221,3 @@ func (uc *PaymentRequestUsecase) MarkPaymentCompleted(ctx context.Context, reque
 }
 
 // Helper functions
-func getChainTypeFromCAIP2(caip2 string) string {
-	parts := strings.Split(caip2, ":")
-	if len(parts) >= 1 {
-		return parts[0]
-	}
-	return ""
-}
-
-func convertToSmallestUnit(amount string, decimals int) string {
-	// Simple conversion - in production use proper decimal library
-	multiplier := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(decimals)), nil)
-
-	// Parse amount as float then convert
-	amountFloat := new(big.Float)
-	amountFloat.SetString(amount)
-
-	multiplierFloat := new(big.Float).SetInt(multiplier)
-	result := new(big.Float).Mul(amountFloat, multiplierFloat)
-
-	resultInt, _ := result.Int(nil)
-	return resultInt.String()
-}
-
-func padLeft(s string, length int) string {
-	if len(s) >= length {
-		return s
-	}
-	return strings.Repeat("0", length-len(s)) + s
-}

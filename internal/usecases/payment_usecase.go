@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"math/big"
 	"strings"
 	"time"
@@ -51,9 +52,9 @@ type FeeConfig struct {
 // DefaultFeeConfig returns default fee configuration
 func DefaultFeeConfig() *FeeConfig {
 	return &FeeConfig{
-		BaseFeeCents:  50,    // $0.50
-		PercentageFee: 0.003, // 0.3%
-		BridgeFeeFlat: 10,    // $0.10
+		BaseFeeCents:  int64(DefaultFixedFeeUSD * 100),   // $0.50
+		PercentageFee: DefaultPercentageFee,              // 0.3%
+		BridgeFeeFlat: int64(DefaultBridgeFeeFlat * 100), // $0.10
 	}
 }
 
@@ -192,7 +193,7 @@ func (u *PaymentUsecase) CreatePayment(ctx context.Context, userID uuid.UUID, in
 		FeeAmount:      payment.FeeAmount,
 		BridgeType:     payment.BridgeType,
 		FeeBreakdown:   *feeBreakdown,
-		ExpiresAt:      time.Now().Add(1 * time.Hour),
+		ExpiresAt:      time.Now().Add(PaymentExpiryDuration),
 		SignatureData:  signatureData,
 	}, nil
 }
@@ -222,19 +223,57 @@ func (u *PaymentUsecase) buildTransactionData(payment *entities.Payment, contrac
 }
 
 func (u *PaymentUsecase) buildEvmPaymentHex(payment *entities.Payment) string {
-	// function createPayment(bytes32 paymentId, string destChainId, bytes32 destToken, uint256 amount, bytes32 receiver)
-	// keccak256("createPayment(bytes32,string,bytes32,uint256,bytes32)")[:4]
-	selector := "0x7856e7df"
-	paymentId := padLeft(strings.TrimPrefix(payment.ID.String(), "0x"), 64)
-	return selector + paymentId
+	// function createPayment(bytes destChainId, bytes receiver, address sourceToken, address destToken, uint256 amount)
+	// selector defined in evm_constants.go
+	selector := CreatePaymentSelector
+
+	// Prepare dynamic data
+	destChainId := []byte(payment.DestChainID)
+	// Receiver can be EVM address (20 bytes) or SVM address (32 bytes)
+	// If it starts with 0x and is 42 chars, it's EVM.
+	var receiver []byte
+	if strings.HasPrefix(payment.ReceiverAddress, "0x") && len(payment.ReceiverAddress) == 42 {
+		addrBytes, _ := hex.DecodeString(strings.TrimPrefix(payment.ReceiverAddress, "0x"))
+		receiver = addrBytes
+	} else {
+		// Assume Solana or other raw bytes
+		receiver = []byte(payment.ReceiverAddress)
+	}
+
+	// ABI Encoding offsets (offsets are from the start of the data area, 5 * EVMWordSize = 160 bytes)
+	offsetDestChainId := 5 * EVMWordSize
+	lenDestChainIdPadded := ((len(destChainId) + (EVMWordSize - 1)) / EVMWordSize) * EVMWordSize
+	offsetReceiver := offsetDestChainId + EVMWordSize + lenDestChainIdPadded
+
+	// Static parts
+	destChainIdOffsetHex := padLeft(fmt.Sprintf("%x", offsetDestChainId), EVMWordSizeHex)
+	receiverOffsetHex := padLeft(fmt.Sprintf("%x", offsetReceiver), EVMWordSizeHex)
+	sourceTokenHex := padLeft(strings.TrimPrefix(payment.SourceTokenAddress, "0x"), EVMWordSizeHex)
+	destTokenHex := padLeft(strings.TrimPrefix(payment.DestTokenAddress, "0x"), EVMWordSizeHex)
+
+	amount := new(big.Int)
+	amount.SetString(payment.SourceAmount, 10)
+	amountHex := padLeft(fmt.Sprintf("%x", amount), EVMWordSizeHex)
+
+	// Dynamic parts
+	destChainIdLenHex := padLeft(fmt.Sprintf("%x", len(destChainId)), EVMWordSizeHex)
+	destChainIdDataHex := padRight(hex.EncodeToString(destChainId), lenDestChainIdPadded*2)
+
+	receiverLenHex := padLeft(fmt.Sprintf("%x", len(receiver)), EVMWordSizeHex)
+	receiverDataHex := padRight(hex.EncodeToString(receiver), ((len(receiver)+(EVMWordSize-1))/EVMWordSize)*EVMWordSize*2)
+
+	return selector + destChainIdOffsetHex + receiverOffsetHex + sourceTokenHex + destTokenHex + amountHex +
+		destChainIdLenHex + destChainIdDataHex + receiverLenHex + receiverDataHex
 }
 
 func (u *PaymentUsecase) buildSvmPaymentBase64(payment *entities.Payment) string {
 	data := map[string]interface{}{
-		"instruction": "create_payment",
-		"payment_id":  payment.ID.String(),
-		"amount":      payment.SourceAmount,
-		"receiver":    payment.ReceiverAddress,
+		"instruction":   "create_payment",
+		"payment_id":    payment.ID.String(),
+		"dest_chain_id": payment.DestChainID,
+		"dest_token":    payment.DestTokenAddress,
+		"amount":        payment.SourceAmount,
+		"receiver":      payment.ReceiverAddress,
 	}
 	jsonData, _ := json.Marshal(data)
 	return hex.EncodeToString(jsonData)
@@ -259,22 +298,4 @@ func (u *PaymentUsecase) GetPaymentEvents(ctx context.Context, paymentID uuid.UU
 // UpdatePaymentStatus updates a payment's status
 func (u *PaymentUsecase) UpdatePaymentStatus(ctx context.Context, paymentID uuid.UUID, status entities.PaymentStatus) error {
 	return u.paymentRepo.UpdateStatus(ctx, paymentID, status)
-}
-
-// Helper functions
-func isEVMChain(chainID string) bool {
-	return len(chainID) > 6 && chainID[:6] == "eip155"
-}
-
-func isSolanaChain(chainID string) bool {
-	return len(chainID) > 6 && chainID[:6] == "solana"
-}
-
-func formatAmount(amount float64, decimals int) string {
-	// Convert float to string with appropriate precision
-	multiplier := new(big.Float).SetFloat64(amount)
-	exp := new(big.Float).SetInt(new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(decimals)), nil))
-	result := new(big.Float).Mul(multiplier, exp)
-	intResult, _ := result.Int(nil)
-	return intResult.String()
 }
