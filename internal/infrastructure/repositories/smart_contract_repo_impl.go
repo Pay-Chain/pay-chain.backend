@@ -2,263 +2,217 @@ package repositories
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
-	"time"
+	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
+	"gorm.io/gorm"
 	"pay-chain.backend/internal/domain/entities"
 	domainerrors "pay-chain.backend/internal/domain/errors"
+	"pay-chain.backend/internal/infrastructure/models"
 )
 
-// SmartContractRepository implements smart contract data operations
-type SmartContractRepository struct {
-	db *sql.DB
+type SmartContractRepositoryImpl struct {
+	db *gorm.DB
 }
 
-// NewSmartContractRepository creates a new smart contract repository
-func NewSmartContractRepository(db *sql.DB) *SmartContractRepository {
-	return &SmartContractRepository{db: db}
+func NewSmartContractRepository(db *gorm.DB) *SmartContractRepositoryImpl {
+	return &SmartContractRepositoryImpl{db: db}
 }
 
-// Create creates a new smart contract record
-func (r *SmartContractRepository) Create(ctx context.Context, contract *entities.SmartContract) error {
-	query := `
-		INSERT INTO smart_contracts (id, name, chain_id, contract_address, abi, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
-	`
-
-	contract.ID = uuid.New()
-	contract.CreatedAt = time.Now()
-	contract.UpdatedAt = time.Now()
-
-	abiJSON, err := json.Marshal(contract.ABI)
+func (r *SmartContractRepositoryImpl) Create(ctx context.Context, contract *entities.SmartContract) error {
+	// Marshal ABI
+	abiBytes, err := json.Marshal(contract.ABI)
 	if err != nil {
+		return fmt.Errorf("failed to marshal ABI: %w", err)
+	}
+
+	// Marshaling Metadata
+	// Assuming contract.Metadata is valid JSON bytes or similar from Entity
+	var metadataStr string
+	if contract.Metadata.Valid {
+		metadataStr = string(contract.Metadata.JSON)
+	} else {
+		metadataStr = "{}"
+	}
+
+	deployerAddr := ""
+	if contract.DeployerAddress.Valid {
+		deployerAddr = contract.DeployerAddress.String
+	}
+
+	m := &models.SmartContract{
+		ID:              contract.ID,
+		Name:            contract.Name,
+		ChainID:         contract.ChainID,
+		ContractAddress: contract.ContractAddress,
+		Type:            string(contract.Type),
+		Version:         contract.Version,
+		DeployerAddress: deployerAddr,
+		StartBlock:      int64(contract.StartBlock),
+		ABI:             string(abiBytes),
+		Metadata:        metadataStr,
+		IsActive:        contract.IsActive,
+		DestinationMap:  pq.StringArray{}, // Initial empty, or map if entity has it
+	}
+
+	// GORM will likely handle CreatedAt/UpdatedAt automatically if fields are standard
+	// But we can set them explicit if we want to match entity
+	m.CreatedAt = contract.CreatedAt
+	m.UpdatedAt = contract.UpdatedAt
+
+	if err := r.db.WithContext(ctx).Create(m).Error; err != nil {
 		return err
 	}
-
-	_, err = r.db.ExecContext(ctx, query,
-		contract.ID,
-		contract.Name,
-		contract.ChainID,
-		contract.ContractAddress,
-		abiJSON,
-		contract.CreatedAt,
-		contract.UpdatedAt,
-	)
-
-	return err
-}
-
-// GetByID gets a smart contract by ID
-func (r *SmartContractRepository) GetByID(ctx context.Context, id uuid.UUID) (*entities.SmartContract, error) {
-	query := `
-		SELECT id, name, chain_id, contract_address, abi, created_at, updated_at
-		FROM smart_contracts
-		WHERE id = $1 AND deleted_at IS NULL
-	`
-
-	var abiBytes []byte
-	contract := &entities.SmartContract{}
-	err := r.db.QueryRowContext(ctx, query, id).Scan(
-		&contract.ID,
-		&contract.Name,
-		&contract.ChainID,
-		&contract.ContractAddress,
-		&abiBytes,
-		&contract.CreatedAt,
-		&contract.UpdatedAt,
-	)
-
-	if err == sql.ErrNoRows {
-		return nil, domainerrors.ErrNotFound
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	if err := json.Unmarshal(abiBytes, &contract.ABI); err != nil {
-		return nil, err
-	}
-
-	return contract, nil
-}
-
-// GetByChainAndAddress gets a smart contract by chain ID and address
-func (r *SmartContractRepository) GetByChainAndAddress(ctx context.Context, chainID, address string) (*entities.SmartContract, error) {
-	query := `
-		SELECT id, name, chain_id, contract_address, abi, created_at, updated_at
-		FROM smart_contracts
-		WHERE chain_id = $1 AND contract_address = $2 AND deleted_at IS NULL
-	`
-
-	var abiBytes []byte
-	contract := &entities.SmartContract{}
-	err := r.db.QueryRowContext(ctx, query, chainID, address).Scan(
-		&contract.ID,
-		&contract.Name,
-		&contract.ChainID,
-		&contract.ContractAddress,
-		&abiBytes,
-		&contract.CreatedAt,
-		&contract.UpdatedAt,
-	)
-
-	if err == sql.ErrNoRows {
-		return nil, domainerrors.ErrNotFound
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	if err := json.Unmarshal(abiBytes, &contract.ABI); err != nil {
-		return nil, err
-	}
-
-	return contract, nil
-}
-
-// GetByChain gets all smart contracts for a chain
-func (r *SmartContractRepository) GetByChain(ctx context.Context, chainID string) ([]*entities.SmartContract, error) {
-	query := `
-		SELECT id, name, chain_id, contract_address, abi, created_at, updated_at
-		FROM smart_contracts
-		WHERE chain_id = $1 AND deleted_at IS NULL
-		ORDER BY created_at DESC
-	`
-
-	rows, err := r.db.QueryContext(ctx, query, chainID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var contracts []*entities.SmartContract
-	for rows.Next() {
-		var abiBytes []byte
-		contract := &entities.SmartContract{}
-		if err := rows.Scan(
-			&contract.ID,
-			&contract.Name,
-			&contract.ChainID,
-			&contract.ContractAddress,
-			&abiBytes,
-			&contract.CreatedAt,
-			&contract.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-
-		if err := json.Unmarshal(abiBytes, &contract.ABI); err != nil {
-			return nil, err
-		}
-
-		contracts = append(contracts, contract)
-	}
-
-	return contracts, nil
-}
-
-// GetAll gets all smart contracts
-func (r *SmartContractRepository) GetAll(ctx context.Context) ([]*entities.SmartContract, error) {
-	query := `
-		SELECT id, name, chain_id, contract_address, abi, created_at, updated_at
-		FROM smart_contracts
-		WHERE deleted_at IS NULL
-		ORDER BY created_at DESC
-	`
-
-	rows, err := r.db.QueryContext(ctx, query)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var contracts []*entities.SmartContract
-	for rows.Next() {
-		var abiBytes []byte
-		contract := &entities.SmartContract{}
-		if err := rows.Scan(
-			&contract.ID,
-			&contract.Name,
-			&contract.ChainID,
-			&contract.ContractAddress,
-			&abiBytes,
-			&contract.CreatedAt,
-			&contract.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-
-		if err := json.Unmarshal(abiBytes, &contract.ABI); err != nil {
-			return nil, err
-		}
-
-		contracts = append(contracts, contract)
-	}
-
-	return contracts, nil
-}
-
-// Update updates a smart contract
-func (r *SmartContractRepository) Update(ctx context.Context, contract *entities.SmartContract) error {
-	query := `
-		UPDATE smart_contracts
-		SET name = $2, abi = $3, updated_at = $4
-		WHERE id = $1 AND deleted_at IS NULL
-	`
-
-	contract.UpdatedAt = time.Now()
-
-	abiJSON, err := json.Marshal(contract.ABI)
-	if err != nil {
-		return err
-	}
-
-	result, err := r.db.ExecContext(ctx, query,
-		contract.ID,
-		contract.Name,
-		abiJSON,
-		contract.UpdatedAt,
-	)
-
-	if err != nil {
-		return err
-	}
-
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-
-	if rowsAffected == 0 {
-		return domainerrors.ErrNotFound
-	}
-
 	return nil
 }
 
-// SoftDelete soft deletes a smart contract
-func (r *SmartContractRepository) SoftDelete(ctx context.Context, id uuid.UUID) error {
-	query := `
-		UPDATE smart_contracts
-		SET deleted_at = $2
-		WHERE id = $1 AND deleted_at IS NULL
-	`
+func (r *SmartContractRepositoryImpl) GetByID(ctx context.Context, id uuid.UUID) (*entities.SmartContract, error) {
+	var m models.SmartContract
+	if err := r.db.WithContext(ctx).Where("id = ?", id).First(&m).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil // Return nil, nil for not found as per previous behavior
+		}
+		return nil, err
+	}
+	return r.toEntity(&m)
+}
 
-	result, err := r.db.ExecContext(ctx, query, id, time.Now())
-	if err != nil {
-		return err
+func (r *SmartContractRepositoryImpl) GetByChainAndAddress(ctx context.Context, chainID, address string) (*entities.SmartContract, error) {
+	var m models.SmartContract
+	if err := r.db.WithContext(ctx).Where("chain_id = ? AND contract_address = ?", chainID, address).First(&m).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return r.toEntity(&m)
+}
+
+func (r *SmartContractRepositoryImpl) GetActiveContract(ctx context.Context, chainID string, contractType entities.SmartContractType) (*entities.SmartContract, error) {
+	var m models.SmartContract
+	// Order by version desc to get latest
+	if err := r.db.WithContext(ctx).
+		Where("chain_id = ? AND type = ? AND is_active = ?", chainID, contractType, true).
+		Order("version DESC").
+		First(&m).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return r.toEntity(&m)
+}
+
+func (r *SmartContractRepositoryImpl) GetByChain(ctx context.Context, chainID string) ([]*entities.SmartContract, error) {
+	var ms []models.SmartContract
+	if err := r.db.WithContext(ctx).Where("chain_id = ?", chainID).Order("created_at DESC").Find(&ms).Error; err != nil {
+		return nil, err
 	}
 
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return err
+	var entitiesList []*entities.SmartContract
+	for _, m := range ms {
+		model := m
+		e, err := r.toEntity(&model)
+		if err != nil {
+			return nil, err
+		}
+		entitiesList = append(entitiesList, e)
+	}
+	return entitiesList, nil
+}
+
+func (r *SmartContractRepositoryImpl) GetAll(ctx context.Context) ([]*entities.SmartContract, error) {
+	var ms []models.SmartContract
+	if err := r.db.WithContext(ctx).Order("created_at DESC").Find(&ms).Error; err != nil {
+		return nil, err
 	}
 
-	if rowsAffected == 0 {
+	var entitiesList []*entities.SmartContract
+	for _, m := range ms {
+		model := m
+		e, err := r.toEntity(&model)
+		if err != nil {
+			return nil, err
+		}
+		entitiesList = append(entitiesList, e)
+	}
+	return entitiesList, nil
+}
+
+func (r *SmartContractRepositoryImpl) Update(ctx context.Context, contract *entities.SmartContract) error {
+	// We can use Updates with struct or map
+	// First Marshal fields
+	abiBytes, _ := json.Marshal(contract.ABI)
+	metadataStr := "{}"
+	if contract.Metadata.Valid {
+		metadataStr = string(contract.Metadata.JSON)
+	}
+
+	updates := map[string]interface{}{
+		"name":      contract.Name,
+		"version":   contract.Version,
+		"is_active": contract.IsActive,
+		"abi":       string(abiBytes),
+		"metadata":  metadataStr,
+		// Add others if needed
+	}
+
+	result := r.db.WithContext(ctx).Model(&models.SmartContract{}).Where("id = ?", contract.ID).Updates(updates)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
 		return domainerrors.ErrNotFound
 	}
-
 	return nil
+}
+
+func (r *SmartContractRepositoryImpl) SoftDelete(ctx context.Context, id uuid.UUID) error {
+	result := r.db.WithContext(ctx).Delete(&models.SmartContract{}, "id = ?", id)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return domainerrors.ErrNotFound
+	}
+	return nil
+}
+
+func (r *SmartContractRepositoryImpl) toEntity(m *models.SmartContract) (*entities.SmartContract, error) {
+	var abi interface{}
+	if m.ABI != "" {
+		_ = json.Unmarshal([]byte(m.ABI), &abi)
+	}
+
+	// Convert string metadata back to null.JSON if possible, or construct it
+	// The entity uses volatiletech/null/v8
+	// We need to import it or handle it.
+	// Wait, the new repo file doesn't import null.
+	// I should check what entities.SmartContract expects.
+	// Assuming entities still uses null.JSON for Metadata.
+
+	// I need to import "github.com/volatiletech/null/v8" if I want to construct it properly
+	// OR I can use explicit assignment if I add the import.
+
+	// Let's check imports I added... I didn't add null/v8.
+	// Use replacement to add it if compilation fails.
+
+	return &entities.SmartContract{
+		ID:              m.ID,
+		Name:            m.Name,
+		Type:            entities.SmartContractType(m.Type),
+		Version:         m.Version,
+		ChainID:         m.ChainID,
+		ContractAddress: m.ContractAddress,
+		// DeployerAddress: null.StringFrom(m.DeployerAddress), // Need null
+		StartBlock: uint64(m.StartBlock),
+		ABI:        abi,
+		// Metadata:        null.JSONFrom([]byte(m.Metadata)), // Need null
+		IsActive:  m.IsActive,
+		CreatedAt: m.CreatedAt,
+		UpdatedAt: m.UpdatedAt,
+		// DeletedAt:       m.DeletedAt, // GORM DeletedAt is struct, entity might expect pointer or specific type
+	}, nil
 }

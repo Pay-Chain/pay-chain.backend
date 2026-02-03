@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"pay-chain.backend/internal/domain/entities"
 	"pay-chain.backend/internal/domain/errors"
+	domainRepos "pay-chain.backend/internal/domain/repositories"
 	"pay-chain.backend/internal/infrastructure/repositories"
 )
 
@@ -21,14 +22,14 @@ type PaymentRequestUsecase struct {
 	paymentRequestRepo *repositories.PaymentRequestRepositoryImpl
 	merchantRepo       *repositories.MerchantRepository
 	walletRepo         *repositories.WalletRepository
-	contractRepo       *repositories.SmartContractRepository
+	contractRepo       domainRepos.SmartContractRepository
 }
 
 func NewPaymentRequestUsecase(
 	paymentRequestRepo *repositories.PaymentRequestRepositoryImpl,
 	merchantRepo *repositories.MerchantRepository,
 	walletRepo *repositories.WalletRepository,
-	contractRepo *repositories.SmartContractRepository,
+	contractRepo domainRepos.SmartContractRepository,
 ) *PaymentRequestUsecase {
 	return &PaymentRequestUsecase{
 		paymentRequestRepo: paymentRequestRepo,

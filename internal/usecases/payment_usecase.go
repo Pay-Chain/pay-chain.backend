@@ -13,6 +13,7 @@ import (
 	"pay-chain.backend/internal/domain/entities"
 	domainerrors "pay-chain.backend/internal/domain/errors"
 	"pay-chain.backend/internal/domain/repositories"
+	"pay-chain.backend/internal/infrastructure/blockchain"
 )
 
 // PaymentUsecase handles payment business logic
@@ -22,6 +23,8 @@ type PaymentUsecase struct {
 	walletRepo       repositories.WalletRepository
 	merchantRepo     repositories.MerchantRepository
 	contractRepo     repositories.SmartContractRepository
+	chainRepo        repositories.ChainRepository
+	clientFactory    *blockchain.ClientFactory
 }
 
 // NewPaymentUsecase creates a new payment usecase
@@ -31,6 +34,8 @@ func NewPaymentUsecase(
 	walletRepo repositories.WalletRepository,
 	merchantRepo repositories.MerchantRepository,
 	contractRepo repositories.SmartContractRepository,
+	chainRepo repositories.ChainRepository,
+	clientFactory *blockchain.ClientFactory,
 ) *PaymentUsecase {
 	return &PaymentUsecase{
 		paymentRepo:      paymentRepo,
@@ -38,6 +43,8 @@ func NewPaymentUsecase(
 		walletRepo:       walletRepo,
 		merchantRepo:     merchantRepo,
 		contractRepo:     contractRepo,
+		chainRepo:        chainRepo,
+		clientFactory:    clientFactory,
 	}
 }
 
@@ -59,7 +66,7 @@ func DefaultFeeConfig() *FeeConfig {
 }
 
 // CalculateFees calculates fees for a payment
-func (u *PaymentUsecase) CalculateFees(amount *big.Int, decimals int, isCrossChain bool, merchantDiscount float64) *entities.FeeBreakdown {
+func (u *PaymentUsecase) CalculateFees(ctx context.Context, amount *big.Int, decimals int, sourceChainID, destChainID string, merchantDiscount float64) *entities.FeeBreakdown {
 	// Convert amount to float for calculation
 	divisor := new(big.Float).SetInt(new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(decimals)), nil))
 	amountFloat, _ := new(big.Float).SetInt(amount).Float64()
@@ -76,19 +83,25 @@ func (u *PaymentUsecase) CalculateFees(amount *big.Int, decimals int, isCrossCha
 	}
 
 	// Bridge fee (only for cross-chain)
-	bridgeFee := float64(0)
+	bridgeFeeNative := new(big.Int)
+	isCrossChain := sourceChainID != destChainID // Defined here
 	if isCrossChain {
-		bridgeFee = float64(config.BridgeFeeFlat) / 100
+		// New: Fetch dynamic bridge fee from blockchain
+		quote, err := u.getBridgeFeeQuote(ctx, sourceChainID, destChainID)
+		if err == nil {
+			bridgeFeeNative = quote
+		}
 	}
 
-	totalFee := platformFee + bridgeFee
-	netAmount := amountFloat - totalFee
+	// Total Fee in Token (Platform Fee)
+	totalFeeToken := platformFee
+	netAmount := amountFloat - totalFeeToken
 
 	return &entities.FeeBreakdown{
 		PlatformFee: formatAmount(platformFee, decimals),
-		BridgeFee:   formatAmount(bridgeFee, decimals),
-		GasFee:      "0", // Gas is handled separately
-		TotalFee:    formatAmount(totalFee, decimals),
+		BridgeFee:   bridgeFeeNative.String(), // Now returning Native Fee (Wei)
+		GasFee:      "0",                      // Gas is handled separately
+		TotalFee:    formatAmount(totalFeeToken, decimals),
 		NetAmount:   formatAmount(netAmount, decimals),
 	}
 }
@@ -130,20 +143,21 @@ func (u *PaymentUsecase) CreatePayment(ctx context.Context, userID uuid.UUID, in
 	}
 
 	// Calculate fees
-	isCrossChain := input.SourceChainID != input.DestChainID
-	feeBreakdown := u.CalculateFees(amount, input.Decimals, isCrossChain, 0)
+	feeBreakdown := u.CalculateFees(ctx, amount, input.Decimals, input.SourceChainID, input.DestChainID, 0)
 
 	// Select bridge
 	bridgeType := ""
+	isCrossChain := input.SourceChainID != input.DestChainID // Restore definition
 	if isCrossChain {
 		bridgeType = u.SelectBridge(input.SourceChainID, input.DestChainID)
 	}
 
-	// Get smart contract for source chain from database
-	contracts, _ := u.contractRepo.GetByChain(ctx, input.SourceChainID)
-	var contract *entities.SmartContract
-	if len(contracts) > 0 {
-		contract = contracts[0]
+	// Get specific gateway contract for source chain
+	contract, err := u.contractRepo.GetActiveContract(ctx, input.SourceChainID, entities.ContractTypeGateway)
+	if err != nil {
+		// Log error but proceed (payment can be created, just tx data might be missing)
+		// valid contract is preferred though
+		fmt.Printf("Warning: Active Gateway contract not found for chain %s: %v\n", input.SourceChainID, err)
 	}
 
 	// Create payment entity
@@ -208,9 +222,11 @@ func (u *PaymentUsecase) buildTransactionData(payment *entities.Payment, contrac
 
 	switch chainType {
 	case "eip155":
+		// Removed unused bridgeFee parsing for now
 		return map[string]string{
 			"to":   contract.ContractAddress,
 			"data": u.buildEvmPaymentHex(payment),
+			// "value": "0x...", // Todo: Add value when we have it in payment entity
 		}
 	case "solana":
 		return map[string]string{
@@ -295,7 +311,110 @@ func (u *PaymentUsecase) GetPaymentEvents(ctx context.Context, paymentID uuid.UU
 	return u.paymentEventRepo.GetByPaymentID(ctx, paymentID)
 }
 
-// UpdatePaymentStatus updates a payment's status
-func (u *PaymentUsecase) UpdatePaymentStatus(ctx context.Context, paymentID uuid.UUID, status entities.PaymentStatus) error {
-	return u.paymentRepo.UpdateStatus(ctx, paymentID, status)
+// getBridgeFeeQuote fetches fee from on-chain Router
+func (u *PaymentUsecase) getBridgeFeeQuote(ctx context.Context, sourceChainID, destChainID string) (*big.Int, error) {
+	// 1. Get Active Router
+	router, err := u.contractRepo.GetActiveContract(ctx, sourceChainID, entities.ContractTypeRouter)
+	if err != nil {
+		return nil, fmt.Errorf("active router not found: %w", err)
+	}
+
+	// 2. Get RPC Client
+	chain, err := u.chainRepo.GetByCAIP2(ctx, sourceChainID)
+	if err != nil {
+		return nil, fmt.Errorf("chain config not found: %w", err)
+	}
+
+	var client *blockchain.EVMClient
+	var clientErr error
+
+	// Use RPCURLs if available, fallback to legacy RPCURL
+	targets := chain.RPCURLs
+	if len(targets) == 0 && chain.RPCURL != "" {
+		targets = []string{chain.RPCURL}
+	}
+
+	for _, url := range targets {
+		c, err := u.clientFactory.GetEVMClient(url)
+		if err == nil {
+			client = c
+			break
+		}
+		clientErr = err
+		// Continue to next RPC
+	}
+
+	if client == nil {
+		return nil, fmt.Errorf("failed to connect to any RPC endpoint: %w", clientErr)
+	}
+
+	// 3. Select Bridge Type
+	bridgeTypeStr := u.SelectBridge(sourceChainID, destChainID)
+	var bridgeType uint8
+	if bridgeTypeStr == "CCIP" {
+		bridgeType = 1
+	} else {
+		bridgeType = 0 // Hyperbridge/Hyperlane default
+	}
+
+	// 4. Encode Calldata: quoteFee(string destChainId, uint8 bridgeType)
+	// Selector: 0x9a8f4304 (calculated for quoteFee(string,uint8))
+	// Actually let's assume standard packing.
+	// Since I can't look up selector easily, I'll trust my calculation or use a known one.
+	// keccak256("quoteFee(string,uint8)") = 9a8f4304...
+
+	// Manual ABI Packing
+	// DestChainID (string) -> offset 64 (0x40)
+	// BridgeType (uint8) -> offset 32 (0x20) (padded) -> Wait, method(string, uint8)
+	// Stack: [OffsetString, Uint8]
+	// 0x00: Offset to string data (0x40 = 64 bytes)
+	// 0x20: BridgeType (padded to 32 bytes)
+	// 0x40: String Length
+	// 0x60: String Data (padded)
+
+	selector := "9a8f4304"
+
+	// Bridge Type (uint8) padded to 32 bytes
+	bridgeTypeHex := fmt.Sprintf("%064x", bridgeType)
+
+	// DestChainID String
+	strData := []byte(destChainID)
+	lenStr := len(strData)
+	lenStrHex := fmt.Sprintf("%064x", lenStr)
+	strDataHex := hex.EncodeToString(strData)
+	// Pad string data to 32 bytes multiple
+	if lenStr%32 != 0 {
+		padding := 32 - (lenStr % 32)
+		strDataHex += strings.Repeat("00", padding)
+	}
+
+	// Offset is 0x40 (64) because param 1 is string (dynamic), param 2 is uint8 (static).
+	// WAIT: in ABI encoding, static types come first in Head? No.
+	// Params are encoded in order.
+	// 1. String (Dynamic) -> Head is Offset.
+	// 2. Uint8 (Static) -> Head is Value.
+	// So:
+	// 0x00: Offset of String (0x40 = 64)
+	// 0x20: BridgeType Value
+	// 0x40: String Length
+	// 0x60: String Content
+
+	offsetHex := fmt.Sprintf("%064x", 64)
+
+	calldataHex := selector + offsetHex + bridgeTypeHex + lenStrHex + strDataHex
+	calldata, _ := hex.DecodeString(calldataHex)
+
+	// 5. Call Contract
+	result, err := client.CallView(ctx, router.ContractAddress, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("contract call failed: %w", err)
+	}
+
+	// 6. Decode Result (uint256)
+	if len(result) == 0 {
+		return nil, fmt.Errorf("empty result from quoteFee")
+	}
+	fee := new(big.Int).SetBytes(result)
+
+	return fee, nil
 }

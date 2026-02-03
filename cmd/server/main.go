@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"log"
 	"os"
 	"os/signal"
@@ -11,8 +10,11 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 
 	"pay-chain.backend/internal/config"
+	"pay-chain.backend/internal/infrastructure/blockchain"
 	"pay-chain.backend/internal/infrastructure/jobs"
 	"pay-chain.backend/internal/infrastructure/repositories"
 	"pay-chain.backend/internal/interfaces/http/handlers"
@@ -35,17 +37,23 @@ func main() {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
-	// Connect to database
-	db, err := sql.Open("postgres", cfg.Database.URL())
+	// Connect to database using GORM
+	dsn := cfg.Database.URL()
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
-	defer db.Close()
 
-	if err := db.Ping(); err != nil {
+	sqlDB, err := db.DB()
+	if err != nil {
+		log.Fatalf("Failed to get generic database object: %v", err)
+	}
+	defer sqlDB.Close()
+
+	if err := sqlDB.Ping(); err != nil {
 		log.Printf("⚠️ Database not available: %v (endpoints will return errors)", err)
 	} else {
-		log.Println("✅ Connected to PostgreSQL")
+		log.Println("✅ Connected to PostgreSQL via GORM")
 	}
 
 	// Initialize JWT service
@@ -67,9 +75,12 @@ func main() {
 	smartContractRepo := repositories.NewSmartContractRepository(db)
 	paymentRequestRepo := repositories.NewPaymentRequestRepository(db)
 
+	// Initialize blockchain client factory
+	clientFactory := blockchain.NewClientFactory()
+
 	// Initialize usecases
 	authUsecase := usecases.NewAuthUsecase(userRepo, emailVerifRepo, walletRepo, jwtService)
-	paymentUsecase := usecases.NewPaymentUsecase(paymentRepo, paymentEventRepo, walletRepo, merchantRepo, smartContractRepo)
+	paymentUsecase := usecases.NewPaymentUsecase(paymentRepo, paymentEventRepo, walletRepo, merchantRepo, smartContractRepo, chainRepo, clientFactory)
 	merchantUsecase := usecases.NewMerchantUsecase(merchantRepo, userRepo)
 	walletUsecase := usecases.NewWalletUsecase(walletRepo, userRepo)
 	paymentRequestUsecase := usecases.NewPaymentRequestUsecase(paymentRequestRepo, merchantRepo, walletRepo, smartContractRepo)

@@ -1,0 +1,54 @@
+package models
+
+import (
+	"time"
+
+	"github.com/google/uuid"
+	"gorm.io/gorm"
+)
+
+type PaymentRequest struct {
+	ID           uuid.UUID `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
+	MerchantID   uuid.UUID `gorm:"type:uuid;not null;index"`
+	WalletID     uuid.UUID `gorm:"type:uuid;not null;index"`
+	ChainID      string    `gorm:"type:varchar(50);not null"` // CAIP-2
+	TokenAddress string    `gorm:"type:varchar(255);not null"`
+	Amount       string    `gorm:"type:varchar(100);not null"` // BigInt
+	Decimals     int       `gorm:"not null"`
+	Description  string    `gorm:"type:text"`
+	Status       string    `gorm:"type:varchar(50);not null;index"`
+	ExpiresAt    time.Time `gorm:"not null"`
+	TxHash       string    `gorm:"type:varchar(255)"`
+	PayerAddress string    `gorm:"type:varchar(255)"`
+	CompletedAt  *time.Time
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+	DeletedAt    gorm.DeletedAt `gorm:"index"`
+}
+
+type RpcEndpoint struct {
+	ID          uuid.UUID `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
+	ChainID     int       `gorm:"not null;index"`
+	URL         string    `gorm:"type:text;not null"`
+	Priority    int       `gorm:"default:0"`
+	IsActive    bool      `gorm:"default:true;index"`
+	LastErrorAt *time.Time
+	ErrorCount  int `gorm:"default:0"`
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
+type BackgroundJob struct {
+	ID           uuid.UUID `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
+	JobType      string    `gorm:"type:varchar(50);not null;index"`
+	Payload      string    `gorm:"type:jsonb;not null"`
+	Status       string    `gorm:"type:varchar(50);not null;index"`
+	Attempts     int       `gorm:"default:0"`
+	MaxAttempts  int       `gorm:"not null"`
+	ScheduledAt  time.Time `gorm:"index"`
+	StartedAt    *time.Time
+	CompletedAt  *time.Time
+	ErrorMessage string `gorm:"type:text"`
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}

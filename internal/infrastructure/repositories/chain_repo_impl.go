@@ -2,50 +2,34 @@ package repositories
 
 import (
 	"context"
-	"database/sql"
 
+	"gorm.io/gorm"
 	"pay-chain.backend/internal/domain/entities"
 	domainerrors "pay-chain.backend/internal/domain/errors"
+	"pay-chain.backend/internal/infrastructure/models"
 )
 
 // ChainRepository implements chain data operations
 type ChainRepository struct {
-	db *sql.DB
+	db *gorm.DB
 }
 
 // NewChainRepository creates a new chain repository
-func NewChainRepository(db *sql.DB) *ChainRepository {
+func NewChainRepository(db *gorm.DB) *ChainRepository {
 	return &ChainRepository{db: db}
 }
 
 // GetByID gets a chain by ID
 func (r *ChainRepository) GetByID(ctx context.Context, id int) (*entities.Chain, error) {
-	query := `
-		SELECT id, namespace, name, chain_type, rpc_url, explorer_url, is_active, created_at
-		FROM chains
-		WHERE id = $1 AND deleted_at IS NULL
-	`
-
-	chain := &entities.Chain{}
-	err := r.db.QueryRowContext(ctx, query, id).Scan(
-		&chain.ID,
-		&chain.Namespace,
-		&chain.Name,
-		&chain.ChainType,
-		&chain.RPCURL,
-		&chain.ExplorerURL,
-		&chain.IsActive,
-		&chain.CreatedAt,
-	)
-
-	if err == sql.ErrNoRows {
-		return nil, domainerrors.ErrNotFound
-	}
-	if err != nil {
+	var chainModel models.Chain
+	if err := r.db.WithContext(ctx).Preload("RPCs").Where("id = ?", id).First(&chainModel).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, domainerrors.ErrNotFound
+		}
 		return nil, err
 	}
 
-	return chain, nil
+	return r.toEntity(&chainModel), nil
 }
 
 // GetByCAIP2 gets a chain by CAIP-2 identifier
@@ -58,104 +42,77 @@ func (r *ChainRepository) GetByCAIP2(ctx context.Context, caip2 string) (*entiti
 		return nil, domainerrors.ErrBadRequest
 	}
 
-	query := `
-		SELECT id, namespace, name, chain_type, rpc_url, explorer_url, is_active, created_at
-		FROM chains
-		WHERE namespace = $1 AND id = $2 AND deleted_at IS NULL
-	`
-
-	chain := &entities.Chain{}
-	err = r.db.QueryRowContext(ctx, query, namespace, chainID).Scan(
-		&chain.ID,
-		&chain.Namespace,
-		&chain.Name,
-		&chain.ChainType,
-		&chain.RPCURL,
-		&chain.ExplorerURL,
-		&chain.IsActive,
-		&chain.CreatedAt,
-	)
-
-	if err == sql.ErrNoRows {
-		return nil, domainerrors.ErrNotFound
-	}
-	if err != nil {
+	var chainModel models.Chain
+	if err := r.db.WithContext(ctx).Preload("RPCs").Where("namespace = ? AND id = ?", namespace, chainID).First(&chainModel).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, domainerrors.ErrNotFound
+		}
 		return nil, err
 	}
 
-	return chain, nil
+	return r.toEntity(&chainModel), nil
 }
 
 // GetAll gets all active chains
 func (r *ChainRepository) GetAll(ctx context.Context) ([]*entities.Chain, error) {
-	query := `
-		SELECT id, namespace, name, chain_type, rpc_url, explorer_url, is_active, created_at
-		FROM chains
-		WHERE deleted_at IS NULL
-		ORDER BY name
-	`
-
-	rows, err := r.db.QueryContext(ctx, query)
-	if err != nil {
+	var chainModels []models.Chain
+	if err := r.db.WithContext(ctx).Preload("RPCs").Order("name").Find(&chainModels).Error; err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
-	var chains []*entities.Chain
-	for rows.Next() {
-		chain := &entities.Chain{}
-		if err := rows.Scan(
-			&chain.ID,
-			&chain.Namespace,
-			&chain.Name,
-			&chain.ChainType,
-			&chain.RPCURL,
-			&chain.ExplorerURL,
-			&chain.IsActive,
-			&chain.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		chains = append(chains, chain)
+	var entitiesList []*entities.Chain
+	for _, m := range chainModels {
+		// Create a local copy to safe pointer referencing
+		model := m
+		entitiesList = append(entitiesList, r.toEntity(&model))
 	}
 
-	return chains, nil
+	return entitiesList, nil
 }
 
 // GetActive gets only active chains
 func (r *ChainRepository) GetActive(ctx context.Context) ([]*entities.Chain, error) {
-	query := `
-		SELECT id, namespace, name, chain_type, rpc_url, explorer_url, is_active, created_at
-		FROM chains
-		WHERE is_active = true AND deleted_at IS NULL
-		ORDER BY name
-	`
-
-	rows, err := r.db.QueryContext(ctx, query)
-	if err != nil {
+	var chainModels []models.Chain
+	if err := r.db.WithContext(ctx).Preload("RPCs").Where("is_active = ?", true).Order("name").Find(&chainModels).Error; err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
-	var chains []*entities.Chain
-	for rows.Next() {
-		chain := &entities.Chain{}
-		if err := rows.Scan(
-			&chain.ID,
-			&chain.Namespace,
-			&chain.Name,
-			&chain.ChainType,
-			&chain.RPCURL,
-			&chain.ExplorerURL,
-			&chain.IsActive,
-			&chain.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		chains = append(chains, chain)
+	var entitiesList []*entities.Chain
+	for _, m := range chainModels {
+		model := m
+		entitiesList = append(entitiesList, r.toEntity(&model))
 	}
 
-	return chains, nil
+	return entitiesList, nil
+}
+
+// toEntity converts GORM model to Domain Entity
+func (r *ChainRepository) toEntity(m *models.Chain) *entities.Chain {
+	rpcURLs := make([]string, 0)
+	for _, rpc := range m.RPCs {
+		if rpc.IsActive {
+			rpcURLs = append(rpcURLs, rpc.URL)
+		}
+	}
+
+	// Fallback/Legacy
+	legacyURL := m.RPCURL
+	if len(rpcURLs) > 0 {
+		legacyURL = rpcURLs[0]
+	}
+
+	return &entities.Chain{
+		ID:             m.ID,
+		Namespace:      m.Namespace,
+		Name:           m.Name,
+		ChainType:      entities.ChainType(m.ChainType),
+		RPCURL:         legacyURL,
+		ExplorerURL:    m.ExplorerURL,
+		IsActive:       m.IsActive,
+		RPCURLs:        rpcURLs,
+		CreatedAt:      m.CreatedAt,
+		StateMachineID: m.StateMachineID,
+	}
 }
 
 // parseCAIP2 parses a CAIP-2 identifier into namespace and chainId

@@ -2,191 +2,117 @@ package repositories
 
 import (
 	"context"
-	"database/sql"
+	"errors"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 	"pay-chain.backend/internal/domain/entities"
 	domainerrors "pay-chain.backend/internal/domain/errors"
+	"pay-chain.backend/internal/infrastructure/models"
 )
 
 // TokenRepository implements token data operations
 type TokenRepository struct {
-	db *sql.DB
+	db *gorm.DB
 }
 
 // NewTokenRepository creates a new token repository
-func NewTokenRepository(db *sql.DB) *TokenRepository {
+func NewTokenRepository(db *gorm.DB) *TokenRepository {
 	return &TokenRepository{db: db}
 }
 
 // GetByID gets a token by ID
 func (r *TokenRepository) GetByID(ctx context.Context, id uuid.UUID) (*entities.Token, error) {
-	query := `
-		SELECT id, symbol, name, decimals, logo_url, is_stablecoin, created_at
-		FROM tokens
-		WHERE id = $1 AND deleted_at IS NULL
-	`
-
-	token := &entities.Token{}
-	err := r.db.QueryRowContext(ctx, query, id).Scan(
-		&token.ID,
-		&token.Symbol,
-		&token.Name,
-		&token.Decimals,
-		&token.LogoURL,
-		&token.IsStablecoin,
-		&token.CreatedAt,
-	)
-
-	if err == sql.ErrNoRows {
-		return nil, domainerrors.ErrNotFound
-	}
-	if err != nil {
+	var m models.Token
+	if err := r.db.WithContext(ctx).Where("id = ?", id).First(&m).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, domainerrors.ErrNotFound
+		}
 		return nil, err
 	}
-
-	return token, nil
+	return r.toEntity(&m), nil
 }
 
 // GetBySymbol gets a token by symbol
 func (r *TokenRepository) GetBySymbol(ctx context.Context, symbol string) (*entities.Token, error) {
-	query := `
-		SELECT id, symbol, name, decimals, logo_url, is_stablecoin, created_at
-		FROM tokens
-		WHERE symbol = $1 AND deleted_at IS NULL
-	`
-
-	token := &entities.Token{}
-	err := r.db.QueryRowContext(ctx, query, symbol).Scan(
-		&token.ID,
-		&token.Symbol,
-		&token.Name,
-		&token.Decimals,
-		&token.LogoURL,
-		&token.IsStablecoin,
-		&token.CreatedAt,
-	)
-
-	if err == sql.ErrNoRows {
-		return nil, domainerrors.ErrNotFound
-	}
-	if err != nil {
+	var m models.Token
+	if err := r.db.WithContext(ctx).Where("symbol = ?", symbol).First(&m).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, domainerrors.ErrNotFound
+		}
 		return nil, err
 	}
-
-	return token, nil
+	return r.toEntity(&m), nil
 }
 
 // GetAll gets all tokens
 func (r *TokenRepository) GetAll(ctx context.Context) ([]*entities.Token, error) {
-	query := `
-		SELECT id, symbol, name, decimals, logo_url, is_stablecoin, created_at
-		FROM tokens
-		WHERE deleted_at IS NULL
-		ORDER BY symbol
-	`
-
-	rows, err := r.db.QueryContext(ctx, query)
-	if err != nil {
+	var ms []models.Token
+	if err := r.db.WithContext(ctx).Order("symbol").Find(&ms).Error; err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
 	var tokens []*entities.Token
-	for rows.Next() {
-		token := &entities.Token{}
-		if err := rows.Scan(
-			&token.ID,
-			&token.Symbol,
-			&token.Name,
-			&token.Decimals,
-			&token.LogoURL,
-			&token.IsStablecoin,
-			&token.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		tokens = append(tokens, token)
+	for _, m := range ms {
+		model := m
+		tokens = append(tokens, r.toEntity(&model))
 	}
-
 	return tokens, nil
 }
 
 // GetStablecoins gets only stablecoin tokens
 func (r *TokenRepository) GetStablecoins(ctx context.Context) ([]*entities.Token, error) {
-	query := `
-		SELECT id, symbol, name, decimals, logo_url, is_stablecoin, created_at
-		FROM tokens
-		WHERE is_stablecoin = true AND deleted_at IS NULL
-		ORDER BY symbol
-	`
-
-	rows, err := r.db.QueryContext(ctx, query)
-	if err != nil {
+	var ms []models.Token
+	if err := r.db.WithContext(ctx).Where("is_stablecoin = ?", true).Order("symbol").Find(&ms).Error; err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
 	var tokens []*entities.Token
-	for rows.Next() {
-		token := &entities.Token{}
-		if err := rows.Scan(
-			&token.ID,
-			&token.Symbol,
-			&token.Name,
-			&token.Decimals,
-			&token.LogoURL,
-			&token.IsStablecoin,
-			&token.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		tokens = append(tokens, token)
+	for _, m := range ms {
+		model := m
+		tokens = append(tokens, r.toEntity(&model))
 	}
-
 	return tokens, nil
 }
 
 // GetSupportedByChain gets tokens supported on a chain
 func (r *TokenRepository) GetSupportedByChain(ctx context.Context, chainID int) ([]*entities.SupportedToken, error) {
-	query := `
-		SELECT st.id, st.chain_id, st.token_id, st.contract_address, st.is_active, 
-		       st.min_amount, st.max_amount, st.created_at,
-		       t.symbol, t.name, t.decimals
-		FROM supported_tokens st
-		JOIN tokens t ON st.token_id = t.id
-		WHERE st.chain_id = $1 AND st.is_active = true AND st.deleted_at IS NULL
-		ORDER BY t.symbol
-	`
-
-	rows, err := r.db.QueryContext(ctx, query, chainID)
-	if err != nil {
+	// Joins tokens
+	var ms []models.SupportedToken
+	if err := r.db.WithContext(ctx).Preload("Token").
+		Where("chain_id = ? AND is_active = ?", chainID, true).
+		Joins("JOIN tokens ON tokens.id = supported_tokens.token_id").
+		Order("tokens.symbol").
+		Find(&ms).Error; err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
-	var tokens []*entities.SupportedToken
-	for rows.Next() {
+	var supported []*entities.SupportedToken
+	for _, m := range ms {
 		st := &entities.SupportedToken{
-			Token: &entities.Token{},
+			ID:              m.ID,
+			ChainID:         m.ChainID,
+			TokenID:         m.TokenID,
+			ContractAddress: m.ContractAddress,
+			IsActive:        m.IsActive,
+			MinAmount:       m.MinAmount,
+			// MaxAmount:       null.StringFromPtr(m.MaxAmount),
+			CreatedAt: m.CreatedAt,
+			Token:     r.toEntity(&m.Token),
 		}
-		if err := rows.Scan(
-			&st.ID,
-			&st.ChainID,
-			&st.TokenID,
-			&st.ContractAddress,
-			&st.IsActive,
-			&st.MinAmount,
-			&st.MaxAmount,
-			&st.CreatedAt,
-			&st.Token.Symbol,
-			&st.Token.Name,
-			&st.Token.Decimals,
-		); err != nil {
-			return nil, err
-		}
-		tokens = append(tokens, st)
+		supported = append(supported, st)
 	}
+	return supported, nil
+}
 
-	return tokens, nil
+func (r *TokenRepository) toEntity(m *models.Token) *entities.Token {
+	return &entities.Token{
+		ID:           m.ID,
+		Symbol:       m.Symbol,
+		Name:         m.Name,
+		Decimals:     m.Decimals,
+		LogoURL:      m.LogoURL,
+		IsStablecoin: m.IsStablecoin,
+		CreatedAt:    m.CreatedAt,
+	}
 }

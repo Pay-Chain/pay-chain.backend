@@ -12,6 +12,8 @@ type SmartContractRepository interface {
 	Create(ctx context.Context, contract *entities.SmartContract) error
 	GetByID(ctx context.Context, id uuid.UUID) (*entities.SmartContract, error)
 	GetByChainAndAddress(ctx context.Context, chainID, address string) (*entities.SmartContract, error)
+	// GetActiveContract returns the currently active contract of a specific type on a chain
+	GetActiveContract(ctx context.Context, chainID string, contractType entities.SmartContractType) (*entities.SmartContract, error)
 	GetByChain(ctx context.Context, chainID string) ([]*entities.SmartContract, error)
 	GetAll(ctx context.Context) ([]*entities.SmartContract, error)
 	Update(ctx context.Context, contract *entities.SmartContract) error

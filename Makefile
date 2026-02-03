@@ -1,5 +1,17 @@
 .PHONY: run build test migrate-up migrate-down generate-models lint clean
 
+# Load .env file if it exists
+ifneq (,$(wildcard ./.env))
+    include .env
+    export
+endif
+
+# Construct DATABASE_URL if not set
+DATABASE_URL ?= postgres://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)?sslmode=$(DB_SSLMODE)
+
+# Go path for tools
+GOBIN ?= $(shell go env GOPATH)/bin
+
 # Development
 init:
 	go mod tidy
@@ -28,9 +40,7 @@ migrate-down:
 migrate-create:
 	migrate create -ext sql -dir migrations -seq $(name)
 
-# SQLBoiler
-generate-models:
-	sqlboiler psql --wipe --no-tests
+
 
 # Linting
 lint:

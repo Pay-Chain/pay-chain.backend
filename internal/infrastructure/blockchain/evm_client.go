@@ -90,6 +90,16 @@ func (c *EVMClient) EstimateGas(ctx context.Context, msg ethereum.CallMsg) (uint
 	return c.client.EstimateGas(ctx, msg)
 }
 
+// CallView executes a read-only contract call
+func (c *EVMClient) CallView(ctx context.Context, to string, data []byte) ([]byte, error) {
+	addr := common.HexToAddress(to)
+	msg := ethereum.CallMsg{
+		To:   &addr,
+		Data: data,
+	}
+	return c.client.CallContract(ctx, msg, nil)
+}
+
 // Close closes the client connection
 func (c *EVMClient) Close() {
 	c.client.Close()

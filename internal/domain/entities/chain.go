@@ -18,17 +18,19 @@ const (
 
 // Chain represents a blockchain
 type Chain struct {
-	ID                  int       `json:"id"`
-	Namespace           string    `json:"namespace"`
-	Name                string    `json:"name"`
-	ChainType           ChainType `json:"chainType"`
-	RPCURL              string    `json:"rpcUrl"`
-	ExplorerURL         string    `json:"explorerUrl,omitempty"`
-	ContractAddress     string    `json:"contractAddress,omitempty"`
-	CCIPRouterAddress   string    `json:"ccipRouterAddress,omitempty"`
-	HyperbridgeGateway  string    `json:"hyperbridgeGateway,omitempty"`
-	IsActive            bool      `json:"isActive"`
-	CreatedAt           time.Time `json:"createdAt"`
+	ID                 int       `json:"id"`
+	Namespace          string    `json:"namespace"`
+	Name               string    `json:"name"`
+	ChainType          ChainType `json:"chainType"`
+	RPCURL             string    `json:"rpcUrl"` // Deprecated: use RPCURLs[0]
+	RPCURLs            []string  `json:"rpcUrls"`
+	ExplorerURL        string    `json:"explorerUrl,omitempty"`
+	ContractAddress    string    `json:"contractAddress,omitempty"`
+	CCIPRouterAddress  string    `json:"ccipRouterAddress,omitempty"`
+	HyperbridgeGateway string    `json:"hyperbridgeGateway,omitempty"`
+	StateMachineID     string    `json:"stateMachineId,omitempty"`
+	IsActive           bool      `json:"isActive"`
+	CreatedAt          time.Time `json:"createdAt"`
 }
 
 // GetCAIP2ID returns the CAIP-2 formatted chain ID
@@ -38,13 +40,13 @@ func (c *Chain) GetCAIP2ID() string {
 
 // Token represents a token
 type Token struct {
-	ID          uuid.UUID `json:"id"`
-	Symbol      string    `json:"symbol"`
-	Name        string    `json:"name"`
-	Decimals    int       `json:"decimals"`
-	LogoURL     string    `json:"logoUrl,omitempty"`
-	IsStablecoin bool     `json:"isStablecoin"`
-	CreatedAt   time.Time `json:"createdAt"`
+	ID           uuid.UUID `json:"id"`
+	Symbol       string    `json:"symbol"`
+	Name         string    `json:"name"`
+	Decimals     int       `json:"decimals"`
+	LogoURL      string    `json:"logoUrl,omitempty"`
+	IsStablecoin bool      `json:"isStablecoin"`
+	CreatedAt    time.Time `json:"createdAt"`
 }
 
 // SupportedToken represents a token supported on a chain
@@ -57,7 +59,7 @@ type SupportedToken struct {
 	MinAmount       string      `json:"minAmount,omitempty"`
 	MaxAmount       null.String `json:"maxAmount,omitempty"`
 	CreatedAt       time.Time   `json:"createdAt"`
-	
+
 	// Joined fields
 	Token *Token `json:"token,omitempty"`
 	Chain *Chain `json:"chain,omitempty"`
