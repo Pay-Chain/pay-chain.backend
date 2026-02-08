@@ -96,6 +96,7 @@ func main() {
 	smartContractHandler := handlers.NewSmartContractHandler(smartContractRepo)
 	paymentRequestHandler := handlers.NewPaymentRequestHandler(paymentRequestUsecase)
 	webhookHandler := handlers.NewWebhookHandler(webhookUsecase)
+	adminHandler := handlers.NewAdminHandler(userRepo, merchantRepo, paymentRepo)
 
 	// Create auth middleware
 	authMiddleware := middleware.AuthMiddleware(jwtService)
@@ -112,7 +113,13 @@ func main() {
 
 	// CORS middleware
 	r.Use(func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		origin := c.Request.Header.Get("Origin")
+		if origin != "" {
+			c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
+		} else {
+			c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		}
+
 		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
 		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE, PATCH")
@@ -144,6 +151,7 @@ func main() {
 			auth.POST("/login", authHandler.Login)
 			auth.POST("/verify-email", authHandler.VerifyEmail)
 			auth.POST("/refresh", authHandler.RefreshToken)
+			auth.GET("/me", authMiddleware, authHandler.GetMe)
 		}
 
 		// Payment routes (protected)
@@ -212,6 +220,7 @@ func main() {
 		contractsAdmin.Use(authMiddleware)
 		{
 			contractsAdmin.POST("", smartContractHandler.CreateSmartContract)
+			contractsAdmin.PUT("/:id", smartContractHandler.UpdateSmartContract)
 			contractsAdmin.DELETE("/:id", smartContractHandler.DeleteSmartContract)
 		}
 
@@ -220,6 +229,27 @@ func main() {
 		{
 			webhooks.POST("/indexer", webhookHandler.HandleIndexerWebhook)
 		}
+
+		// Admin routes (protected)
+		admin := v1.Group("/admin")
+		admin.Use(authMiddleware, middleware.RequireAdmin())
+		{
+			admin.GET("/users", adminHandler.ListUsers)
+			admin.GET("/merchants", adminHandler.ListMerchants)
+			admin.PUT("/merchants/:id/status", adminHandler.UpdateMerchantStatus)
+			admin.GET("/stats", adminHandler.GetStats)
+
+			// Chain management
+			admin.POST("/chains", chainHandler.CreateChain)
+			admin.PUT("/chains/:id", chainHandler.UpdateChain)
+			admin.DELETE("/chains/:id", chainHandler.DeleteChain)
+		}
+	}
+
+	// Print all registered routes for debugging
+	log.Println("📋 Registered Routes:")
+	for _, route := range r.Routes() {
+		log.Printf("   %s %s", route.Method, route.Path)
 	}
 
 	// Graceful shutdown

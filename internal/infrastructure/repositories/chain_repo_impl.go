@@ -86,6 +86,111 @@ func (r *ChainRepository) GetActive(ctx context.Context) ([]*entities.Chain, err
 	return entitiesList, nil
 }
 
+// Create creates a new chain (using Upsert logic)
+func (r *ChainRepository) Create(ctx context.Context, chain *entities.Chain) error {
+	m := &models.Chain{
+		ID:          chain.ID,
+		Name:        chain.Name,
+		Namespace:   chain.Namespace,
+		ChainType:   string(chain.ChainType),
+		RPCURL:      chain.RPCURL,
+		ExplorerURL: chain.ExplorerURL,
+		Symbol:      chain.Symbol,
+		LogoURL:     chain.LogoURL,
+		IsActive:    chain.IsActive,
+		CreatedAt:   chain.CreatedAt,
+	}
+
+	// Use Save to perform an UPSERT.
+	// We use Unscoped() to ensure we can "reactivate" soft-deleted records with the same ID.
+	if err := r.db.WithContext(ctx).Unscoped().Save(m).Error; err != nil {
+		return err
+	}
+
+	// Sync RPC URL to chain_rpcs table if provided
+	if chain.RPCURL != "" {
+		rpc := &models.ChainRPC{
+			ChainID:  chain.ID,
+			URL:      chain.RPCURL,
+			Priority: 0,
+			IsActive: true,
+		}
+		// Try to find existing RPC with this URL to avoid duplicates, or just create a new one as primary?
+		// For simplicity/robustness: Upsert based on ChainID + URL is tricky without unique constraint.
+		// Let's just create it if it doesn't exist, or update the "primary" one (Priority 0).
+		// Better strategy: Find any existing RPC for this chain. If none, create. If exists, update the first one.
+
+		var existingRPC models.ChainRPC
+		err := r.db.WithContext(ctx).Where("chain_id = ?", chain.ID).First(&existingRPC).Error
+		if err == nil {
+			// Update existing
+			existingRPC.URL = chain.RPCURL
+			r.db.WithContext(ctx).Save(&existingRPC)
+		} else {
+			// Create new
+			r.db.WithContext(ctx).Create(rpc)
+		}
+	}
+
+	return nil
+}
+
+// Update updates a chain
+func (r *ChainRepository) Update(ctx context.Context, chain *entities.Chain) error {
+	updates := map[string]interface{}{
+		"name":         chain.Name,
+		"namespace":    chain.Namespace,
+		"chain_type":   chain.ChainType,
+		"rpc_url":      chain.RPCURL,
+		"explorer_url": chain.ExplorerURL,
+		"symbol":       chain.Symbol,
+		"logo_url":     chain.LogoURL,
+		"is_active":    chain.IsActive,
+	}
+
+	result := r.db.WithContext(ctx).Model(&models.Chain{}).Where("id = ?", chain.ID).Updates(updates)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return domainerrors.ErrNotFound
+	}
+
+	// Sync RPC URL to chain_rpcs table
+	if chain.RPCURL != "" {
+		var existingRPC models.ChainRPC
+		err := r.db.WithContext(ctx).Where("chain_id = ?", chain.ID).First(&existingRPC).Error
+		if err == nil {
+			// Update existing
+			existingRPC.URL = chain.RPCURL
+			r.db.WithContext(ctx).Save(&existingRPC)
+		} else {
+			// Create new
+			rpc := &models.ChainRPC{
+				ChainID:  chain.ID,
+				URL:      chain.RPCURL,
+				Priority: 0,
+				IsActive: true,
+			}
+			r.db.WithContext(ctx).Create(rpc)
+		}
+	}
+
+	return nil
+}
+
+// Delete deletes a chain
+func (r *ChainRepository) Delete(ctx context.Context, id int) error {
+	result := r.db.WithContext(ctx).Delete(&models.Chain{}, "id = ?", id)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return domainerrors.ErrNotFound
+	}
+	return nil
+}
+
 // toEntity converts GORM model to Domain Entity
 func (r *ChainRepository) toEntity(m *models.Chain) *entities.Chain {
 	rpcURLs := make([]string, 0)
@@ -108,6 +213,8 @@ func (r *ChainRepository) toEntity(m *models.Chain) *entities.Chain {
 		ChainType:      entities.ChainType(m.ChainType),
 		RPCURL:         legacyURL,
 		ExplorerURL:    m.ExplorerURL,
+		Symbol:         m.Symbol,
+		LogoURL:        m.LogoURL,
 		IsActive:       m.IsActive,
 		RPCURLs:        rpcURLs,
 		CreatedAt:      m.CreatedAt,

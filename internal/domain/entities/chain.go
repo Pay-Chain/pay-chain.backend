@@ -1,6 +1,7 @@
 package entities
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -25,6 +26,8 @@ type Chain struct {
 	RPCURL             string    `json:"rpcUrl"` // Deprecated: use RPCURLs[0]
 	RPCURLs            []string  `json:"rpcUrls"`
 	ExplorerURL        string    `json:"explorerUrl,omitempty"`
+	Symbol             string    `json:"symbol,omitempty"`
+	LogoURL            string    `json:"logoUrl,omitempty"`
 	ContractAddress    string    `json:"contractAddress,omitempty"`
 	CCIPRouterAddress  string    `json:"ccipRouterAddress,omitempty"`
 	HyperbridgeGateway string    `json:"hyperbridgeGateway,omitempty"`
@@ -35,7 +38,7 @@ type Chain struct {
 
 // GetCAIP2ID returns the CAIP-2 formatted chain ID
 func (c *Chain) GetCAIP2ID() string {
-	return c.Namespace + ":" + string(rune(c.ID))
+	return fmt.Sprintf("%s:%d", c.Namespace, c.ID)
 }
 
 // Token represents a token

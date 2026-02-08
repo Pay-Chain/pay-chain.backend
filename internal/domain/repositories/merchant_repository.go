@@ -15,6 +15,7 @@ type MerchantRepository interface {
 	Update(ctx context.Context, merchant *entities.Merchant) error
 	UpdateStatus(ctx context.Context, id uuid.UUID, status entities.MerchantStatus) error
 	SoftDelete(ctx context.Context, id uuid.UUID) error
+	List(ctx context.Context) ([]*entities.Merchant, error)
 }
 
 // WalletRepository defines wallet data operations

@@ -149,6 +149,21 @@ func (r *MerchantRepository) UpdateStatus(ctx context.Context, id uuid.UUID, sta
 	return nil
 }
 
+// List lists all merchants
+func (r *MerchantRepository) List(ctx context.Context) ([]*entities.Merchant, error) {
+	var mList []models.Merchant
+	if err := r.db.WithContext(ctx).Order("created_at DESC").Find(&mList).Error; err != nil {
+		return nil, err
+	}
+
+	var merchants []*entities.Merchant
+	for _, m := range mList {
+		model := m
+		merchants = append(merchants, r.toEntity(&model))
+	}
+	return merchants, nil
+}
+
 // SoftDelete soft deletes a merchant
 func (r *MerchantRepository) SoftDelete(ctx context.Context, id uuid.UUID) error {
 	result := r.db.WithContext(ctx).Delete(&models.Merchant{}, "id = ?", id)

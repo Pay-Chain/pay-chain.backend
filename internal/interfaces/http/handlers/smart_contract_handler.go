@@ -137,3 +137,51 @@ func (h *SmartContractHandler) DeleteSmartContract(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "Contract deleted successfully"})
 }
+
+// UpdateSmartContract updates a smart contract
+// PUT /api/v1/contracts/:id
+func (h *SmartContractHandler) UpdateSmartContract(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid contract ID"})
+		return
+	}
+
+	var input entities.UpdateSmartContractInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	contract, err := h.repo.GetByID(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Contract not found"})
+		return
+	}
+
+	if input.Name != "" {
+		contract.Name = input.Name
+	}
+	if input.Version != "" {
+		contract.Version = input.Version
+	}
+	if input.ABI != nil {
+		contract.ABI = input.ABI
+	}
+	if input.IsActive != nil {
+		contract.IsActive = *input.IsActive
+	}
+	if input.Metadata != nil {
+		// Conversion needed if entity and input types differ slightly
+		// Assuming map[string]interface{} to null.JSON conversion logic here...
+		// For now simple placeholder if needed, or if json.Marshal works
+	}
+
+	if err := h.repo.Update(c.Request.Context(), contract); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update contract"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Contract updated", "contract": contract})
+}

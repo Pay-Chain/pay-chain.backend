@@ -14,6 +14,7 @@ type UserRepository interface {
 	GetByEmail(ctx context.Context, email string) (*entities.User, error)
 	Update(ctx context.Context, user *entities.User) error
 	SoftDelete(ctx context.Context, id uuid.UUID) error
+	List(ctx context.Context, search string) ([]*entities.User, error)
 }
 
 // EmailVerificationRepository defines email verification operations

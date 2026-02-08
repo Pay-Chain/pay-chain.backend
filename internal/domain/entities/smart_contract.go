@@ -18,6 +18,7 @@ const (
 	ContractTypeTokenSwapper       SmartContractType = "TOKEN_SWAPPER"
 	ContractTypeAdapterCCIP        SmartContractType = "ADAPTER_CCIP"
 	ContractTypeAdapterHyperbridge SmartContractType = "ADAPTER_HYPERBRIDGE"
+	ContractTypePool               SmartContractType = "POOL" // DEX Pool
 	ContractTypeMock               SmartContractType = "MOCK" // For testing
 )
 
@@ -30,6 +31,10 @@ type SmartContract struct {
 	ChainID         string            `json:"chainId"` // CAIP-2 format: namespace:chainId
 	ContractAddress string            `json:"contractAddress"`
 	DeployerAddress null.String       `json:"deployerAddress,omitempty"`
+	Token0Address   null.String       `json:"token0Address,omitempty"`
+	Token1Address   null.String       `json:"token1Address,omitempty"`
+	FeeTier         null.Int          `json:"feeTier,omitempty"`
+	HookAddress     null.String       `json:"hookAddress,omitempty"`
 	StartBlock      uint64            `json:"startBlock"` // Block number deployment/indexing start
 	ABI             interface{}       `json:"abi"`
 	Metadata        null.JSON         `json:"metadata,omitempty"` // Store extra config like gas limits, timeouts
@@ -47,6 +52,10 @@ type CreateSmartContractInput struct {
 	ChainID         string                 `json:"chainId" binding:"required"`
 	ContractAddress string                 `json:"contractAddress" binding:"required"`
 	DeployerAddress string                 `json:"deployerAddress,omitempty"`
+	Token0Address   string                 `json:"token0Address,omitempty"`
+	Token1Address   string                 `json:"token1Address,omitempty"`
+	FeeTier         int                    `json:"feeTier,omitempty"`
+	HookAddress     string                 `json:"hookAddress,omitempty"`
 	StartBlock      uint64                 `json:"startBlock" binding:"required"`
 	ABI             interface{}            `json:"abi" binding:"required"`
 	Metadata        map[string]interface{} `json:"metadata,omitempty"`

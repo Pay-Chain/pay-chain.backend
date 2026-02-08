@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"log"
 	"net/http"
 	"strings"
 
@@ -27,6 +28,7 @@ func AuthMiddleware(jwtService *jwt.JWTService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader(AuthorizationHeader)
 		if authHeader == "" {
+			log.Printf("[AuthMiddleware] Request to %s failed: Authorization header is missing", c.Request.URL.Path)
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 				"error": "Authorization header is required",
 			})
@@ -34,6 +36,7 @@ func AuthMiddleware(jwtService *jwt.JWTService) gin.HandlerFunc {
 		}
 
 		if !strings.HasPrefix(authHeader, BearerPrefix) {
+			log.Printf("[AuthMiddleware] Request to %s failed: Invalid authorization format", c.Request.URL.Path)
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 				"error": "Invalid authorization format. Use: Bearer <token>",
 			})
@@ -43,6 +46,7 @@ func AuthMiddleware(jwtService *jwt.JWTService) gin.HandlerFunc {
 		tokenString := strings.TrimPrefix(authHeader, BearerPrefix)
 		claims, err := jwtService.ValidateToken(tokenString)
 		if err != nil {
+			log.Printf("[AuthMiddleware] Request to %s failed: %v", c.Request.URL.Path, err)
 			if err == jwt.ErrExpiredToken {
 				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 					"error": "Token has expired",
@@ -113,4 +117,14 @@ func RequireRole(roles ...string) gin.HandlerFunc {
 			"error": "Insufficient permissions",
 		})
 	}
+}
+
+// RequireAdmin creates a middleware that requires admin role
+func RequireAdmin() gin.HandlerFunc {
+	return RequireRole("admin")
+}
+
+// RequireAdminOrSubAdmin creates a middleware that requires admin or sub_admin role
+func RequireAdminOrSubAdmin() gin.HandlerFunc {
+	return RequireRole("admin", "sub_admin")
 }

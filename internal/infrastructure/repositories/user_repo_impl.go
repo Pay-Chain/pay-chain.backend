@@ -89,6 +89,28 @@ func (r *UserRepository) Update(ctx context.Context, user *entities.User) error 
 	return nil
 }
 
+// List lists users with optional search filter
+func (r *UserRepository) List(ctx context.Context, search string) ([]*entities.User, error) {
+	var userModels []models.User
+	query := r.db.WithContext(ctx).Order("created_at DESC")
+
+	if search != "" {
+		searchTerm := "%" + search + "%"
+		query = query.Where("name ILIKE ? OR email ILIKE ?", searchTerm, searchTerm)
+	}
+
+	if err := query.Find(&userModels).Error; err != nil {
+		return nil, err
+	}
+
+	var users []*entities.User
+	for _, m := range userModels {
+		model := m
+		users = append(users, r.toEntity(&model))
+	}
+	return users, nil
+}
+
 // SoftDelete soft deletes a user
 func (r *UserRepository) SoftDelete(ctx context.Context, id uuid.UUID) error {
 	result := r.db.WithContext(ctx).Delete(&models.User{}, "id = ?", id)

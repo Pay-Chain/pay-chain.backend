@@ -14,6 +14,8 @@ type Chain struct {
 	ChainType      string `gorm:"type:varchar(50);not null;default:'EVM'"`
 	RPCURL         string `gorm:"type:text;column:rpc_url"` // Legacy column, kept for backward compatibility
 	ExplorerURL    string `gorm:"type:text"`
+	Symbol         string `gorm:"type:varchar(20)"`
+	LogoURL        string `gorm:"type:text"`
 	IsActive       bool   `gorm:"default:true"`
 	StateMachineID string `gorm:"type:varchar(100)"` // e.g., 'isis-local', 'suave-local'
 	CreatedAt      time.Time

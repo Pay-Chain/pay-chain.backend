@@ -17,6 +17,10 @@ type SmartContract struct {
 	Type            string         `gorm:"type:varchar(50);not null;default:'GATEWAY'"`
 	Version         string         `gorm:"type:varchar(20);not null;default:'1.0.0'"`
 	DeployerAddress string         `gorm:"type:varchar(66)"`
+	Token0Address   string         `gorm:"type:varchar(66)"`
+	Token1Address   string         `gorm:"type:varchar(66)"`
+	FeeTier         int            `gorm:"default:0"`
+	HookAddress     string         `gorm:"type:varchar(66)"`
 	StartBlock      int64          `gorm:"default:0"`
 	Metadata        string         `gorm:"type:jsonb;default:'{}'"`
 	IsActive        bool           `gorm:"default:true"`

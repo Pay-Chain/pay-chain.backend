@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/lib/pq"
+	"github.com/volatiletech/null/v8"
 	"gorm.io/gorm"
 	"pay-chain.backend/internal/domain/entities"
 	domainerrors "pay-chain.backend/internal/domain/errors"
@@ -50,6 +51,10 @@ func (r *SmartContractRepositoryImpl) Create(ctx context.Context, contract *enti
 		Type:            string(contract.Type),
 		Version:         contract.Version,
 		DeployerAddress: deployerAddr,
+		Token0Address:   contract.Token0Address.String,
+		Token1Address:   contract.Token1Address.String,
+		FeeTier:         contract.FeeTier.Int,
+		HookAddress:     contract.HookAddress.String,
 		StartBlock:      int64(contract.StartBlock),
 		ABI:             string(abiBytes),
 		Metadata:        metadataStr,
@@ -151,11 +156,15 @@ func (r *SmartContractRepositoryImpl) Update(ctx context.Context, contract *enti
 	}
 
 	updates := map[string]interface{}{
-		"name":      contract.Name,
-		"version":   contract.Version,
-		"is_active": contract.IsActive,
-		"abi":       string(abiBytes),
-		"metadata":  metadataStr,
+		"name":           contract.Name,
+		"version":        contract.Version,
+		"is_active":      contract.IsActive,
+		"abi":            string(abiBytes),
+		"metadata":       metadataStr,
+		"token0_address": contract.Token0Address.String,
+		"token1_address": contract.Token1Address.String,
+		"fee_tier":       contract.FeeTier.Int,
+		"hook_address":   contract.HookAddress.String,
 		// Add others if needed
 	}
 
@@ -207,8 +216,12 @@ func (r *SmartContractRepositoryImpl) toEntity(m *models.SmartContract) (*entiti
 		ChainID:         m.ChainID,
 		ContractAddress: m.ContractAddress,
 		// DeployerAddress: null.StringFrom(m.DeployerAddress), // Need null
-		StartBlock: uint64(m.StartBlock),
-		ABI:        abi,
+		Token0Address: null.NewString(m.Token0Address, m.Token0Address != ""),
+		Token1Address: null.NewString(m.Token1Address, m.Token1Address != ""),
+		FeeTier:       null.NewInt(m.FeeTier, m.FeeTier != 0),
+		HookAddress:   null.NewString(m.HookAddress, m.HookAddress != ""),
+		StartBlock:    uint64(m.StartBlock),
+		ABI:           abi,
 		// Metadata:        null.JSONFrom([]byte(m.Metadata)), // Need null
 		IsActive:  m.IsActive,
 		CreatedAt: m.CreatedAt,
