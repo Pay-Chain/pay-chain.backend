@@ -2,12 +2,14 @@ package handlers
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"pay-chain.backend/internal/domain/entities"
 	domainerrors "pay-chain.backend/internal/domain/errors"
 	"pay-chain.backend/internal/domain/repositories"
+	"pay-chain.backend/pkg/utils"
 )
 
 // SmartContractHandler handles smart contract endpoints
@@ -73,15 +75,20 @@ func (h *SmartContractHandler) GetSmartContract(c *gin.Context) {
 // ListSmartContracts lists all smart contracts
 // GET /api/v1/contracts
 func (h *SmartContractHandler) ListSmartContracts(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "0"))
+	pagination := utils.GetPaginationParams(page, limit)
+
 	chainID := c.Query("chainId")
 
 	var contracts []*entities.SmartContract
+	var totalCount int64
 	var err error
 
 	if chainID != "" {
-		contracts, err = h.repo.GetByChain(c.Request.Context(), chainID)
+		contracts, totalCount, err = h.repo.GetByChain(c.Request.Context(), chainID, pagination)
 	} else {
-		contracts, err = h.repo.GetAll(c.Request.Context())
+		contracts, totalCount, err = h.repo.GetAll(c.Request.Context(), pagination)
 	}
 
 	if err != nil {
@@ -89,7 +96,11 @@ func (h *SmartContractHandler) ListSmartContracts(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"contracts": contracts})
+	meta := utils.CalculateMeta(totalCount, pagination.Page, pagination.Limit)
+	c.JSON(http.StatusOK, gin.H{
+		"items": contracts,
+		"meta":  meta,
+	})
 }
 
 // GetContractByChainAndAddress gets a contract by chain ID and address

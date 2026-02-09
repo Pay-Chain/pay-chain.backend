@@ -8,11 +8,11 @@ import (
 
 // Config holds all configuration values
 type Config struct {
-	Server   ServerConfig
-	Database DatabaseConfig
-	Redis    RedisConfig
-	RabbitMQ RabbitMQConfig
-	JWT      JWTConfig
+	Server     ServerConfig
+	Database   DatabaseConfig
+	Redis      RedisConfig
+	RabbitMQ   RabbitMQConfig
+	JWT        JWTConfig
 	Blockchain BlockchainConfig
 }
 
@@ -34,7 +34,7 @@ type DatabaseConfig struct {
 
 // URL returns the database connection URL
 func (c DatabaseConfig) URL() string {
-	return "postgres://" + c.User + ":" + c.Password + "@" + c.Host + ":" + strconv.Itoa(c.Port) + "/" + c.DBName + "?sslmode=" + c.SSLMode
+	return "postgres://" + c.User + ":" + c.Password + "@" + c.Host + ":" + strconv.Itoa(c.Port) + "/" + c.DBName + "?sslmode=" + c.SSLMode + "&prepare_threshold=0"
 }
 
 // RedisConfig holds Redis configuration
@@ -56,9 +56,9 @@ type JWTConfig struct {
 
 // BlockchainConfig holds blockchain RPC URLs
 type BlockchainConfig struct {
-	BaseSepoliaRPC   string
-	BSCSepoliaRPC    string
-	SolanaDevnetRPC  string
+	BaseSepoliaRPC  string
+	BSCSepoliaRPC   string
+	SolanaDevnetRPC string
 }
 
 // Load loads configuration from environment variables

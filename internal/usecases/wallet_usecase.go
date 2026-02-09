@@ -2,7 +2,7 @@ package usecases
 
 import (
 	"context"
-	"strconv"
+	"errors"
 
 	"github.com/google/uuid"
 	"github.com/volatiletech/null/v8"
@@ -62,8 +62,12 @@ func (u *WalletUsecase) ConnectWallet(ctx context.Context, userID uuid.UUID, inp
 	// 3. Verify message format and timestamp
 
 	// Check if wallet already exists
-	existingWallet, err := u.walletRepo.GetByAddress(ctx, input.ChainID, input.Address)
-	if err != nil && err != domainerrors.ErrNotFound {
+	checkChainID, err := uuid.Parse(input.ChainID)
+	if err != nil {
+		return nil, domainerrors.ErrInvalidInput
+	}
+	existingWallet, err := u.walletRepo.GetByAddress(ctx, checkChainID, input.Address)
+	if err != nil && !errors.Is(err, domainerrors.ErrNotFound) {
 		return nil, err
 	}
 	if existingWallet != nil {
@@ -76,12 +80,10 @@ func (u *WalletUsecase) ConnectWallet(ctx context.Context, userID uuid.UUID, inp
 	// First wallet is set as primary
 	isPrimary := len(existingWallets) == 0
 
-	// Parse chain ID to int
-	chainID, err := strconv.Atoi(input.ChainID)
+	// Parse chain ID to uuid
+	chainID, err := uuid.Parse(input.ChainID)
 	if err != nil {
-		// If not a pure number, might be CAIP-2 format (e.g., "eip155:1")
-		// For now, try to extract the chain ID portion
-		chainID = 0 // Default, repository should handle CAIP-2 format
+		return nil, domainerrors.ErrInvalidInput
 	}
 
 	// Create wallet with null.String for UserID

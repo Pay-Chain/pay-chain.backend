@@ -1,0 +1,2 @@
+-- 000015_add_token_type.up.sql
+ALTER TABLE tokens ADD COLUMN IF NOT EXISTS type VARCHAR(20) NOT NULL DEFAULT 'ERC20';

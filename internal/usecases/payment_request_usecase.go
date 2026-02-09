@@ -12,6 +12,7 @@ import (
 	"pay-chain.backend/internal/domain/errors"
 	domainRepos "pay-chain.backend/internal/domain/repositories"
 	"pay-chain.backend/internal/infrastructure/repositories"
+	"pay-chain.backend/pkg/utils"
 )
 
 const (
@@ -85,7 +86,7 @@ func (uc *PaymentRequestUsecase) CreatePaymentRequest(ctx context.Context, input
 	}
 
 	// Get smart contract for this chain
-	contracts, _ := uc.contractRepo.GetByChain(ctx, input.ChainID)
+	contracts, _, err := uc.contractRepo.GetByChain(ctx, input.ChainID, utils.PaginationParams{Page: 1, Limit: 1})
 	var contract *entities.SmartContract
 	if len(contracts) > 0 {
 		contract = contracts[0]
@@ -194,7 +195,7 @@ func (uc *PaymentRequestUsecase) GetPaymentRequest(ctx context.Context, requestI
 	}
 
 	// Get contract
-	contracts, _ := uc.contractRepo.GetByChain(ctx, request.ChainID)
+	contracts, _, err := uc.contractRepo.GetByChain(ctx, request.ChainID, utils.PaginationParams{Page: 1, Limit: 1})
 	var contract *entities.SmartContract
 	if len(contracts) > 0 {
 		contract = contracts[0]

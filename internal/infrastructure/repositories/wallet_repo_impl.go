@@ -57,7 +57,7 @@ func (r *WalletRepository) GetByID(ctx context.Context, id uuid.UUID) (*entities
 	return r.toEntity(&m), nil
 }
 
-// GetByUserID gets wallets for a user
+// GetByUserID gets wallets by user ID
 func (r *WalletRepository) GetByUserID(ctx context.Context, userID uuid.UUID) ([]*entities.Wallet, error) {
 	var ms []models.Wallet
 	if err := r.db.WithContext(ctx).
@@ -76,10 +76,9 @@ func (r *WalletRepository) GetByUserID(ctx context.Context, userID uuid.UUID) ([
 }
 
 // GetByAddress gets a wallet by address and chain
-func (r *WalletRepository) GetByAddress(ctx context.Context, chainID, address string) (*entities.Wallet, error) {
-	// ChainID is string in CAIP-2?
-	// Original impl has GetByAddress(chainID, address string)
-	// But query used chain_id = $1 (int?) or string?
+func (r *WalletRepository) GetByAddress(ctx context.Context, chainID uuid.UUID, address string) (*entities.Wallet, error) {
+	// ChainID is UUID
+
 	// The repo signature says `chainID, address string`.
 	// But `models.Wallet` has `ChainID int`.
 	// And `parseCAIP2` logic suggests we might need to parse it if input is string CAIP-2?
@@ -96,8 +95,7 @@ func (r *WalletRepository) GetByAddress(ctx context.Context, chainID, address st
 	// Wait, internal/infrastructure/repositories/wallet_repo_impl.go line 111:
 	// func (r *WalletRepository) GetByAddress(ctx context.Context, chainID, address string)
 
-	// I will attempt simple Where.
-
+	// ChainID is UUID
 	var m models.Wallet
 	if err := r.db.WithContext(ctx).Where("chain_id = ? AND address = ?", chainID, address).First(&m).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {

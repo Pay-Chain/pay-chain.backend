@@ -3,7 +3,6 @@ package usecases
 import (
 	"context"
 	"errors"
-	"strconv"
 
 	"github.com/google/uuid"
 	"github.com/volatiletech/null/v8"
@@ -61,7 +60,11 @@ func (u *AuthUsecase) Register(ctx context.Context, input *entities.CreateUserIn
 	}
 
 	// Check if wallet already registered to another user
-	existingWallet, err := u.walletRepo.GetByAddress(ctx, input.WalletChainID, input.WalletAddress)
+	checkChainID, err := uuid.Parse(input.WalletChainID)
+	if err != nil {
+		return nil, "", domainerrors.ErrInvalidInput
+	}
+	existingWallet, err := u.walletRepo.GetByAddress(ctx, checkChainID, input.WalletAddress)
 	if err != nil && !errors.Is(err, domainerrors.ErrNotFound) {
 		return nil, "", err
 	}
@@ -89,7 +92,11 @@ func (u *AuthUsecase) Register(ctx context.Context, input *entities.CreateUserIn
 	}
 
 	// Create wallet linked to user (as primary)
-	chainID, _ := strconv.Atoi(input.WalletChainID)
+	chainID, err := uuid.Parse(input.WalletChainID)
+	if err != nil {
+		return nil, "", domainerrors.ErrInvalidInput
+	}
+
 	wallet := &entities.Wallet{
 		UserID:    null.StringFrom(user.ID.String()),
 		ChainID:   chainID,

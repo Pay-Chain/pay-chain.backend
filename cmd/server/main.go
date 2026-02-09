@@ -39,7 +39,12 @@ func main() {
 
 	// Connect to database using GORM
 	dsn := cfg.Database.URL()
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	db, err := gorm.Open(postgres.New(postgres.Config{
+		DSN:                  dsn,
+		PreferSimpleProtocol: true,
+	}), &gorm.Config{
+		PrepareStmt: false,
+	})
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
@@ -203,7 +208,7 @@ func main() {
 		// Token routes (public)
 		tokens := v1.Group("/tokens")
 		{
-			tokens.GET("", tokenHandler.ListTokens)
+			tokens.GET("", tokenHandler.ListSupportedTokens)
 			tokens.GET("/stablecoins", tokenHandler.ListStablecoins)
 		}
 
@@ -243,6 +248,16 @@ func main() {
 			admin.POST("/chains", chainHandler.CreateChain)
 			admin.PUT("/chains/:id", chainHandler.UpdateChain)
 			admin.DELETE("/chains/:id", chainHandler.DeleteChain)
+
+			// RPC management
+			rpcHandler := handlers.NewRpcHandler(chainRepo)
+			admin.GET("/rpcs", rpcHandler.ListRPCs)
+
+			// Supported Token management
+			admin.GET("/tokens", tokenHandler.ListSupportedTokens)
+			admin.POST("/tokens", tokenHandler.CreateToken)
+			admin.PUT("/tokens/:id", tokenHandler.UpdateToken)
+			admin.DELETE("/tokens/:id", tokenHandler.DeleteToken)
 		}
 	}
 

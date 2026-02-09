@@ -1,14 +1,17 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"pay-chain.backend/internal/domain/entities"
 	domainerrors "pay-chain.backend/internal/domain/errors"
 	"pay-chain.backend/internal/domain/repositories"
+	"pay-chain.backend/pkg/utils"
 )
 
 // ChainHandler handles chain endpoints
@@ -23,8 +26,14 @@ func NewChainHandler(chainRepo repositories.ChainRepository) *ChainHandler {
 
 // ListChains lists all active chains
 // GET /api/v1/chains
+// ListChains lists all active chains
+// GET /api/v1/chains
 func (h *ChainHandler) ListChains(c *gin.Context) {
-	chains, err := h.chainRepo.GetActive(c.Request.Context())
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "0"))
+	pagination := utils.GetPaginationParams(page, limit)
+
+	chains, totalCount, err := h.chainRepo.GetActive(c.Request.Context(), pagination)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to list chains"})
 		return
@@ -32,10 +41,12 @@ func (h *ChainHandler) ListChains(c *gin.Context) {
 
 	// Format response with CAIP-2 IDs
 	type chainResponse struct {
-		ID          int    `json:"id"`
+		ID          string `json:"id"`
+		NetworkID   string `json:"networkId"`
 		CAIP2       string `json:"caip2"`
 		Name        string `json:"name"`
 		ChainType   string `json:"chainType"`
+		RPCURL      string `json:"rpcUrl"`
 		ExplorerURL string `json:"explorerUrl"`
 		Symbol      string `json:"symbol"`
 		LogoURL     string `json:"logoUrl"`
@@ -45,10 +56,12 @@ func (h *ChainHandler) ListChains(c *gin.Context) {
 	var response []chainResponse
 	for _, chain := range chains {
 		response = append(response, chainResponse{
-			ID:          chain.ID,
+			ID:          chain.ID.String(),
+			NetworkID:   chain.NetworkID,
 			CAIP2:       chain.GetCAIP2ID(),
 			Name:        chain.Name,
 			ChainType:   string(chain.ChainType),
+			RPCURL:      chain.RPCURL,
 			ExplorerURL: chain.ExplorerURL,
 			Symbol:      chain.Symbol,
 			LogoURL:     chain.LogoURL,
@@ -60,18 +73,22 @@ func (h *ChainHandler) ListChains(c *gin.Context) {
 		response = []chainResponse{}
 	}
 
-	c.JSON(http.StatusOK, gin.H{"chains": response})
+	meta := utils.CalculateMeta(totalCount, pagination.Page, pagination.Limit)
+	c.JSON(http.StatusOK, gin.H{
+		"items": response,
+		"meta":  meta,
+	})
 }
 
 // CreateChain creates a new chain (Admin only)
 // POST /api/v1/admin/chains
 func (h *ChainHandler) CreateChain(c *gin.Context) {
 	var input struct {
-		ID          int    `json:"id" binding:"required"` // Chain ID from RPC
+		NetworkID   string `json:"networkId" binding:"required"` // External Chain ID (e.g. "1", "solana:5ey...")
 		Name        string `json:"name" binding:"required"`
 		ChainType   string `json:"chainType" binding:"required"` // EVM, SVM
 		RPCURL      string `json:"rpcUrl" binding:"required"`
-		ExplorerURL string `json:"explorerUrl" binding:"required"`
+		ExplorerURL string `json:"explorerUrl"`
 		Symbol      string `json:"symbol" binding:"required"`
 		LogoURL     string `json:"logoUrl"`
 	}
@@ -89,7 +106,8 @@ func (h *ChainHandler) CreateChain(c *gin.Context) {
 	}
 
 	chain := &entities.Chain{
-		ID:          input.ID,
+		ID:          uuid.New(),
+		NetworkID:   input.NetworkID,
 		Namespace:   namespace,
 		Name:        input.Name,
 		ChainType:   entities.ChainType(input.ChainType),
@@ -113,23 +131,25 @@ func (h *ChainHandler) CreateChain(c *gin.Context) {
 // PUT /api/v1/admin/chains/:id
 func (h *ChainHandler) UpdateChain(c *gin.Context) {
 	idStr := c.Param("id")
-	id, err := strconv.Atoi(idStr)
+	id, err := uuid.Parse(idStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid chain ID"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid chain UUID"})
 		return
 	}
 
 	var input struct {
+		NetworkID   string `json:"networkId" binding:"required"`
 		Name        string `json:"name" binding:"required"`
 		ChainType   string `json:"chainType" binding:"required"`
 		RPCURL      string `json:"rpcUrl" binding:"required"`
-		ExplorerURL string `json:"explorerUrl" binding:"required"`
-		Symbol      string `json:"symbol" binding:"required"`
+		ExplorerURL string `json:"explorerUrl"`
+		Symbol      string `json:"symbol"`
 		LogoURL     string `json:"logoUrl"`
 		IsActive    bool   `json:"isActive"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
+		fmt.Printf("UpdateChain validation error: %v\n", err) // Added logging
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -142,6 +162,7 @@ func (h *ChainHandler) UpdateChain(c *gin.Context) {
 
 	chain := &entities.Chain{
 		ID:          id,
+		NetworkID:   input.NetworkID,
 		Namespace:   namespace,
 		Name:        input.Name,
 		ChainType:   entities.ChainType(input.ChainType),
@@ -169,9 +190,9 @@ func (h *ChainHandler) UpdateChain(c *gin.Context) {
 func (h *ChainHandler) DeleteChain(c *gin.Context) {
 	idStr := c.Param("id")
 	// Parse ID
-	id, err := strconv.Atoi(idStr)
+	id, err := uuid.Parse(idStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid chain ID"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid chain UUID"})
 		return
 	}
 

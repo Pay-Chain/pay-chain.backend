@@ -12,6 +12,7 @@ import (
 	"pay-chain.backend/internal/domain/entities"
 	domainerrors "pay-chain.backend/internal/domain/errors"
 	"pay-chain.backend/internal/infrastructure/models"
+	"pay-chain.backend/pkg/utils"
 )
 
 type SmartContractRepositoryImpl struct {
@@ -110,10 +111,22 @@ func (r *SmartContractRepositoryImpl) GetActiveContract(ctx context.Context, cha
 	return r.toEntity(&m)
 }
 
-func (r *SmartContractRepositoryImpl) GetByChain(ctx context.Context, chainID string) ([]*entities.SmartContract, error) {
+func (r *SmartContractRepositoryImpl) GetByChain(ctx context.Context, chainID string, pagination utils.PaginationParams) ([]*entities.SmartContract, int64, error) {
 	var ms []models.SmartContract
-	if err := r.db.WithContext(ctx).Where("chain_id = ?", chainID).Order("created_at DESC").Find(&ms).Error; err != nil {
-		return nil, err
+	var totalCount int64
+
+	query := r.db.WithContext(ctx).Model(&models.SmartContract{}).Where("chain_id = ?", chainID)
+
+	if err := query.Count(&totalCount).Error; err != nil {
+		return nil, 0, err
+	}
+
+	if pagination.Limit > 0 {
+		query = query.Limit(pagination.Limit).Offset(pagination.CalculateOffset())
+	}
+
+	if err := query.Order("created_at DESC").Find(&ms).Error; err != nil {
+		return nil, 0, err
 	}
 
 	var entitiesList []*entities.SmartContract
@@ -121,17 +134,29 @@ func (r *SmartContractRepositoryImpl) GetByChain(ctx context.Context, chainID st
 		model := m
 		e, err := r.toEntity(&model)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		entitiesList = append(entitiesList, e)
 	}
-	return entitiesList, nil
+	return entitiesList, totalCount, nil
 }
 
-func (r *SmartContractRepositoryImpl) GetAll(ctx context.Context) ([]*entities.SmartContract, error) {
+func (r *SmartContractRepositoryImpl) GetAll(ctx context.Context, pagination utils.PaginationParams) ([]*entities.SmartContract, int64, error) {
 	var ms []models.SmartContract
-	if err := r.db.WithContext(ctx).Order("created_at DESC").Find(&ms).Error; err != nil {
-		return nil, err
+	var totalCount int64
+
+	query := r.db.WithContext(ctx).Model(&models.SmartContract{})
+
+	if err := query.Count(&totalCount).Error; err != nil {
+		return nil, 0, err
+	}
+
+	if pagination.Limit > 0 {
+		query = query.Limit(pagination.Limit).Offset(pagination.CalculateOffset())
+	}
+
+	if err := query.Order("created_at DESC").Find(&ms).Error; err != nil {
+		return nil, 0, err
 	}
 
 	var entitiesList []*entities.SmartContract
@@ -139,11 +164,11 @@ func (r *SmartContractRepositoryImpl) GetAll(ctx context.Context) ([]*entities.S
 		model := m
 		e, err := r.toEntity(&model)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		entitiesList = append(entitiesList, e)
 	}
-	return entitiesList, nil
+	return entitiesList, totalCount, nil
 }
 
 func (r *SmartContractRepositoryImpl) Update(ctx context.Context, contract *entities.SmartContract) error {

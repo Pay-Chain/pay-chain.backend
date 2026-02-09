@@ -26,18 +26,6 @@ type PaymentRequest struct {
 	DeletedAt    gorm.DeletedAt `gorm:"index"`
 }
 
-type RpcEndpoint struct {
-	ID          uuid.UUID `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
-	ChainID     int       `gorm:"not null;index"`
-	URL         string    `gorm:"type:text;not null"`
-	Priority    int       `gorm:"default:0"`
-	IsActive    bool      `gorm:"default:true;index"`
-	LastErrorAt *time.Time
-	ErrorCount  int `gorm:"default:0"`
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
-}
-
 type BackgroundJob struct {
 	ID           uuid.UUID `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
 	JobType      string    `gorm:"type:varchar(50);not null;index"`
