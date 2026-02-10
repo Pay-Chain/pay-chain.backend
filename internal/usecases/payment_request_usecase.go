@@ -85,8 +85,14 @@ func (uc *PaymentRequestUsecase) CreatePaymentRequest(ctx context.Context, input
 		targetWallet = wallets[0]
 	}
 
+	// Parse ChainID
+	chainID, err := uuid.Parse(input.ChainID)
+	if err != nil {
+		return nil, errors.BadRequest("invalid chain id format")
+	}
+
 	// Get smart contract for this chain
-	contracts, _, err := uc.contractRepo.GetByChain(ctx, input.ChainID, utils.PaginationParams{Page: 1, Limit: 1})
+	contracts, _, err := uc.contractRepo.GetByChain(ctx, chainID, utils.PaginationParams{Page: 1, Limit: 1})
 	var contract *entities.SmartContract
 	if len(contracts) > 0 {
 		contract = contracts[0]
@@ -103,7 +109,8 @@ func (uc *PaymentRequestUsecase) CreatePaymentRequest(ctx context.Context, input
 		ID:           requestID,
 		MerchantID:   merchant.ID,
 		WalletID:     targetWallet.ID,
-		ChainID:      input.ChainID,
+		ChainID:      chainID,
+		NetworkID:    input.ChainID, // Store original input as NetworkID (CAIP-2 or ID)
 		TokenAddress: input.TokenAddress,
 		Amount:       amountInSmallestUnit,
 		Decimals:     input.Decimals,
@@ -133,7 +140,7 @@ func (uc *PaymentRequestUsecase) buildTransactionData(
 ) *entities.PaymentRequestTxData {
 	txData := &entities.PaymentRequestTxData{
 		RequestID: request.ID.String(),
-		ChainID:   request.ChainID,
+		ChainID:   request.NetworkID, // external tx data needs network ID
 		Amount:    request.Amount,
 		Decimals:  request.Decimals,
 	}
@@ -143,7 +150,7 @@ func (uc *PaymentRequestUsecase) buildTransactionData(
 	}
 
 	// Determine chain type from CAIP-2
-	chainType := getChainTypeFromCAIP2(request.ChainID)
+	chainType := getChainTypeFromCAIP2(request.NetworkID)
 
 	switch chainType {
 	case "eip155": // EVM

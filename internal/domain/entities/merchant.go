@@ -11,25 +11,25 @@ import (
 type MerchantType string
 
 const (
-	MerchantTypePartner   MerchantType = "partner"
-	MerchantTypeCorporate MerchantType = "corporate"
-	MerchantTypeUMKM      MerchantType = "umkm"
-	MerchantTypeRetail    MerchantType = "retail"
+	MerchantTypePartner   MerchantType = "PARTNER"
+	MerchantTypeCorporate MerchantType = "CORPORATE"
+	MerchantTypeUMKM      MerchantType = "UMKM"
+	MerchantTypeRetail    MerchantType = "RETAIL"
 )
 
 // MerchantStatus represents merchant verification status
 type MerchantStatus string
 
 const (
-	MerchantStatusPending   MerchantStatus = "pending"
-	MerchantStatusActive    MerchantStatus = "active"
-	MerchantStatusSuspended MerchantStatus = "suspended"
-	MerchantStatusRejected  MerchantStatus = "rejected"
+	MerchantStatusPending   MerchantStatus = "PENDING"
+	MerchantStatusActive    MerchantStatus = "ACTIVE"
+	MerchantStatusSuspended MerchantStatus = "SUSPENDED"
+	MerchantStatusRejected  MerchantStatus = "REJECTED"
 )
 
 // Merchant represents a merchant entity
 type Merchant struct {
-	ID                 uuid.UUID      `json:"id"`
+	ID                 uuid.UUID      `json:"id" gorm:"type:uuid;primary_key;default:uuid_generate_v7()"`
 	UserID             uuid.UUID      `json:"userId"`
 	BusinessName       string         `json:"businessName"`
 	BusinessEmail      string         `json:"businessEmail"`
@@ -38,11 +38,11 @@ type Merchant struct {
 	TaxID              null.String    `json:"taxId,omitempty"`
 	BusinessAddress    null.String    `json:"businessAddress,omitempty"`
 	Documents          null.JSON      `json:"documents,omitempty"`
-	FeeDiscountPercent float64        `json:"feeDiscountPercent"`
-	VerifiedAt         null.Time      `json:"verifiedAt,omitempty"`
+	FeeDiscountPercent string         `json:"feeDiscountPercent" gorm:"type:decimal(5,2)"` // Changed to string
+	VerifiedAt         *time.Time     `json:"verifiedAt,omitempty"`
 	CreatedAt          time.Time      `json:"createdAt"`
 	UpdatedAt          time.Time      `json:"updatedAt"`
-	DeletedAt          null.Time      `json:"-"`
+	DeletedAt          *time.Time     `json:"-"`
 }
 
 // MerchantApplyInput represents input for merchant application
@@ -64,5 +64,5 @@ type MerchantStatusResponse struct {
 	Message         string         `json:"message,omitempty"`
 	RejectionReason null.String    `json:"rejectionReason,omitempty"`
 	SubmittedAt     time.Time      `json:"submittedAt"`
-	ReviewedAt      null.Time      `json:"reviewedAt,omitempty"`
+	ReviewedAt      *time.Time     `json:"reviewedAt,omitempty"`
 }

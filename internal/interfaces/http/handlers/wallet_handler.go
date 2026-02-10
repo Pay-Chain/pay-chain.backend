@@ -8,6 +8,7 @@ import (
 	"pay-chain.backend/internal/domain/entities"
 	domainerrors "pay-chain.backend/internal/domain/errors"
 	"pay-chain.backend/internal/interfaces/http/middleware"
+	"pay-chain.backend/internal/interfaces/http/response"
 	"pay-chain.backend/internal/usecases"
 )
 
@@ -27,31 +28,31 @@ func (h *WalletHandler) ConnectWallet(c *gin.Context) {
 	var input entities.ConnectWalletInput
 
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		response.Error(c, domainerrors.BadRequest(err.Error()))
 		return
 	}
 
 	userID, ok := middleware.GetUserID(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		response.Error(c, domainerrors.Unauthorized("User not authenticated"))
 		return
 	}
 
 	wallet, err := h.walletUsecase.ConnectWallet(c.Request.Context(), userID, &input)
 	if err != nil {
 		if err == domainerrors.ErrBadRequest {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
+			response.Error(c, domainerrors.BadRequest("Invalid input"))
 			return
 		}
 		if err == domainerrors.ErrAlreadyExists {
-			c.JSON(http.StatusConflict, gin.H{"error": "Wallet already connected to another account"})
+			response.Error(c, domainerrors.Conflict("Wallet already connected to another account"))
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to connect wallet"})
+		response.Error(c, err)
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{
+	response.Success(c, http.StatusCreated, gin.H{
 		"message": "Wallet connected successfully",
 		"wallet":  wallet,
 	})
@@ -62,13 +63,13 @@ func (h *WalletHandler) ConnectWallet(c *gin.Context) {
 func (h *WalletHandler) ListWallets(c *gin.Context) {
 	userID, ok := middleware.GetUserID(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		response.Error(c, domainerrors.Unauthorized("User not authenticated"))
 		return
 	}
 
 	wallets, err := h.walletUsecase.GetWallets(c.Request.Context(), userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to list wallets"})
+		response.Error(c, err)
 		return
 	}
 
@@ -76,7 +77,7 @@ func (h *WalletHandler) ListWallets(c *gin.Context) {
 		wallets = []*entities.Wallet{}
 	}
 
-	c.JSON(http.StatusOK, gin.H{"wallets": wallets})
+	response.Success(c, http.StatusOK, gin.H{"wallets": wallets})
 }
 
 // SetPrimaryWallet sets a wallet as primary
@@ -85,26 +86,26 @@ func (h *WalletHandler) SetPrimaryWallet(c *gin.Context) {
 	idStr := c.Param("id")
 	walletID, err := uuid.Parse(idStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid wallet ID"})
+		response.Error(c, domainerrors.BadRequest("Invalid wallet ID"))
 		return
 	}
 
 	userID, ok := middleware.GetUserID(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		response.Error(c, domainerrors.Unauthorized("User not authenticated"))
 		return
 	}
 
 	if err := h.walletUsecase.SetPrimaryWallet(c.Request.Context(), userID, walletID); err != nil {
 		if err == domainerrors.ErrNotFound {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Wallet not found"})
+			response.Error(c, domainerrors.NotFound("Wallet not found"))
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to set primary wallet"})
+		response.Error(c, err)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Primary wallet updated"})
+	response.Success(c, http.StatusOK, gin.H{"message": "Primary wallet updated"})
 }
 
 // DisconnectWallet disconnects a wallet
@@ -113,28 +114,28 @@ func (h *WalletHandler) DisconnectWallet(c *gin.Context) {
 	idStr := c.Param("id")
 	walletID, err := uuid.Parse(idStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid wallet ID"})
+		response.Error(c, domainerrors.BadRequest("Invalid wallet ID"))
 		return
 	}
 
 	userID, ok := middleware.GetUserID(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		response.Error(c, domainerrors.Unauthorized("User not authenticated"))
 		return
 	}
 
 	if err := h.walletUsecase.DisconnectWallet(c.Request.Context(), userID, walletID); err != nil {
 		if err == domainerrors.ErrNotFound {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Wallet not found"})
+			response.Error(c, domainerrors.NotFound("Wallet not found"))
 			return
 		}
 		if err == domainerrors.ErrForbidden {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Not authorized"})
+			response.Error(c, domainerrors.Forbidden("Not authorized"))
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to disconnect wallet"})
+		response.Error(c, err)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Wallet disconnected"})
+	response.Success(c, http.StatusOK, gin.H{"message": "Wallet disconnected"})
 }

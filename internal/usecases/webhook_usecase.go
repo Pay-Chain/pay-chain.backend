@@ -77,13 +77,12 @@ func (u *WebhookUsecase) ProcessIndexerWebhook(ctx context.Context, eventType st
 		// Create event
 		_ = u.paymentEventRepo.Create(ctx, &entities.PaymentEvent{
 			PaymentID: paymentUUID,
-			EventType: eventType,
-			Chain:     "indexer", // Marker for indexer-triggered update
+			EventType: entities.PaymentEventType(eventType),
 			TxHash:    paymentData.SourceTxHash,
 		})
 
 	case "PAYMENT_REQUEST_CREATED":
-		// No action needed if backend already created it, 
+		// No action needed if backend already created it,
 		// but we could sync if it originated from elsewhere
 		log.Printf("Payment request created on-chain: %s", data)
 

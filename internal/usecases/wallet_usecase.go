@@ -5,7 +5,6 @@ import (
 	"errors"
 
 	"github.com/google/uuid"
-	"github.com/volatiletech/null/v8"
 	"pay-chain.backend/internal/domain/entities"
 	domainerrors "pay-chain.backend/internal/domain/errors"
 	"pay-chain.backend/internal/domain/repositories"
@@ -71,7 +70,7 @@ func (u *WalletUsecase) ConnectWallet(ctx context.Context, userID uuid.UUID, inp
 		return nil, err
 	}
 	if existingWallet != nil {
-		if existingWallet.UserID.Valid && existingWallet.UserID.String == userID.String() {
+		if existingWallet.UserID != nil && *existingWallet.UserID == userID {
 			return existingWallet, nil // Already connected
 		}
 		return nil, domainerrors.ErrAlreadyExists // Wallet belongs to another user
@@ -88,7 +87,7 @@ func (u *WalletUsecase) ConnectWallet(ctx context.Context, userID uuid.UUID, inp
 
 	// Create wallet with null.String for UserID
 	wallet := &entities.Wallet{
-		UserID:    null.StringFrom(userID.String()),
+		UserID:    &userID,
 		ChainID:   chainID,
 		Address:   input.Address,
 		IsPrimary: isPrimary,
@@ -118,7 +117,7 @@ func (u *WalletUsecase) DisconnectWallet(ctx context.Context, userID, walletID u
 	if err != nil {
 		return err
 	}
-	if !wallet.UserID.Valid || wallet.UserID.String != userID.String() {
+	if wallet.UserID == nil || *wallet.UserID != userID {
 		return domainerrors.ErrForbidden
 	}
 

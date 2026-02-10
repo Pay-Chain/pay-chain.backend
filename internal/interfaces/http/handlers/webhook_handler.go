@@ -5,6 +5,8 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	domainerrors "pay-chain.backend/internal/domain/errors"
+	"pay-chain.backend/internal/interfaces/http/response"
 	"pay-chain.backend/internal/usecases"
 )
 
@@ -28,15 +30,15 @@ func (h *WebhookHandler) HandleIndexerWebhook(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		response.Error(c, domainerrors.BadRequest(err.Error()))
 		return
 	}
 
 	err := h.webhookUsecase.ProcessIndexerWebhook(c.Request.Context(), input.EventType, input.Data)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process webhook"})
+		response.Error(c, err)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"received": true})
+	response.Success(c, http.StatusOK, gin.H{"received": true})
 }

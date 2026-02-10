@@ -15,8 +15,11 @@ type TokenRepository interface {
 	GetByAddress(ctx context.Context, address string, chainID uuid.UUID) (*entities.Token, error)
 	GetAll(ctx context.Context) ([]*entities.Token, error)
 	GetStablecoins(ctx context.Context) ([]*entities.Token, error)
-	GetSupportedByChain(ctx context.Context, chainID uuid.UUID, pagination utils.PaginationParams) ([]*entities.SupportedToken, int64, error)
-	GetAllSupported(ctx context.Context, chainID *uuid.UUID, search *string, pagination utils.PaginationParams) ([]*entities.SupportedToken, int64, error)
+	GetNative(ctx context.Context, chainID uuid.UUID) (*entities.Token, error)
+	// GetTokensByChain replaces GetSupportedByChain
+	GetTokensByChain(ctx context.Context, chainID uuid.UUID, pagination utils.PaginationParams) ([]*entities.Token, int64, error)
+	// GetAllTokens replaces GetAllSupported
+	GetAllTokens(ctx context.Context, chainID *uuid.UUID, search *string, pagination utils.PaginationParams) ([]*entities.Token, int64, error)
 	Create(ctx context.Context, token *entities.Token) error
 	Update(ctx context.Context, token *entities.Token) error
 	SoftDelete(ctx context.Context, id uuid.UUID) error

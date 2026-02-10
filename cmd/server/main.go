@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
+	"go.uber.org/zap"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
@@ -21,6 +22,8 @@ import (
 	"pay-chain.backend/internal/interfaces/http/middleware"
 	"pay-chain.backend/internal/usecases"
 	"pay-chain.backend/pkg/jwt"
+	"pay-chain.backend/pkg/logger"
+	"pay-chain.backend/pkg/redis"
 )
 
 func main() {
@@ -31,6 +34,19 @@ func main() {
 
 	// Load configuration
 	cfg := config.Load()
+
+	// Initialize Logger
+	logger.Init(cfg.Server.Env)
+	logger.Info(context.Background(), "Logger initialized", zap.String("env", cfg.Server.Env))
+
+	// Initialize Redis
+	if err := redis.Init(cfg.Redis.URL, cfg.Redis.PASSWORD); err != nil {
+		logger.Error(context.Background(), "Failed to initialize Redis", zap.Error(err))
+		// Fail hard if Redis is critical for Idempotency?
+		// For now, log error but maybe don't crash if idempotent is critical.
+		log.Fatalf("Failed to initialize Redis: %v", err)
+	}
+	logger.Info(context.Background(), "Redis initialized")
 
 	// Set Gin mode
 	if cfg.Server.Env == "production" {
@@ -76,16 +92,17 @@ func main() {
 	paymentEventRepo := repositories.NewPaymentEventRepository(db)
 	walletRepo := repositories.NewWalletRepository(db)
 	chainRepo := repositories.NewChainRepository(db)
-	tokenRepo := repositories.NewTokenRepository(db)
-	smartContractRepo := repositories.NewSmartContractRepository(db)
+	tokenRepo := repositories.NewTokenRepository(db, chainRepo)
+	smartContractRepo := repositories.NewSmartContractRepository(db, chainRepo)
 	paymentRequestRepo := repositories.NewPaymentRequestRepository(db)
+	uow := repositories.NewUnitOfWork(db)
 
 	// Initialize blockchain client factory
 	clientFactory := blockchain.NewClientFactory()
 
 	// Initialize usecases
 	authUsecase := usecases.NewAuthUsecase(userRepo, emailVerifRepo, walletRepo, jwtService)
-	paymentUsecase := usecases.NewPaymentUsecase(paymentRepo, paymentEventRepo, walletRepo, merchantRepo, smartContractRepo, chainRepo, clientFactory)
+	paymentUsecase := usecases.NewPaymentUsecase(paymentRepo, paymentEventRepo, walletRepo, merchantRepo, smartContractRepo, chainRepo, tokenRepo, uow, clientFactory)
 	merchantUsecase := usecases.NewMerchantUsecase(merchantRepo, userRepo)
 	walletUsecase := usecases.NewWalletUsecase(walletRepo, userRepo)
 	paymentRequestUsecase := usecases.NewPaymentRequestUsecase(paymentRequestRepo, merchantRepo, walletRepo, smartContractRepo)
@@ -97,8 +114,8 @@ func main() {
 	merchantHandler := handlers.NewMerchantHandler(merchantUsecase)
 	walletHandler := handlers.NewWalletHandler(walletUsecase)
 	chainHandler := handlers.NewChainHandler(chainRepo)
-	tokenHandler := handlers.NewTokenHandler(tokenRepo)
-	smartContractHandler := handlers.NewSmartContractHandler(smartContractRepo)
+	tokenHandler := handlers.NewTokenHandler(tokenRepo, chainRepo)
+	smartContractHandler := handlers.NewSmartContractHandler(smartContractRepo, chainRepo)
 	paymentRequestHandler := handlers.NewPaymentRequestHandler(paymentRequestUsecase)
 	webhookHandler := handlers.NewWebhookHandler(webhookUsecase)
 	adminHandler := handlers.NewAdminHandler(userRepo, merchantRepo, paymentRepo)
@@ -114,7 +131,11 @@ func main() {
 	go expiryJob.Start(ctx)
 
 	// Initialize router
-	r := gin.Default()
+	// Initialize router
+	r := gin.New()
+	r.Use(gin.Recovery())
+	r.Use(middleware.RequestIDMiddleware())
+	r.Use(middleware.LoggerMiddleware())
 
 	// CORS middleware
 	r.Use(func(c *gin.Context) {
@@ -163,7 +184,8 @@ func main() {
 		payments := v1.Group("/payments")
 		payments.Use(authMiddleware)
 		{
-			payments.POST("", paymentHandler.CreatePayment)
+			// Apply Idempotency only to Create Payment
+			payments.POST("", middleware.IdempotencyMiddleware(), paymentHandler.CreatePayment)
 			payments.GET("/:id", paymentHandler.GetPayment)
 			payments.GET("", paymentHandler.ListPayments)
 			payments.GET("/:id/events", paymentHandler.GetPaymentEvents)

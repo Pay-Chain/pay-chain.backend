@@ -7,18 +7,24 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"pay-chain.backend/internal/domain/entities"
+	domainerrors "pay-chain.backend/internal/domain/errors"
 	"pay-chain.backend/internal/domain/repositories"
+	"pay-chain.backend/internal/interfaces/http/response"
 	"pay-chain.backend/pkg/utils"
 )
 
 // TokenHandler handles token endpoints
 type TokenHandler struct {
 	tokenRepo repositories.TokenRepository
+	chainRepo repositories.ChainRepository
 }
 
 // NewTokenHandler creates a new token handler
-func NewTokenHandler(tokenRepo repositories.TokenRepository) *TokenHandler {
-	return &TokenHandler{tokenRepo: tokenRepo}
+func NewTokenHandler(tokenRepo repositories.TokenRepository, chainRepo repositories.ChainRepository) *TokenHandler {
+	return &TokenHandler{
+		tokenRepo: tokenRepo,
+		chainRepo: chainRepo,
+	}
 }
 
 // ListSupportedTokens lists tokens, optionally filtered by chain
@@ -35,18 +41,23 @@ func (h *TokenHandler) ListSupportedTokens(c *gin.Context) {
 		// Get tokens supported on specific chain
 		chainID, err := uuid.Parse(chainIDStr)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid chainId"})
-			return
+			// Try lookup by legacy blockchain ID
+			chain, err := h.chainRepo.GetByChainID(c.Request.Context(), chainIDStr)
+			if err != nil {
+				response.Error(c, domainerrors.BadRequest("Invalid chainId"))
+				return
+			}
+			chainID = chain.ID
 		}
 
-		tokens, totalCount, err := h.tokenRepo.GetSupportedByChain(c.Request.Context(), chainID, pagination)
+		tokens, totalCount, err := h.tokenRepo.GetTokensByChain(c.Request.Context(), chainID, pagination)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to list tokens"})
+			response.Error(c, err)
 			return
 		}
 
 		meta := utils.CalculateMeta(totalCount, pagination.Page, pagination.Limit)
-		c.JSON(http.StatusOK, gin.H{
+		response.Success(c, http.StatusOK, gin.H{
 			"items": tokens,
 			"meta":  meta,
 		})
@@ -59,14 +70,14 @@ func (h *TokenHandler) ListSupportedTokens(c *gin.Context) {
 		searchPtr = &search
 	}
 
-	tokens, totalCount, err := h.tokenRepo.GetAllSupported(c.Request.Context(), nil, searchPtr, pagination)
+	tokens, totalCount, err := h.tokenRepo.GetAllTokens(c.Request.Context(), nil, searchPtr, pagination)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to list tokens"})
+		response.Error(c, err)
 		return
 	}
 
 	meta := utils.CalculateMeta(totalCount, pagination.Page, pagination.Limit)
-	c.JSON(http.StatusOK, gin.H{
+	response.Success(c, http.StatusOK, gin.H{
 		"items": tokens,
 		"meta":  meta,
 	})
@@ -77,11 +88,11 @@ func (h *TokenHandler) ListSupportedTokens(c *gin.Context) {
 func (h *TokenHandler) ListStablecoins(c *gin.Context) {
 	tokens, err := h.tokenRepo.GetStablecoins(c.Request.Context())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to list stablecoins"})
+		response.Error(c, err)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"tokens": tokens})
+	response.Success(c, http.StatusOK, gin.H{"tokens": tokens})
 }
 
 // CreateToken creates a new token
@@ -98,14 +109,19 @@ func (h *TokenHandler) CreateToken(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		response.Error(c, domainerrors.BadRequest(err.Error()))
 		return
 	}
 
 	chainID, err := uuid.Parse(req.ChainID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid chainId"})
-		return
+		// Try lookup by legacy blockchain ID
+		chain, err := h.chainRepo.GetByChainID(c.Request.Context(), req.ChainID)
+		if err != nil {
+			response.Error(c, domainerrors.BadRequest("Invalid chainId"))
+			return
+		}
+		chainID = chain.ID
 	}
 
 	token := &entities.Token{
@@ -115,17 +131,17 @@ func (h *TokenHandler) CreateToken(c *gin.Context) {
 		Decimals:        req.Decimals,
 		LogoURL:         req.LogoURL,
 		Type:            entities.TokenType(req.Type),
-		ChainID:         chainID,
+		ChainUUID:       chainID,
 		ContractAddress: req.ContractAddress,
 		IsActive:        true,
 	}
 
 	if err := h.tokenRepo.Create(c.Request.Context(), token); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create token"})
+		response.Error(c, err)
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"token": token})
+	response.Success(c, http.StatusCreated, gin.H{"token": token})
 }
 
 // UpdateToken updates an existing token
@@ -134,7 +150,7 @@ func (h *TokenHandler) UpdateToken(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid token ID"})
+		response.Error(c, domainerrors.BadRequest("Invalid token ID"))
 		return
 	}
 
@@ -149,13 +165,13 @@ func (h *TokenHandler) UpdateToken(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		response.Error(c, domainerrors.BadRequest(err.Error()))
 		return
 	}
 
 	token, err := h.tokenRepo.GetByID(c.Request.Context(), id)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Token not found"})
+		response.Error(c, domainerrors.NotFound("Token not found"))
 		return
 	}
 
@@ -179,17 +195,24 @@ func (h *TokenHandler) UpdateToken(c *gin.Context) {
 	}
 	if req.ChainID != "" {
 		chainID, err := uuid.Parse(req.ChainID)
-		if err == nil {
-			token.ChainID = chainID
+		if err != nil {
+			// Try lookup by legacy blockchain ID
+			chain, err := h.chainRepo.GetByChainID(c.Request.Context(), req.ChainID)
+			if err == nil {
+				chainID = chain.ID
+			}
+		}
+		if chainID != uuid.Nil {
+			token.ChainUUID = chainID
 		}
 	}
 
 	if err := h.tokenRepo.Update(c.Request.Context(), token); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update token"})
+		response.Error(c, err)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"token": token})
+	response.Success(c, http.StatusOK, gin.H{"token": token})
 }
 
 // DeleteToken soft deletes a token
@@ -198,14 +221,14 @@ func (h *TokenHandler) DeleteToken(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid token ID"})
+		response.Error(c, domainerrors.BadRequest("Invalid token ID"))
 		return
 	}
 
 	if err := h.tokenRepo.SoftDelete(c.Request.Context(), id); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete token"})
+		response.Error(c, err)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Token deleted successfully"})
+	response.Success(c, http.StatusOK, gin.H{"message": "Token deleted successfully"})
 }

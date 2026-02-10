@@ -9,6 +9,7 @@ import (
 	"pay-chain.backend/internal/domain/entities"
 	domainerrors "pay-chain.backend/internal/domain/errors"
 	"pay-chain.backend/internal/interfaces/http/middleware"
+	"pay-chain.backend/internal/interfaces/http/response"
 	"pay-chain.backend/internal/usecases"
 )
 
@@ -28,27 +29,27 @@ func (h *PaymentHandler) CreatePayment(c *gin.Context) {
 	var input entities.CreatePaymentInput
 
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		response.Error(c, domainerrors.BadRequest(err.Error()))
 		return
 	}
 
 	userID, ok := middleware.GetUserID(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		response.Error(c, domainerrors.Unauthorized("User not authenticated"))
 		return
 	}
 
-	response, err := h.paymentUsecase.CreatePayment(c.Request.Context(), userID, &input)
+	createResponse, err := h.paymentUsecase.CreatePayment(c.Request.Context(), userID, &input)
 	if err != nil {
 		if err == domainerrors.ErrBadRequest {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
+			response.Error(c, domainerrors.BadRequest("Invalid input"))
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create payment"})
+		response.Error(c, err)
 		return
 	}
 
-	c.JSON(http.StatusCreated, response)
+	response.Success(c, http.StatusCreated, createResponse)
 }
 
 // GetPayment gets a payment by ID
@@ -57,21 +58,21 @@ func (h *PaymentHandler) GetPayment(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid payment ID"})
+		response.Error(c, domainerrors.BadRequest("Invalid payment ID"))
 		return
 	}
 
 	payment, err := h.paymentUsecase.GetPayment(c.Request.Context(), id)
 	if err != nil {
 		if err == domainerrors.ErrNotFound {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Payment not found"})
+			response.Error(c, domainerrors.NotFound("Payment not found"))
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get payment"})
+		response.Error(c, err)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"payment": payment})
+	response.Success(c, http.StatusOK, gin.H{"payment": payment})
 }
 
 // ListPayments lists payments for the current user
@@ -79,7 +80,7 @@ func (h *PaymentHandler) GetPayment(c *gin.Context) {
 func (h *PaymentHandler) ListPayments(c *gin.Context) {
 	userID, ok := middleware.GetUserID(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		response.Error(c, domainerrors.Unauthorized("User not authenticated"))
 		return
 	}
 
@@ -95,13 +96,13 @@ func (h *PaymentHandler) ListPayments(c *gin.Context) {
 
 	payments, total, err := h.paymentUsecase.GetPaymentsByUser(c.Request.Context(), userID, page, limit)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to list payments"})
+		response.Error(c, err)
 		return
 	}
 
 	totalPages := (total + limit - 1) / limit
 
-	c.JSON(http.StatusOK, gin.H{
+	response.Success(c, http.StatusOK, gin.H{
 		"payments": payments,
 		"pagination": gin.H{
 			"page":       page,
@@ -118,15 +119,15 @@ func (h *PaymentHandler) GetPaymentEvents(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid payment ID"})
+		response.Error(c, domainerrors.BadRequest("Invalid payment ID"))
 		return
 	}
 
 	events, err := h.paymentUsecase.GetPaymentEvents(c.Request.Context(), id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get payment events"})
+		response.Error(c, err)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"events": events})
+	response.Success(c, http.StatusOK, gin.H{"events": events})
 }

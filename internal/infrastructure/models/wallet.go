@@ -15,6 +15,7 @@ type Wallet struct {
 	Address    string     `gorm:"type:varchar(255);not null;index"`
 	IsPrimary  bool       `gorm:"default:false"`
 	CreatedAt  time.Time
+	UpdatedAt  time.Time
 	DeletedAt  gorm.DeletedAt `gorm:"index"`
 
 	// Relations

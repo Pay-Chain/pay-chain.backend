@@ -8,28 +8,27 @@ import (
 )
 
 type Chain struct {
-	ID             uuid.UUID `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
-	NetworkID      string    `gorm:"type:varchar(50);not null;uniqueIndex"` // Added NetworkID (e.g. "1", "solana:5ey...")
-	Namespace      string    `gorm:"type:varchar(50);not null"`
-	Name           string    `gorm:"type:varchar(100);not null"`
-	ChainType      string    `gorm:"type:varchar(50);not null;default:'EVM'"`
-	RPCURL         string    `gorm:"type:text;column:rpc_url"` // Legacy column, kept for backward compatibility
-	ExplorerURL    string    `gorm:"type:text"`
-	Symbol         string    `gorm:"type:varchar(20)"`
-	LogoURL        string    `gorm:"type:text"`
-	IsActive       bool      `gorm:"default:true"`
-	StateMachineID string    `gorm:"type:varchar(100)"` // e.g., 'isis-local', 'suave-local'
+	ID        uuid.UUID `gorm:"type:uuid;primaryKey;default:uuid_generate_v7()"`
+	NetworkID string    `gorm:"type:varchar(255);not null;uniqueIndex;column:chain_id"` // Mapped to chain_id column
+	// Namespace      string    `gorm:"-"` // Deprecated: Derived from Type
+	Name           string `gorm:"type:varchar(100);not null"`
+	ChainType      string `gorm:"type:varchar(50);not null;default:'EVM';column:type"`
+	RPCURL         string `gorm:"type:text;column:rpc_url"`
+	ExplorerURL    string `gorm:"type:text"`
+	Symbol         string `gorm:"type:varchar(20);column:currency_symbol"`
+	LogoURL        string `gorm:"type:text;column:image_url"`
+	IsActive       bool   `gorm:"default:true"`
+	StateMachineID string `gorm:"type:varchar(100)"`
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 	DeletedAt      gorm.DeletedAt `gorm:"index"`
 
 	// Relations
 	RPCs []ChainRPC `gorm:"foreignKey:ChainID;references:ID"`
-	// SmartContracts []SmartContract `gorm:"foreignKey:ChainID"` // Disabled due to type mismatch (SmartContract uses string CAIP-2)
 }
 
 type ChainRPC struct {
-	ID          uuid.UUID `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
+	ID          uuid.UUID `gorm:"type:uuid;primaryKey;default:uuid_generate_v7()"`
 	ChainID     uuid.UUID `gorm:"type:uuid;not null;index"`
 	URL         string    `gorm:"type:text;not null"`
 	Priority    int       `gorm:"default:0"`

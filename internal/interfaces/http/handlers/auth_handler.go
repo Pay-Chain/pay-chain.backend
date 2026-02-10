@@ -9,6 +9,7 @@ import (
 	"pay-chain.backend/internal/domain/entities"
 	domainerrors "pay-chain.backend/internal/domain/errors"
 	"pay-chain.backend/internal/interfaces/http/middleware"
+	"pay-chain.backend/internal/interfaces/http/response"
 	"pay-chain.backend/internal/usecases"
 )
 
@@ -30,30 +31,24 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	var input entities.CreateUserInput
 
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": err.Error(),
-		})
+		response.Error(c, domainerrors.BadRequest(err.Error()))
 		return
 	}
 
 	user, verificationToken, err := h.authUsecase.Register(c.Request.Context(), &input)
 	if err != nil {
 		if err == domainerrors.ErrAlreadyExists {
-			c.JSON(http.StatusConflict, gin.H{
-				"error": "Email already registered",
-			})
+			response.Error(c, domainerrors.Conflict("Email already registered"))
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "Failed to register user",
-		})
+		response.Error(c, err)
 		return
 	}
 
 	// TODO: Send verification email with token
 	_ = verificationToken
 
-	c.JSON(http.StatusCreated, gin.H{
+	response.Success(c, http.StatusCreated, gin.H{
 		"message": "Registration successful. Please check your email for verification.",
 		"user": gin.H{
 			"id":    user.ID,
@@ -69,23 +64,17 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	var input entities.LoginInput
 
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": err.Error(),
-		})
+		response.Error(c, domainerrors.BadRequest(err.Error()))
 		return
 	}
 
 	authResponse, err := h.authUsecase.Login(c.Request.Context(), &input)
 	if err != nil {
 		if err == domainerrors.ErrInvalidCredentials {
-			c.JSON(http.StatusUnauthorized, gin.H{
-				"error": "Invalid email or password",
-			})
+			response.Error(c, domainerrors.NewAppError(http.StatusUnauthorized, domainerrors.CodeInvalidCredentials, "Invalid email or password", domainerrors.ErrInvalidCredentials))
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "Failed to login",
-		})
+		response.Error(c, err)
 		return
 	}
 
@@ -93,7 +82,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	c.SetCookie("token", authResponse.AccessToken, 3600*24, "/", "", false, true)
 	c.SetCookie("refresh_token", authResponse.RefreshToken, 3600*24*7, "/", "", false, true)
 
-	c.JSON(http.StatusOK, gin.H{
+	response.Success(c, http.StatusOK, gin.H{
 		"accessToken":  authResponse.AccessToken,
 		"refreshToken": authResponse.RefreshToken,
 		"user": gin.H{
@@ -114,26 +103,20 @@ func (h *AuthHandler) VerifyEmail(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": err.Error(),
-		})
+		response.Error(c, domainerrors.BadRequest(err.Error()))
 		return
 	}
 
 	if err := h.authUsecase.VerifyEmail(c.Request.Context(), input.Token); err != nil {
 		if err == domainerrors.ErrNotFound {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "Invalid or expired verification token",
-			})
+			response.Error(c, domainerrors.BadRequest("Invalid or expired verification token"))
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "Failed to verify email",
-		})
+		response.Error(c, err)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	response.Success(c, http.StatusOK, gin.H{
 		"message": "Email verified successfully",
 	})
 }
@@ -170,22 +153,15 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 		}
 	}
 
-	// 3. Last fallback: Check Authorization header as Bearer token if appropriate
-	// (Though refresh tokens usually aren't sent as Bearer, some clients might)
-
 	if refreshToken == "" {
 		log.Println("[AuthHandler] RefreshToken: Error - No refresh token provided in body or cookie")
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "Refresh token is required",
-		})
+		response.Error(c, domainerrors.BadRequest("Refresh token is required"))
 		return
 	}
 
 	tokenPair, err := h.authUsecase.RefreshToken(c.Request.Context(), refreshToken)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"error": "Invalid or expired refresh token",
-		})
+		response.Error(c, domainerrors.NewAppError(http.StatusUnauthorized, domainerrors.CodeUnauthorized, "Invalid or expired refresh token", err))
 		return
 	}
 
@@ -193,7 +169,7 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 	c.SetCookie("token", tokenPair.AccessToken, 3600*24, "/", "", false, true)
 	c.SetCookie("refresh_token", tokenPair.RefreshToken, 3600*24*7, "/", "", false, true)
 
-	c.JSON(http.StatusOK, gin.H{
+	response.Success(c, http.StatusOK, gin.H{
 		"accessToken":  tokenPair.AccessToken,
 		"refreshToken": tokenPair.RefreshToken,
 	})
@@ -207,14 +183,14 @@ func (h *AuthHandler) GetMe(c *gin.Context) {
 	val, exists := c.Get(middleware.UserIDKey)
 	if !exists {
 		log.Printf("[AuthHandler] GetMe failed: userId not found in context (Middleware key: %s)", middleware.UserIDKey)
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		response.Error(c, domainerrors.Unauthorized("Unauthorized"))
 		return
 	}
 
 	userID, ok := val.(uuid.UUID)
 	if !ok {
 		log.Printf("[AuthHandler] GetMe failed: userID in context is not a UUID (got %T)", val)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
+		response.Error(c, domainerrors.InternalError(nil))
 		return
 	}
 
@@ -223,15 +199,15 @@ func (h *AuthHandler) GetMe(c *gin.Context) {
 	if err != nil {
 		log.Printf("[AuthHandler] GetMe failed to fetch user: %v", err)
 		if err == domainerrors.ErrNotFound {
-			c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+			response.Error(c, domainerrors.NotFound("User not found"))
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user"})
+		response.Error(c, err)
 		return
 	}
 
 	log.Printf("[AuthHandler] GetMe success for user: %s (%s)", user.Name, user.Email)
-	c.JSON(http.StatusOK, gin.H{
+	response.Success(c, http.StatusOK, gin.H{
 		"user": gin.H{
 			"id":        user.ID,
 			"email":     user.Email,

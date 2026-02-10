@@ -75,8 +75,8 @@ func (r *UserRepository) Update(ctx context.Context, user *entities.User) error 
 		"kyc_status": user.KYCStatus,
 		"updated_at": time.Now(),
 	}
-	if user.KYCVerifiedAt.Valid {
-		updates["kyc_verified_at"] = user.KYCVerifiedAt.Time
+	if user.KYCVerifiedAt != nil {
+		updates["kyc_verified_at"] = *user.KYCVerifiedAt
 	}
 
 	result := r.db.WithContext(ctx).Model(&models.User{}).Where("id = ?", user.ID).Updates(updates)

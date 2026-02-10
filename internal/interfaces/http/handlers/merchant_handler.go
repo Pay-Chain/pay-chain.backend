@@ -7,6 +7,7 @@ import (
 	"pay-chain.backend/internal/domain/entities"
 	domainerrors "pay-chain.backend/internal/domain/errors"
 	"pay-chain.backend/internal/interfaces/http/middleware"
+	"pay-chain.backend/internal/interfaces/http/response"
 	"pay-chain.backend/internal/usecases"
 )
 
@@ -26,27 +27,27 @@ func (h *MerchantHandler) ApplyMerchant(c *gin.Context) {
 	var input entities.MerchantApplyInput
 
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		response.Error(c, domainerrors.BadRequest(err.Error()))
 		return
 	}
 
 	userID, ok := middleware.GetUserID(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		response.Error(c, domainerrors.Unauthorized("User not authenticated"))
 		return
 	}
 
-	response, err := h.merchantUsecase.ApplyMerchant(c.Request.Context(), userID, &input)
+	res, err := h.merchantUsecase.ApplyMerchant(c.Request.Context(), userID, &input)
 	if err != nil {
 		if err == domainerrors.ErrBadRequest {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid merchant type"})
+			response.Error(c, domainerrors.BadRequest("Invalid merchant type"))
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to apply as merchant"})
+		response.Error(c, err)
 		return
 	}
 
-	c.JSON(http.StatusCreated, response)
+	response.Success(c, http.StatusCreated, res)
 }
 
 // GetMerchantStatus gets merchant status for the current user
@@ -54,15 +55,15 @@ func (h *MerchantHandler) ApplyMerchant(c *gin.Context) {
 func (h *MerchantHandler) GetMerchantStatus(c *gin.Context) {
 	userID, ok := middleware.GetUserID(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		response.Error(c, domainerrors.Unauthorized("User not authenticated"))
 		return
 	}
 
-	response, err := h.merchantUsecase.GetMerchantStatus(c.Request.Context(), userID)
+	res, err := h.merchantUsecase.GetMerchantStatus(c.Request.Context(), userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get merchant status"})
+		response.Error(c, err)
 		return
 	}
 
-	c.JSON(http.StatusOK, response)
+	response.Success(c, http.StatusOK, res)
 }

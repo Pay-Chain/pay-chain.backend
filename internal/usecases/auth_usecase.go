@@ -5,7 +5,6 @@ import (
 	"errors"
 
 	"github.com/google/uuid"
-	"github.com/volatiletech/null/v8"
 	"pay-chain.backend/internal/domain/entities"
 	domainerrors "pay-chain.backend/internal/domain/errors"
 	"pay-chain.backend/internal/domain/repositories"
@@ -68,7 +67,7 @@ func (u *AuthUsecase) Register(ctx context.Context, input *entities.CreateUserIn
 	if err != nil && !errors.Is(err, domainerrors.ErrNotFound) {
 		return nil, "", err
 	}
-	if existingWallet != nil && existingWallet.UserID.Valid {
+	if existingWallet != nil && existingWallet.UserID != nil {
 		return nil, "", domainerrors.NewError("wallet already registered to another user", domainerrors.ErrAlreadyExists)
 	}
 
@@ -98,7 +97,7 @@ func (u *AuthUsecase) Register(ctx context.Context, input *entities.CreateUserIn
 	}
 
 	wallet := &entities.Wallet{
-		UserID:    null.StringFrom(user.ID.String()),
+		UserID:    &user.ID,
 		ChainID:   chainID,
 		Address:   input.WalletAddress,
 		IsPrimary: true,

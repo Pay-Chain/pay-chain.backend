@@ -39,7 +39,8 @@ func (c DatabaseConfig) URL() string {
 
 // RedisConfig holds Redis configuration
 type RedisConfig struct {
-	URL string
+	URL      string
+	PASSWORD string
 }
 
 // RabbitMQConfig holds RabbitMQ configuration
@@ -77,7 +78,8 @@ func Load() *Config {
 			SSLMode:  getEnv("DB_SSLMODE", "disable"),
 		},
 		Redis: RedisConfig{
-			URL: getEnv("REDIS_URL", "redis://localhost:6379"),
+			URL:      getEnv("REDIS_URL", "redis://localhost:6379"),
+			PASSWORD: getEnv("REDIS_PASSWORD", ""),
 		},
 		RabbitMQ: RabbitMQConfig{
 			URL: getEnv("RABBITMQ_URL", "amqp://guest:guest@localhost:5672/"),

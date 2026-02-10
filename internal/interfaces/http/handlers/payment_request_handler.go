@@ -1,11 +1,14 @@
 package handlers
 
 import (
-	"net/http"
 	"strconv"
+
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	domainerrors "pay-chain.backend/internal/domain/errors"
+	"pay-chain.backend/internal/interfaces/http/response"
 	"pay-chain.backend/internal/usecases"
 )
 
@@ -30,13 +33,13 @@ type CreatePaymentRequestRequest struct {
 func (h *PaymentRequestHandler) CreatePaymentRequest(c *gin.Context) {
 	userID, exists := c.Get("userID")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		response.Error(c, domainerrors.Unauthorized("unauthorized"))
 		return
 	}
 
 	var req CreatePaymentRequestRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		response.Error(c, domainerrors.BadRequest(err.Error()))
 		return
 	}
 
@@ -51,11 +54,11 @@ func (h *PaymentRequestHandler) CreatePaymentRequest(c *gin.Context) {
 
 	result, err := h.usecase.CreatePaymentRequest(c.Request.Context(), input)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		response.Error(c, err)
 		return
 	}
 
-	c.JSON(http.StatusCreated, result)
+	response.Success(c, http.StatusCreated, result)
 }
 
 // GetPaymentRequest gets a payment request by ID with transaction data
@@ -64,17 +67,21 @@ func (h *PaymentRequestHandler) GetPaymentRequest(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request ID"})
+		response.Error(c, domainerrors.BadRequest("invalid request ID"))
 		return
 	}
 
 	request, txData, err := h.usecase.GetPaymentRequest(c.Request.Context(), id)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		if err == domainerrors.ErrNotFound {
+			response.Error(c, domainerrors.NotFound(err.Error()))
+			return
+		}
+		response.Error(c, err)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	response.Success(c, http.StatusOK, gin.H{
 		"request": request,
 		"txData":  txData,
 	})
@@ -85,7 +92,7 @@ func (h *PaymentRequestHandler) GetPaymentRequest(c *gin.Context) {
 func (h *PaymentRequestHandler) ListPaymentRequests(c *gin.Context) {
 	userID, exists := c.Get("userID")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		response.Error(c, domainerrors.Unauthorized("unauthorized"))
 		return
 	}
 
@@ -102,11 +109,11 @@ func (h *PaymentRequestHandler) ListPaymentRequests(c *gin.Context) {
 
 	requests, total, err := h.usecase.ListPaymentRequests(c.Request.Context(), userID.(uuid.UUID), limit, offset)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		response.Error(c, err)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	response.Success(c, http.StatusOK, gin.H{
 		"requests": requests,
 		"pagination": gin.H{
 			"page":       page,
@@ -123,18 +130,22 @@ func (h *PaymentRequestHandler) GetPublicPaymentRequest(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request ID"})
+		response.Error(c, domainerrors.BadRequest("invalid request ID"))
 		return
 	}
 
 	request, txData, err := h.usecase.GetPaymentRequest(c.Request.Context(), id)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		if err == domainerrors.ErrNotFound {
+			response.Error(c, domainerrors.NotFound(err.Error()))
+			return
+		}
+		response.Error(c, err)
 		return
 	}
 
 	// Only return public info
-	c.JSON(http.StatusOK, gin.H{
+	response.Success(c, http.StatusOK, gin.H{
 		"requestId":       request.ID,
 		"chainId":         request.ChainID,
 		"amount":          request.Amount,

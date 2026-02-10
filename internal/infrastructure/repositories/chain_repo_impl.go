@@ -2,7 +2,6 @@ package repositories
 
 import (
 	"context"
-
 	"errors"
 	"strings"
 
@@ -28,7 +27,7 @@ func NewChainRepository(db *gorm.DB) repositories.ChainRepository {
 // GetByID gets a chain by ID
 func (r *chainRepo) GetByID(ctx context.Context, id uuid.UUID) (*entities.Chain, error) {
 	var m models.Chain
-	if err := r.db.WithContext(ctx).First(&m, "id = ?", id).Error; err != nil {
+	if err := r.db.WithContext(ctx).Preload("RPCs").First(&m, "id = ?", id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, domainerrors.ErrNotFound
 		}
@@ -37,7 +36,19 @@ func (r *chainRepo) GetByID(ctx context.Context, id uuid.UUID) (*entities.Chain,
 	return r.toEntity(&m), nil
 }
 
-// GetByCAIP2 gets a chain by CAIP-2 ID
+// GetByChainID gets a chain by external ChainID (NetworkID)
+func (r *chainRepo) GetByChainID(ctx context.Context, chainID string) (*entities.Chain, error) {
+	var m models.Chain
+	if err := r.db.WithContext(ctx).Preload("RPCs").Where("chain_id = ?", chainID).First(&m).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, domainerrors.ErrNotFound
+		}
+		return nil, err
+	}
+	return r.toEntity(&m), nil
+}
+
+// GetByCAIP2 gets a chain by CAIP-2 ID (namespace:reference)
 func (r *chainRepo) GetByCAIP2(ctx context.Context, caip2 string) (*entities.Chain, error) {
 	parts := strings.Split(caip2, ":")
 	if len(parts) != 2 {
@@ -47,7 +58,8 @@ func (r *chainRepo) GetByCAIP2(ctx context.Context, caip2 string) (*entities.Cha
 	networkID := parts[1]
 
 	var m models.Chain
-	if err := r.db.WithContext(ctx).Where("namespace = ? AND network_id = ?", namespace, networkID).First(&m).Error; err != nil {
+	// Map NetworkID to chain_id column (Chain Model NetworkID field)
+	if err := r.db.WithContext(ctx).Preload("RPCs").Where("namespace = ? AND chain_id = ?", namespace, networkID).First(&m).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, domainerrors.ErrNotFound
 		}
@@ -59,13 +71,13 @@ func (r *chainRepo) GetByCAIP2(ctx context.Context, caip2 string) (*entities.Cha
 // GetAll gets all chains
 func (r *chainRepo) GetAll(ctx context.Context) ([]*entities.Chain, error) {
 	var ms []models.Chain
-	if err := r.db.WithContext(ctx).Find(&ms).Error; err != nil {
+	if err := r.db.WithContext(ctx).Preload("RPCs").Find(&ms).Error; err != nil {
 		return nil, err
 	}
 
 	var chains []*entities.Chain
 	for _, m := range ms {
-		model := m // Copy to avoid pointer issue in loop
+		model := m
 		chains = append(chains, r.toEntity(&model))
 	}
 	return chains, nil
@@ -96,7 +108,9 @@ func (r *chainRepo) GetAllRPCs(ctx context.Context, chainID *uuid.UUID, isActive
 	}
 
 	// Preload Chain for response mapping
-	query = query.Preload("Chain").Order("chain_id, priority DESC")
+	query = query.Preload("Chain", func(db *gorm.DB) *gorm.DB {
+		return db.Unscoped()
+	}).Order("chain_id, priority DESC")
 
 	if pagination.Limit > 0 {
 		query = query.Limit(pagination.Limit).Offset(pagination.CalculateOffset())
@@ -146,17 +160,17 @@ func (r *chainRepo) GetActive(ctx context.Context, pagination utils.PaginationPa
 // Create creates a new chain
 func (r *chainRepo) Create(ctx context.Context, chain *entities.Chain) error {
 	m := &models.Chain{
-		ID:             chain.ID,
-		NetworkID:      chain.NetworkID,
-		Namespace:      chain.Namespace,
+		ID:        chain.ID,
+		NetworkID: chain.ChainID,
+		// Namespace:      r.getNamespace(chain.Type), // Deprecated/Derived
 		Name:           chain.Name,
-		ChainType:      string(chain.ChainType),
+		ChainType:      string(chain.Type),
 		RPCURL:         chain.RPCURL,
 		ExplorerURL:    chain.ExplorerURL,
-		Symbol:         chain.Symbol,
-		LogoURL:        chain.LogoURL,
+		Symbol:         chain.CurrencySymbol,
+		LogoURL:        chain.ImageURL,
 		IsActive:       chain.IsActive,
-		StateMachineID: chain.StateMachineID,
+		StateMachineID: "", // Entity doesn't have this field
 		CreatedAt:      chain.CreatedAt,
 	}
 
@@ -169,16 +183,16 @@ func (r *chainRepo) Create(ctx context.Context, chain *entities.Chain) error {
 // Update updates a chain
 func (r *chainRepo) Update(ctx context.Context, chain *entities.Chain) error {
 	updates := map[string]interface{}{
-		"network_id":       chain.NetworkID,
-		"name":             chain.Name,
-		"namespace":        chain.Namespace,
-		"chain_type":       string(chain.ChainType),
-		"rpc_url":          chain.RPCURL,
-		"explorer_url":     chain.ExplorerURL,
-		"symbol":           chain.Symbol,
-		"logo_url":         chain.LogoURL,
-		"is_active":        chain.IsActive,
-		"state_machine_id": chain.StateMachineID,
+		"chain_id": chain.ChainID,
+		"name":     chain.Name,
+		// "namespace":       r.getNamespace(chain.Type), // Removed
+		"type":            string(chain.Type),
+		"rpc_url":         chain.RPCURL,
+		"explorer_url":    chain.ExplorerURL,
+		"currency_symbol": chain.CurrencySymbol,
+		"image_url":       chain.ImageURL,
+		"is_active":       chain.IsActive,
+		// "state_machine_id": chain.StateMachineID, // Removed
 	}
 
 	result := r.db.WithContext(ctx).Model(&models.Chain{}).Where("id = ?", chain.ID).Updates(updates)
@@ -205,33 +219,44 @@ func (r *chainRepo) Delete(ctx context.Context, id uuid.UUID) error {
 
 // toEntity converts GORM model to Domain Entity
 func (r *chainRepo) toEntity(m *models.Chain) *entities.Chain {
-	rpcURLs := make([]string, 0)
-	for _, rpc := range m.RPCs {
-		if rpc.IsActive {
-			rpcURLs = append(rpcURLs, rpc.URL)
-		}
-	}
+	// Logic to pick main RPC URL if legacy is empty?
+	// The entity has RPCURL string.
+	// Model has RPCURL string.
+	// We can just usage m.RPCURL.
 
-	// Fallback/Legacy
-	legacyURL := m.RPCURL
-	if len(rpcURLs) > 0 {
-		legacyURL = rpcURLs[0]
+	// Preload RPCs are in m.RPCs
+	var rpcs []entities.ChainRPC
+	for _, rpc := range m.RPCs {
+		rpcs = append(rpcs, *r.toRpcEntity(&rpc))
 	}
 
 	return &entities.Chain{
 		ID:             m.ID,
-		NetworkID:      m.NetworkID,
-		Namespace:      m.Namespace,
+		ChainID:        m.NetworkID,
 		Name:           m.Name,
-		ChainType:      entities.ChainType(m.ChainType),
-		RPCURL:         legacyURL,
-		RPCURLs:        rpcURLs,
+		Type:           entities.ChainType(strings.ToUpper(m.ChainType)),
+		RPCURL:         m.RPCURL,
 		ExplorerURL:    m.ExplorerURL,
-		Symbol:         m.Symbol,
-		LogoURL:        m.LogoURL,
+		CurrencySymbol: m.Symbol,
+		ImageURL:       m.LogoURL,
 		IsActive:       m.IsActive,
-		StateMachineID: m.StateMachineID,
 		CreatedAt:      m.CreatedAt,
+		UpdatedAt:      m.UpdatedAt,
+		// DeletedAt:      &m.DeletedAt.Time, // GORM DeletedAt is struct?
+		RPCs: rpcs,
+	}
+}
+
+func (r *chainRepo) getNamespace(chainType entities.ChainType) string {
+	switch chainType {
+	case entities.ChainTypeEVM:
+		return "eip155"
+	case entities.ChainTypeSVM:
+		return "solana"
+	case entities.ChainTypeSubstrate:
+		return "substrate"
+	default:
+		return "unknown"
 	}
 }
 

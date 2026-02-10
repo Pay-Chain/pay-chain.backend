@@ -12,10 +12,10 @@ import (
 type SmartContractRepository interface {
 	Create(ctx context.Context, contract *entities.SmartContract) error
 	GetByID(ctx context.Context, id uuid.UUID) (*entities.SmartContract, error)
-	GetByChainAndAddress(ctx context.Context, chainID, address string) (*entities.SmartContract, error)
+	GetByChainAndAddress(ctx context.Context, chainID uuid.UUID, address string) (*entities.SmartContract, error)
 	// GetActiveContract returns the currently active contract of a specific type on a chain
-	GetActiveContract(ctx context.Context, chainID string, contractType entities.SmartContractType) (*entities.SmartContract, error)
-	GetByChain(ctx context.Context, chainID string, pagination utils.PaginationParams) ([]*entities.SmartContract, int64, error)
+	GetActiveContract(ctx context.Context, chainID uuid.UUID, contractType entities.SmartContractType) (*entities.SmartContract, error)
+	GetByChain(ctx context.Context, chainID uuid.UUID, pagination utils.PaginationParams) ([]*entities.SmartContract, int64, error)
 	GetAll(ctx context.Context, pagination utils.PaginationParams) ([]*entities.SmartContract, int64, error)
 	Update(ctx context.Context, contract *entities.SmartContract) error
 	SoftDelete(ctx context.Context, id uuid.UUID) error

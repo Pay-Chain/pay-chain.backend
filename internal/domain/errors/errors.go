@@ -23,11 +23,29 @@ var (
 	ErrUnsupportedToken   = errors.New("unsupported token")
 )
 
-// AppError represents application error with HTTP status
+// Standard Error Codes
+const (
+	CodeNotFound           = "ERR_NOT_FOUND"
+	CodeAlreadyExists      = "ERR_ALREADY_EXISTS"
+	CodeInvalidInput       = "ERR_INVALID_INPUT"
+	CodeBadRequest         = "ERR_BAD_REQUEST"
+	CodeUnauthorized       = "ERR_UNAUTHORIZED"
+	CodeForbidden          = "ERR_FORBIDDEN"
+	CodeInternalError      = "ERR_INTERNAL_ERROR"
+	CodeInvalidCredentials = "ERR_INVALID_CREDENTIALS"
+	CodeTokenExpired       = "ERR_TOKEN_EXPIRED"
+	CodeEmailNotVerified   = "ERR_EMAIL_NOT_VERIFIED"
+	CodePaymentFailed      = "ERR_PAYMENT_FAILED"
+	CodeInsufficientFunds  = "ERR_INSUFFICIENT_FUNDS"
+	CodeConflict           = "ERR_CONFLICT"
+)
+
+// AppError represents application error with HTTP status and string code
 type AppError struct {
-	Code    int    `json:"code"`
-	Message string `json:"message"`
-	Err     error  `json:"-"`
+	Status  int    `json:"-"`       // HTTP Status Code
+	Code    string `json:"code"`    // Machine-readable Code
+	Message string `json:"message"` // Human-readable Message
+	Err     error  `json:"-"`       // Underlying Error
 }
 
 func (e *AppError) Error() string {
@@ -38,8 +56,9 @@ func (e *AppError) Error() string {
 }
 
 // NewAppError creates a new app error
-func NewAppError(code int, message string, err error) *AppError {
+func NewAppError(status int, code string, message string, err error) *AppError {
 	return &AppError{
+		Status:  status,
 		Code:    code,
 		Message: message,
 		Err:     err,
@@ -48,29 +67,36 @@ func NewAppError(code int, message string, err error) *AppError {
 
 // Common error constructors
 func NotFound(message string) *AppError {
-	return NewAppError(http.StatusNotFound, message, ErrNotFound)
+	return NewAppError(http.StatusNotFound, CodeNotFound, message, ErrNotFound)
 }
 
 func BadRequest(message string) *AppError {
-	return NewAppError(http.StatusBadRequest, message, ErrInvalidInput)
+	return NewAppError(http.StatusBadRequest, CodeInvalidInput, message, ErrInvalidInput)
 }
 
 func Unauthorized(message string) *AppError {
-	return NewAppError(http.StatusUnauthorized, message, ErrUnauthorized)
+	return NewAppError(http.StatusUnauthorized, CodeUnauthorized, message, ErrUnauthorized)
 }
 
 func Forbidden(message string) *AppError {
-	return NewAppError(http.StatusForbidden, message, ErrForbidden)
+	return NewAppError(http.StatusForbidden, CodeForbidden, message, ErrForbidden)
 }
 
 func InternalError(err error) *AppError {
-	return NewAppError(http.StatusInternalServerError, "internal server error", err)
+	return NewAppError(http.StatusInternalServerError, CodeInternalError, "internal server error", err)
+}
+
+// Conflict creates a conflict error
+func Conflict(message string) *AppError {
+	return NewAppError(http.StatusConflict, CodeConflict, message, ErrAlreadyExists)
 }
 
 // NewError creates a new error with a custom message wrapping an existing error
+// Defaulting to Bad Request generic for compatibility, but ideally should be specific.
 func NewError(message string, err error) error {
 	return &AppError{
-		Code:    http.StatusBadRequest,
+		Status:  http.StatusBadRequest,
+		Code:    CodeBadRequest,
 		Message: message,
 		Err:     err,
 	}

@@ -27,8 +27,9 @@ type SmartContract struct {
 	ID              uuid.UUID         `json:"id"`
 	Name            string            `json:"name"`
 	Type            SmartContractType `json:"type"`
-	Version         string            `json:"version"` // Semver e.g. "1.0.0"
-	ChainID         string            `json:"chainId"` // CAIP-2 format: namespace:chainId
+	Version         string            `json:"version"`   // Semver e.g. "1.0.0"
+	ChainUUID       uuid.UUID         `json:"chainUuid"` // Internal UUID
+	BlockchainID    string            `json:"chainId"`   // Frontend-compatible Blockchain ID (e.g. "1")
 	ContractAddress string            `json:"contractAddress"`
 	DeployerAddress null.String       `json:"deployerAddress,omitempty"`
 	Token0Address   null.String       `json:"token0Address,omitempty"`

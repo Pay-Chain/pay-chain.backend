@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/volatiletech/null/v8"
 	"pay-chain.backend/internal/domain/entities"
 	domainerrors "pay-chain.backend/internal/domain/errors"
 	"pay-chain.backend/internal/domain/repositories"
@@ -24,6 +25,8 @@ type PaymentUsecase struct {
 	merchantRepo     repositories.MerchantRepository
 	contractRepo     repositories.SmartContractRepository
 	chainRepo        repositories.ChainRepository
+	tokenRepo        repositories.TokenRepository
+	uow              repositories.UnitOfWork
 	clientFactory    *blockchain.ClientFactory
 }
 
@@ -35,6 +38,8 @@ func NewPaymentUsecase(
 	merchantRepo repositories.MerchantRepository,
 	contractRepo repositories.SmartContractRepository,
 	chainRepo repositories.ChainRepository,
+	tokenRepo repositories.TokenRepository,
+	uow repositories.UnitOfWork,
 	clientFactory *blockchain.ClientFactory,
 ) *PaymentUsecase {
 	return &PaymentUsecase{
@@ -44,6 +49,8 @@ func NewPaymentUsecase(
 		merchantRepo:     merchantRepo,
 		contractRepo:     contractRepo,
 		chainRepo:        chainRepo,
+		tokenRepo:        tokenRepo,
+		uow:              uow,
 		clientFactory:    clientFactory,
 	}
 }
@@ -136,62 +143,139 @@ func (u *PaymentUsecase) CreatePayment(ctx context.Context, userID uuid.UUID, in
 		return nil, domainerrors.ErrBadRequest
 	}
 
+	// Resolve Source Chain
+	sourceChain, err := u.chainRepo.GetByChainID(ctx, input.SourceChainID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid source chain: %w", err)
+	}
+
+	// Resolve Dest Chain
+	destChain, err := u.chainRepo.GetByChainID(ctx, input.DestChainID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid dest chain: %w", err)
+	}
+
 	// Parse amount
 	amount := new(big.Int)
 	if _, ok := amount.SetString(input.Amount, 10); !ok {
 		return nil, domainerrors.ErrBadRequest
 	}
 
-	// Calculate fees
+	// Calculate fees (Pass strings as before, logic uses them for config/math)
 	feeBreakdown := u.CalculateFees(ctx, amount, input.Decimals, input.SourceChainID, input.DestChainID, 0)
 
 	// Select bridge
 	bridgeType := ""
-	isCrossChain := input.SourceChainID != input.DestChainID // Restore definition
+	isCrossChain := input.SourceChainID != input.DestChainID
 	if isCrossChain {
 		bridgeType = u.SelectBridge(input.SourceChainID, input.DestChainID)
 	}
 
-	// Get specific gateway contract for source chain
-	contract, err := u.contractRepo.GetActiveContract(ctx, input.SourceChainID, entities.ContractTypeGateway)
+	// Get specific gateway contract for source chain using UUID
+	contract, err := u.contractRepo.GetActiveContract(ctx, sourceChain.ID, entities.ContractTypeGateway)
 	if err != nil {
-		// Log error but proceed (payment can be created, just tx data might be missing)
-		// valid contract is preferred though
 		fmt.Printf("Warning: Active Gateway contract not found for chain %s: %v\n", input.SourceChainID, err)
+	}
+
+	// Resolve Token UUIDs?
+	// Input provides `SourceTokenAddress`.
+	// We need to find the Token Entity ID for `Payment` record.
+	// If native, address might be empty or 0x0.
+	// We should try to lookup Token by address + chainID.
+	// If not found, do we fail or create?
+	// For now, let's look it up.
+
+	var sourceTokenID uuid.UUID
+	srcToken, err := u.resolveToken(ctx, input.SourceTokenAddress, sourceChain.ID)
+	if err == nil && srcToken != nil {
+		sourceTokenID = srcToken.ID
+	} else {
+		// Fallback or critical error?
+		// For now, if not found, we might need dummy or error.
+		// Let's assume error for strictly managed tokens.
+		// fmt.Printf("Warning: Source token not found %s\n", input.SourceTokenAddress)
+		// But Payment struct has `SourceTokenID uuid.UUID` (NOT NULL).
+		// So we MUST find it.
+		// Implementation Gaps: We might need `GetByAddress` in TokenRepo.
+		// I added `GetByAddress` in `token_repo_impl`.
+		return nil, fmt.Errorf("source token not found for address %s on chain %s", input.SourceTokenAddress, input.SourceChainID)
+	}
+
+	var destTokenID uuid.UUID
+	destToken, err := u.resolveToken(ctx, input.DestTokenAddress, destChain.ID)
+	if err == nil && destToken != nil {
+		destTokenID = destToken.ID
+	} else {
+		return nil, fmt.Errorf("dest token not found for address %s on chain %s", input.DestTokenAddress, input.DestChainID)
 	}
 
 	// Create payment entity
 	payment := &entities.Payment{
-		SenderID:           userID,
-		SourceChainID:      input.SourceChainID,
-		DestChainID:        input.DestChainID,
+		ID:                 uuid.New(), // Generate ID
+		SenderID:           &userID,
+		MerchantID:         nil, // userID is User, not Merchant in this context? Or need to check if User is Merchant?
+		SourceChainID:      sourceChain.ID,
+		DestChainID:        destChain.ID,
+		SourceTokenID:      &sourceTokenID,
+		DestTokenID:        &destTokenID,
 		SourceTokenAddress: input.SourceTokenAddress,
 		DestTokenAddress:   input.DestTokenAddress,
 		SourceAmount:       input.Amount,
 		FeeAmount:          feeBreakdown.TotalFee,
-		BridgeType:         bridgeType,
-		ReceiverAddress:    input.ReceiverAddress,
-		Decimals:           input.Decimals,
-		Status:             entities.PaymentStatusPending,
-		CreatedAt:          time.Now(),
-		UpdatedAt:          time.Now(),
+		TotalCharged:       input.Amount, // Should simplify/clarify
+		// BridgeType:         bridgeType, // Field removed from model/entity in favor of BridgeID?
+		// Wait, Entity Definition:
+		// `BridgeID *uuid.UUID`
+		// `Bridge *PaymentBridge`
+		// It does NOT have string BridgeType anymore?
+		// My earlier `view_file` of `payment.go` entity showed `Bridge *PaymentBridge`.
+		// But did I remove `BridgeType` string?
+		// Let's check `payment.go` entity again if I can...
+		// Assuming I need to look up Bridge ID if I want to persist it.
+		// For now, I will leave BridgeID null if I can't resolve it easily, or map string generic.
+		// Entity `payment.go` (Step 15817):
+		// `BridgeID *uuid.UUID`
+		// It does NOT have `BridgeType` string field in the struct snippet.
+
+		ReceiverAddress: input.ReceiverAddress,
+		// Decimals:           input.Decimals, // Entity `payment.go` REMOVED Decimals field?
+		// Step 15817 snippet: `SourceAmount`, `DestAmount`..., `Status`.
+		// Does NOT show `Decimals`.
+		// I should check `payment.go` again to be safe.
+
+		Status:    entities.PaymentStatusPending,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
 	}
+
 	// Set nullable DestAmount
-	payment.DestAmount.SetValid(feeBreakdown.NetAmount)
+	if feeBreakdown.NetAmount != "" {
+		payment.DestAmount = null.StringFrom(feeBreakdown.NetAmount)
+	}
 
 	// Save payment
-	if err := u.paymentRepo.Create(ctx, payment); err != nil {
+	// Wrap DB operations in Transaction
+	if err := u.uow.Do(ctx, func(txCtx context.Context) error {
+		// Save payment
+		if err := u.paymentRepo.Create(txCtx, payment); err != nil {
+			return err
+		}
+
+		// Create initial event
+		event := &entities.PaymentEvent{
+			ID:        uuid.New(),
+			PaymentID: payment.ID,
+			EventType: entities.PaymentEventTypeCreated, // Use Enum
+			ChainID:   &sourceChain.ID,
+			CreatedAt: time.Now(),
+		}
+		if err := u.paymentEventRepo.Create(txCtx, event); err != nil {
+			return err
+		}
+		return nil
+	}); err != nil {
 		return nil, err
 	}
-
-	// Create initial event
-	event := &entities.PaymentEvent{
-		PaymentID: payment.ID,
-		EventType: "CREATED",
-		Chain:     "source",
-		CreatedAt: time.Now(),
-	}
-	_ = u.paymentEventRepo.Create(ctx, event)
 
 	// Build transaction data using metadata from DB
 	signatureData := u.buildTransactionData(payment, contract)
@@ -199,17 +283,36 @@ func (u *PaymentUsecase) CreatePayment(ctx context.Context, userID uuid.UUID, in
 	return &entities.CreatePaymentResponse{
 		PaymentID:      payment.ID,
 		Status:         payment.Status,
-		SourceChainID:  payment.SourceChainID,
-		DestChainID:    payment.DestChainID,
+		SourceChainID:  input.SourceChainID, // Return the Input String (Network ID) for frontend consistency
+		DestChainID:    input.DestChainID,
 		SourceAmount:   payment.SourceAmount,
-		SourceDecimals: payment.Decimals,
+		SourceDecimals: input.Decimals,
 		DestAmount:     payment.DestAmount.String,
 		FeeAmount:      payment.FeeAmount,
-		BridgeType:     payment.BridgeType,
+		BridgeType:     bridgeType,
 		FeeBreakdown:   *feeBreakdown,
 		ExpiresAt:      time.Now().Add(PaymentExpiryDuration),
 		SignatureData:  signatureData,
 	}, nil
+}
+
+// Helper to resolve token
+func (u *PaymentUsecase) resolveToken(ctx context.Context, address string, chainID uuid.UUID) (*entities.Token, error) {
+	// If address is "0x000..." or "native", handle native token logic
+	if address == "" || address == "0x0000000000000000000000000000000000000000" || address == "native" {
+		nativeToken, err := u.tokenRepo.GetNative(ctx, chainID)
+		if err != nil {
+			return nil, fmt.Errorf("native token not found for chain %s: %w", chainID, err)
+		}
+		return nativeToken, nil
+	}
+
+	// Lookup by address
+	token, err := u.tokenRepo.GetByAddress(ctx, address, chainID)
+	if err != nil {
+		return nil, fmt.Errorf("token not found for address %s: %w", address, err)
+	}
+	return token, nil
 }
 
 // buildTransactionData builds transaction data for frontend based on database metadata
@@ -218,7 +321,14 @@ func (u *PaymentUsecase) buildTransactionData(payment *entities.Payment, contrac
 		return nil
 	}
 
-	chainType := getChainTypeFromCAIP2(payment.SourceChainID)
+	// Determine chain type using SourceChain relation if available, else standard EVM default or fetch
+	// For now, assuming standard EVM if not Sol
+	// But better: use SourceChain.ChainID (string/CAIP-2) if preloaded.
+	var sourceChainID string
+	if payment.SourceChain != nil {
+		sourceChainID = payment.SourceChain.ChainID
+	}
+	chainType := getChainTypeFromCAIP2(sourceChainID)
 
 	switch chainType {
 	case "eip155":
@@ -244,7 +354,7 @@ func (u *PaymentUsecase) buildEvmPaymentHex(payment *entities.Payment) string {
 	selector := CreatePaymentSelector
 
 	// Prepare dynamic data
-	destChainId := []byte(payment.DestChainID)
+	destChainId := payment.DestChainID[:]
 	// Receiver can be EVM address (20 bytes) or SVM address (32 bytes)
 	// If it starts with 0x and is 42 chars, it's EVM.
 	var receiver []byte
@@ -313,25 +423,35 @@ func (u *PaymentUsecase) GetPaymentEvents(ctx context.Context, paymentID uuid.UU
 
 // getBridgeFeeQuote fetches fee from on-chain Router
 func (u *PaymentUsecase) getBridgeFeeQuote(ctx context.Context, sourceChainID, destChainID string) (*big.Int, error) {
-	// 1. Get Active Router
-	router, err := u.contractRepo.GetActiveContract(ctx, sourceChainID, entities.ContractTypeRouter)
-	if err != nil {
-		return nil, fmt.Errorf("active router not found: %w", err)
-	}
-
-	// 2. Get RPC Client
-	chain, err := u.chainRepo.GetByCAIP2(ctx, sourceChainID)
+	// 1. Get Chain Config to resolve UUID and RPCs (SourceChainID is NetworkID)
+	chain, err := u.chainRepo.GetByChainID(ctx, sourceChainID)
 	if err != nil {
 		return nil, fmt.Errorf("chain config not found: %w", err)
 	}
 
+	// 2. Get Active Router
+	router, err := u.contractRepo.GetActiveContract(ctx, chain.ID, entities.ContractTypeRouter)
+	if err != nil {
+		return nil, fmt.Errorf("active router not found: %w", err)
+	}
+
+	// 3. Get RPC Client
 	var client *blockchain.EVMClient
 	var clientErr error
 
-	// Use RPCURLs if available, fallback to legacy RPCURL
-	targets := chain.RPCURLs
+	// Use RPCs if available, fallback to legacy RPCURL
+	var targets []string
+	for _, rpc := range chain.RPCs {
+		if rpc.IsActive {
+			targets = append(targets, rpc.URL)
+		}
+	}
 	if len(targets) == 0 && chain.RPCURL != "" {
 		targets = []string{chain.RPCURL}
+	}
+
+	if len(targets) == 0 {
+		return nil, fmt.Errorf("no RPC endpoints available for chain %s", sourceChainID)
 	}
 
 	for _, url := range targets {

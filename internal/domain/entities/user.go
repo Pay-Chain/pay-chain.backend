@@ -4,42 +4,41 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/volatiletech/null/v8"
 )
 
 // UserRole represents user roles
 type UserRole string
 
 const (
-	UserRoleAdmin    UserRole = "admin"
-	UserRoleSubAdmin UserRole = "sub_admin"
-	UserRolePartner  UserRole = "partner"
-	UserRoleUser     UserRole = "user"
+	UserRoleAdmin    UserRole = "ADMIN"
+	UserRoleSubAdmin UserRole = "SUB_ADMIN"
+	UserRolePartner  UserRole = "PARTNER"
+	UserRoleUser     UserRole = "USER"
 )
 
 // KYCStatus represents KYC verification status
 type KYCStatus string
 
 const (
-	KYCNotStarted       KYCStatus = "not_started"
-	KYCIDCardVerified   KYCStatus = "id_card_verified"
-	KYCFaceVerified     KYCStatus = "face_verified"
-	KYCLivenessVerified KYCStatus = "liveness_verified"
-	KYCFullyVerified    KYCStatus = "fully_verified"
+	KYCNotStarted       KYCStatus = "NOT_STARTED"
+	KYCIDCardVerified   KYCStatus = "ID_CARD_VERIFIED"
+	KYCFaceVerified     KYCStatus = "FACE_VERIFIED"
+	KYCLivenessVerified KYCStatus = "LIVENESS_VERIFIED"
+	KYCFullyVerified    KYCStatus = "FULLY_VERIFIED"
 )
 
 // User represents a user entity
 type User struct {
-	ID            uuid.UUID `json:"id"`
-	Email         string    `json:"email"`
-	Name          string    `json:"name"`
-	PasswordHash  string    `json:"-"`
-	Role          UserRole  `json:"role"`
-	KYCStatus     KYCStatus `json:"kycStatus"`
-	KYCVerifiedAt null.Time `json:"kycVerifiedAt,omitempty"`
-	CreatedAt     time.Time `json:"createdAt"`
-	UpdatedAt     time.Time `json:"updatedAt"`
-	DeletedAt     null.Time `json:"-"`
+	ID            uuid.UUID  `json:"id" gorm:"type:uuid;primary_key;default:uuid_generate_v7()"`
+	Email         string     `json:"email"`
+	Name          string     `json:"name"`
+	PasswordHash  string     `json:"-"`
+	Role          UserRole   `json:"role"`
+	KYCStatus     KYCStatus  `json:"kycStatus"`
+	KYCVerifiedAt *time.Time `json:"kycVerifiedAt,omitempty"`
+	CreatedAt     time.Time  `json:"createdAt"`
+	UpdatedAt     time.Time  `json:"updatedAt"`
+	DeletedAt     *time.Time `json:"-"`
 }
 
 // CreateUserInput represents input for creating a user
@@ -48,7 +47,7 @@ type CreateUserInput struct {
 	Name            string `json:"name" binding:"required,min=2,max=100"`
 	Password        string `json:"password" binding:"required,min=8"`
 	WalletAddress   string `json:"walletAddress" binding:"required"`
-	WalletChainID   string `json:"walletChainId" binding:"required"`
+	WalletChainID   string `json:"walletChainId" binding:"required"` // The NetworkID (e.g. "84532")
 	WalletSignature string `json:"walletSignature" binding:"required"`
 }
 

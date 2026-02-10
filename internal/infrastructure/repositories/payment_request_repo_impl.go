@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
@@ -24,13 +25,14 @@ func (r *PaymentRequestRepositoryImpl) Create(ctx context.Context, req *entities
 		ID:           req.ID,
 		MerchantID:   req.MerchantID,
 		WalletID:     req.WalletID,
-		ChainID:      req.ChainID,
+		ChainID:      req.NetworkID, // Use NetworkID (string) for Model.ChainID
 		TokenAddress: req.TokenAddress,
 		Amount:       req.Amount,
 		Decimals:     req.Decimals,
 		Description:  req.Description,
 		Status:       string(req.Status),
 		ExpiresAt:    req.ExpiresAt,
+		PayerAddress: req.PayerAddress,
 		CreatedAt:    time.Now(),
 		UpdatedAt:    time.Now(),
 	}
@@ -95,7 +97,7 @@ func (r *PaymentRequestRepositoryImpl) MarkCompleted(ctx context.Context, id uui
 	return r.db.WithContext(ctx).Model(&models.PaymentRequest{}).
 		Where("id = ?", id).
 		Updates(map[string]interface{}{
-			"status":       "completed",
+			"status":       entities.PaymentRequestStatusCompleted,
 			"tx_hash":      txHash,
 			"completed_at": now,
 			"updated_at":   now,
@@ -105,7 +107,7 @@ func (r *PaymentRequestRepositoryImpl) MarkCompleted(ctx context.Context, id uui
 func (r *PaymentRequestRepositoryImpl) GetExpiredPending(ctx context.Context, limit int) ([]*entities.PaymentRequest, error) {
 	var ms []models.PaymentRequest
 	if err := r.db.WithContext(ctx).
-		Where("status = ? AND expires_at < ?", "pending", time.Now()).
+		Where("status = ? AND expires_at < ?", entities.PaymentRequestStatusPending, time.Now()).
 		Limit(limit).
 		Find(&ms).Error; err != nil {
 		return nil, err
@@ -126,18 +128,21 @@ func (r *PaymentRequestRepositoryImpl) ExpireRequests(ctx context.Context, ids [
 	return r.db.WithContext(ctx).Model(&models.PaymentRequest{}).
 		Where("id IN ?", ids).
 		Updates(map[string]interface{}{
-			"status":     "expired",
+			"status":     entities.PaymentRequestStatusExpired,
 			"updated_at": time.Now(),
 		}).Error
 }
 
 func (r *PaymentRequestRepositoryImpl) toEntity(m *models.PaymentRequest) *entities.PaymentRequest {
 	return &entities.PaymentRequest{
-		ID:           m.ID,
-		MerchantID:   m.MerchantID,
-		WalletID:     m.WalletID,
-		ChainID:      m.ChainID,
+		ID:         m.ID,
+		MerchantID: m.MerchantID,
+		WalletID:   m.WalletID,
+		NetworkID:  m.ChainID, // Map Model.ChainID (string) to Entity.NetworkID
+		// ChainID:      uuid.Nil,      // Cannot resolve UUID
+		// TokenID:      uuid.Nil,      // Cannot resolve UUID
 		TokenAddress: m.TokenAddress,
+		// WalletAddress: "", // Cannot resolve address
 		Amount:       m.Amount,
 		Decimals:     m.Decimals,
 		Description:  m.Description,
@@ -161,13 +166,20 @@ func NewBackgroundJobRepository(db *gorm.DB) *BackgroundJobRepositoryImpl {
 }
 
 func (r *BackgroundJobRepositoryImpl) Create(ctx context.Context, job *entities.BackgroundJob) error {
+	payloadBytes, err := json.Marshal(job.Payload)
+	if err != nil {
+		return err
+	}
+
 	m := &models.BackgroundJob{
 		ID:          job.ID,
 		JobType:     job.JobType,
-		Payload:     job.Payload,
-		Status:      job.Status,
+		Payload:     string(payloadBytes), // Store as string (jsonb)
+		Status:      string(job.Status),
 		MaxAttempts: job.MaxAttempts,
 		ScheduledAt: job.ScheduledAt,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
 	}
 	return r.db.WithContext(ctx).Create(m).Error
 }
@@ -175,7 +187,7 @@ func (r *BackgroundJobRepositoryImpl) Create(ctx context.Context, job *entities.
 func (r *BackgroundJobRepositoryImpl) GetPending(ctx context.Context, limit int) ([]*entities.BackgroundJob, error) {
 	var ms []models.BackgroundJob
 	if err := r.db.WithContext(ctx).
-		Where("status = ? AND scheduled_at <= ? AND attempts < max_attempts", "pending", time.Now()).
+		Where("status = ? AND scheduled_at <= ? AND attempts < max_attempts", entities.JobStatusPending, time.Now()).
 		Order("scheduled_at ASC").
 		Limit(limit).
 		Find(&ms).Error; err != nil {
@@ -184,11 +196,14 @@ func (r *BackgroundJobRepositoryImpl) GetPending(ctx context.Context, limit int)
 
 	var jobs []*entities.BackgroundJob
 	for _, m := range ms {
+		var payload interface{}
+		_ = json.Unmarshal([]byte(m.Payload), &payload) // Ignore error? Or log?
+
 		jobs = append(jobs, &entities.BackgroundJob{
 			ID:           m.ID,
 			JobType:      m.JobType,
-			Payload:      m.Payload,
-			Status:       m.Status,
+			Payload:      payload,
+			Status:       entities.JobStatus(m.Status),
 			Attempts:     m.Attempts,
 			MaxAttempts:  m.MaxAttempts,
 			ScheduledAt:  m.ScheduledAt,
@@ -206,7 +221,7 @@ func (r *BackgroundJobRepositoryImpl) MarkProcessing(ctx context.Context, id uui
 	return r.db.WithContext(ctx).Model(&models.BackgroundJob{}).
 		Where("id = ?", id).
 		Updates(map[string]interface{}{
-			"status":     "processing",
+			"status":     entities.JobStatusProcessing,
 			"started_at": time.Now(),
 			"attempts":   gorm.Expr("attempts + ?", 1),
 			"updated_at": time.Now(),
@@ -218,7 +233,7 @@ func (r *BackgroundJobRepositoryImpl) MarkCompleted(ctx context.Context, id uuid
 	return r.db.WithContext(ctx).Model(&models.BackgroundJob{}).
 		Where("id = ?", id).
 		Updates(map[string]interface{}{
-			"status":       "completed",
+			"status":       entities.JobStatusCompleted,
 			"completed_at": now,
 			"updated_at":   now,
 		}).Error
@@ -228,7 +243,7 @@ func (r *BackgroundJobRepositoryImpl) MarkFailed(ctx context.Context, id uuid.UU
 	return r.db.WithContext(ctx).Model(&models.BackgroundJob{}).
 		Where("id = ?", id).
 		Updates(map[string]interface{}{
-			"status":        "failed",
+			"status":        entities.JobStatusFailed,
 			"error_message": errorMsg,
 			"updated_at":    time.Now(),
 		}).Error

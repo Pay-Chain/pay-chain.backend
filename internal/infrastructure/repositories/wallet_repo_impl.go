@@ -31,15 +31,12 @@ func (r *WalletRepository) Create(ctx context.Context, wallet *entities.Wallet) 
 		CreatedAt: wallet.CreatedAt,
 	}
 
-	if wallet.UserID.Valid {
-		// Assuming UserID.String is valid UUID string
-		uid, _ := uuid.Parse(wallet.UserID.String)
-		m.UserID = &uid
+	if wallet.UserID != nil {
+		m.UserID = wallet.UserID
 	}
 
-	if wallet.MerchantID.Valid {
-		mid, _ := uuid.Parse(wallet.MerchantID.String)
-		m.MerchantID = &mid
+	if wallet.MerchantID != nil {
+		m.MerchantID = wallet.MerchantID
 	}
 
 	return r.db.WithContext(ctx).Create(m).Error
@@ -144,14 +141,15 @@ func (r *WalletRepository) SoftDelete(ctx context.Context, id uuid.UUID) error {
 }
 
 func (r *WalletRepository) toEntity(m *models.Wallet) *entities.Wallet {
-	// conversion logic
 	return &entities.Wallet{
-		ID: m.ID,
-		// UserID:     null.StringFrom(m.UserID.String()), // if *uuid
-		// MerchantID: ...
-		ChainID:   m.ChainID,
-		Address:   m.Address,
-		IsPrimary: m.IsPrimary,
-		CreatedAt: m.CreatedAt,
+		ID:         m.ID,
+		UserID:     m.UserID,
+		MerchantID: m.MerchantID,
+		ChainID:    m.ChainID,
+		Address:    m.Address,
+		Type:       "EOA", // Default
+		IsPrimary:  m.IsPrimary,
+		CreatedAt:  m.CreatedAt,
+		UpdatedAt:  m.UpdatedAt,
 	}
 }

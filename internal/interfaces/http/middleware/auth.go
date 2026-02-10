@@ -46,7 +46,7 @@ func AuthMiddleware(jwtService *jwt.JWTService) gin.HandlerFunc {
 		tokenString := strings.TrimPrefix(authHeader, BearerPrefix)
 		claims, err := jwtService.ValidateToken(tokenString)
 		if err != nil {
-			log.Printf("[AuthMiddleware] Request to %s failed: %v", c.Request.URL.Path, err)
+			log.Printf("[AuthMiddleware] Token validation failed for %s: %v", c.Request.URL.Path, err)
 			if err == jwt.ErrExpiredToken {
 				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 					"error": "Token has expired",
@@ -58,6 +58,8 @@ func AuthMiddleware(jwtService *jwt.JWTService) gin.HandlerFunc {
 			})
 			return
 		}
+
+		log.Printf("[AuthMiddleware] Authenticated user %s with role %s for %s", claims.Email, claims.Role, c.Request.URL.Path)
 
 		// Set user info in context
 		c.Set(UserIDKey, claims.UserID)
@@ -121,10 +123,10 @@ func RequireRole(roles ...string) gin.HandlerFunc {
 
 // RequireAdmin creates a middleware that requires admin role
 func RequireAdmin() gin.HandlerFunc {
-	return RequireRole("admin")
+	return RequireRole("ADMIN")
 }
 
 // RequireAdminOrSubAdmin creates a middleware that requires admin or sub_admin role
 func RequireAdminOrSubAdmin() gin.HandlerFunc {
-	return RequireRole("admin", "sub_admin")
+	return RequireRole("ADMIN", "SUB_ADMIN")
 }

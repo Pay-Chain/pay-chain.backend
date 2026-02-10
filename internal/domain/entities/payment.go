@@ -11,48 +11,70 @@ import (
 type PaymentStatus string
 
 const (
-	PaymentStatusPending    PaymentStatus = "pending"
-	PaymentStatusProcessing PaymentStatus = "processing"
-	PaymentStatusCompleted  PaymentStatus = "completed"
-	PaymentStatusFailed     PaymentStatus = "failed"
-	PaymentStatusRefunded   PaymentStatus = "refunded"
+	PaymentStatusPending    PaymentStatus = "PENDING"
+	PaymentStatusProcessing PaymentStatus = "PROCESSING"
+	PaymentStatusCompleted  PaymentStatus = "COMPLETED"
+	PaymentStatusFailed     PaymentStatus = "FAILED"
+	PaymentStatusRefunded   PaymentStatus = "REFUNDED"
+)
+
+// PaymentEventType represents payment event type
+type PaymentEventType string
+
+const (
+	PaymentEventTypeCreated           PaymentEventType = "CREATED"
+	PaymentEventTypeDestinationTxHash PaymentEventType = "DESTINATION_TX_HASH"
+	PaymentEventTypeCompleted         PaymentEventType = "COMPLETED"
+	PaymentEventTypeFailed            PaymentEventType = "FAILED"
 )
 
 // Payment represents a payment entity
 type Payment struct {
-	ID                  uuid.UUID     `json:"id"`
-	SenderID            uuid.UUID     `json:"senderId"`
-	MerchantID          null.String   `json:"merchantId,omitempty"`
-	ReceiverWalletID    uuid.UUID     `json:"receiverWalletId"`
-	SourceChainID       string        `json:"sourceChainId"`
-	DestChainID         string        `json:"destChainId"`
-	SourceTokenID       uuid.UUID     `json:"sourceTokenId"`
-	DestTokenID         uuid.UUID     `json:"destTokenId"`
+	ID                  uuid.UUID     `json:"id" gorm:"type:uuid;primary_key;default:uuid_generate_v7()"`
+	SenderID            *uuid.UUID    `json:"senderId"`
+	MerchantID          *uuid.UUID    `json:"merchantId,omitempty"`
+	BridgeID            *uuid.UUID    `json:"bridgeId,omitempty"`
+	SourceChainID       uuid.UUID     `json:"sourceChainId"`
+	DestChainID         uuid.UUID     `json:"destChainId"`
+	SourceTokenID       *uuid.UUID    `json:"sourceTokenId"`
+	DestTokenID         *uuid.UUID    `json:"destTokenId"`
 	SourceTokenAddress  string        `json:"sourceTokenAddress"`
 	DestTokenAddress    string        `json:"destTokenAddress"`
+	SenderAddress       string        `json:"senderAddress"`
+	DestAddress         string        `json:"destAddress"`
+	SourceAmount        string        `json:"sourceAmount" gorm:"type:decimal(36,18)"`
+	DestAmount          null.String   `json:"destAmount,omitempty" gorm:"type:decimal(36,18)"`
+	FeeAmount           string        `json:"feeAmount" gorm:"type:decimal(36,18)"`
+	TotalCharged        string        `json:"totalCharged" gorm:"type:decimal(36,18)"`
 	ReceiverAddress     string        `json:"receiverAddress"`
-	SourceAmount        string        `json:"sourceAmount"`
-	DestAmount          null.String   `json:"destAmount,omitempty"`
-	Decimals            int           `json:"decimals"`
-	FeeAmount           string        `json:"feeAmount"`
-	TotalCharged        string        `json:"totalCharged"`
-	BridgeType          string        `json:"bridgeType"`
 	Status              PaymentStatus `json:"status"`
 	SourceTxHash        null.String   `json:"sourceTxHash,omitempty"`
 	DestTxHash          null.String   `json:"destTxHash,omitempty"`
 	RefundTxHash        null.String   `json:"refundTxHash,omitempty"`
 	CrossChainMessageID null.String   `json:"crossChainMessageId,omitempty"`
-	ExpiresAt           null.Time     `json:"expiresAt,omitempty"`
-	RefundedAt          null.Time     `json:"refundedAt,omitempty"`
+	ExpiresAt           *time.Time    `json:"expiresAt,omitempty"`
 	CreatedAt           time.Time     `json:"createdAt"`
 	UpdatedAt           time.Time     `json:"updatedAt"`
-	DeletedAt           null.Time     `json:"-"`
+	DeletedAt           *time.Time    `json:"-"`
+
+	// Joins
+	SourceChain *Chain         `json:"sourceChain,omitempty" gorm:"foreignKey:SourceChainID"`
+	DestChain   *Chain         `json:"destChain,omitempty" gorm:"foreignKey:DestChainID"`
+	SourceToken *Token         `json:"sourceToken,omitempty" gorm:"foreignKey:SourceTokenID"`
+	DestToken   *Token         `json:"destToken,omitempty" gorm:"foreignKey:DestTokenID"`
+	Bridge      *PaymentBridge `json:"bridge,omitempty" gorm:"foreignKey:BridgeID"`
+}
+
+// PaymentBridge represents the bridge provider (CCIP, Hyperlane)
+type PaymentBridge struct {
+	ID   uuid.UUID `json:"id" gorm:"type:uuid;primary_key;default:uuid_generate_v7()"`
+	Name string    `json:"name"`
 }
 
 // CreatePaymentInput represents input for creating a payment
 type CreatePaymentInput struct {
-	SourceChainID      string `json:"sourceChainId" binding:"required"`
-	DestChainID        string `json:"destChainId" binding:"required"`
+	SourceChainID      string `json:"sourceChainId" binding:"required"` // UUID or NetworkID? Likely NetworkID in API
+	DestChainID        string `json:"destChainId" binding:"required"`   // Likely NetworkID in API
 	SourceTokenAddress string `json:"sourceTokenAddress" binding:"required"`
 	DestTokenAddress   string `json:"destTokenAddress" binding:"required"`
 	Amount             string `json:"amount" binding:"required"`
@@ -65,8 +87,8 @@ type CreatePaymentInput struct {
 type CreatePaymentResponse struct {
 	PaymentID      uuid.UUID     `json:"paymentId"`
 	Status         PaymentStatus `json:"status"`
-	SourceChainID  string        `json:"sourceChainId"`
-	DestChainID    string        `json:"destChainId"`
+	SourceChainID  string        `json:"sourceChainId"` // Network ID
+	DestChainID    string        `json:"destChainId"`   // Network ID
 	SourceAmount   string        `json:"sourceAmount"`
 	SourceDecimals int           `json:"sourceDecimals"`
 	DestAmount     string        `json:"destAmount"`
@@ -90,12 +112,12 @@ type FeeBreakdown struct {
 
 // PaymentEvent represents a payment event
 type PaymentEvent struct {
-	ID          uuid.UUID   `json:"id"`
-	PaymentID   uuid.UUID   `json:"paymentId"`
-	EventType   string      `json:"eventType"`
-	Chain       string      `json:"chain"`
-	TxHash      string      `json:"txHash"`
-	BlockNumber int64       `json:"blockNumber"`
-	Metadata    interface{} `json:"metadata,omitempty"`
-	CreatedAt   time.Time   `json:"createdAt"`
+	ID          uuid.UUID        `json:"id" gorm:"type:uuid;primary_key;default:uuid_generate_v7()"`
+	PaymentID   uuid.UUID        `json:"paymentId"`
+	EventType   PaymentEventType `json:"eventType"`
+	ChainID     *uuid.UUID       `json:"chainId,omitempty"`
+	TxHash      string           `json:"txHash"`
+	BlockNumber int64            `json:"blockNumber,omitempty"`
+	Metadata    interface{}      `json:"metadata,omitempty" gorm:"type:jsonb"`
+	CreatedAt   time.Time        `json:"createdAt"`
 }

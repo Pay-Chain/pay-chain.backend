@@ -23,26 +23,23 @@ func NewPaymentEventRepository(db *gorm.DB) *PaymentEventRepository {
 
 // Create creates a new payment event
 func (r *PaymentEventRepository) Create(ctx context.Context, event *entities.PaymentEvent) error {
-	// Entity fields: Metadata interface{}
-	// Model fields: Metadata string (jsonb)
-
-	// Convert metadata to string/json
-	// Assuming simple conversion or empty for now or use json.Marshal
 	meta := "{}"
-	// if event.Metadata != nil ... json.Marshal ...
+	// if event.Metadata != nil ...
 
 	m := &models.PaymentEvent{
 		ID:          event.ID,
 		PaymentID:   event.PaymentID,
-		EventType:   event.EventType,
-		Chain:       event.Chain,
+		EventType:   string(event.EventType), // Cast Enum to string
+		ChainID:     event.ChainID,           // UUID pointer
 		TxHash:      event.TxHash,
 		BlockNumber: event.BlockNumber,
 		Metadata:    meta,
 		CreatedAt:   event.CreatedAt,
 	}
 
-	return r.db.WithContext(ctx).Create(m).Error
+	// Use the transaction-aware DB instance
+	db := GetDB(ctx, r.db)
+	return db.WithContext(ctx).Create(m).Error
 }
 
 // GetByPaymentID gets events for a payment
@@ -57,13 +54,11 @@ func (r *PaymentEventRepository) GetByPaymentID(ctx context.Context, paymentID u
 
 	var events []*entities.PaymentEvent
 	for _, m := range ms {
-		// Convert model to entity
-		// Unmarshal metadata
 		event := &entities.PaymentEvent{
 			ID:          m.ID,
 			PaymentID:   m.PaymentID,
-			EventType:   m.EventType,
-			Chain:       m.Chain,
+			EventType:   entities.PaymentEventType(m.EventType),
+			ChainID:     m.ChainID,
 			TxHash:      m.TxHash,
 			BlockNumber: m.BlockNumber,
 			// Metadata:    ...,
@@ -91,8 +86,8 @@ func (r *PaymentEventRepository) GetLatestByPaymentID(ctx context.Context, payme
 	return &entities.PaymentEvent{
 		ID:          m.ID,
 		PaymentID:   m.PaymentID,
-		EventType:   m.EventType,
-		Chain:       m.Chain,
+		EventType:   entities.PaymentEventType(m.EventType),
+		ChainID:     m.ChainID,
 		TxHash:      m.TxHash,
 		BlockNumber: m.BlockNumber,
 		CreatedAt:   m.CreatedAt,

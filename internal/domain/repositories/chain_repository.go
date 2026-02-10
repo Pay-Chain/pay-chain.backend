@@ -11,6 +11,7 @@ import (
 // ChainRepository defines chain data operations
 type ChainRepository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*entities.Chain, error)
+	GetByChainID(ctx context.Context, chainID string) (*entities.Chain, error)
 	GetByCAIP2(ctx context.Context, caip2 string) (*entities.Chain, error)
 	GetAll(ctx context.Context) ([]*entities.Chain, error)
 	GetAllRPCs(ctx context.Context, chainID *uuid.UUID, isActive *bool, search *string, pagination utils.PaginationParams) ([]*entities.ChainRPC, int64, error)
