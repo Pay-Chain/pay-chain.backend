@@ -2,9 +2,6 @@ package usecases
 
 import (
 	"context"
-	"encoding/hex"
-	"encoding/json"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -23,20 +20,28 @@ type PaymentRequestUsecase struct {
 	paymentRequestRepo *repositories.PaymentRequestRepositoryImpl
 	merchantRepo       *repositories.MerchantRepository
 	walletRepo         *repositories.WalletRepository
+	chainRepo          domainRepos.ChainRepository
 	contractRepo       domainRepos.SmartContractRepository
+	tokenRepo          domainRepos.TokenRepository
+	chainResolver      *ChainResolver
 }
 
 func NewPaymentRequestUsecase(
 	paymentRequestRepo *repositories.PaymentRequestRepositoryImpl,
 	merchantRepo *repositories.MerchantRepository,
 	walletRepo *repositories.WalletRepository,
+	chainRepo domainRepos.ChainRepository,
 	contractRepo domainRepos.SmartContractRepository,
+	tokenRepo domainRepos.TokenRepository,
 ) *PaymentRequestUsecase {
 	return &PaymentRequestUsecase{
 		paymentRequestRepo: paymentRequestRepo,
 		merchantRepo:       merchantRepo,
 		walletRepo:         walletRepo,
+		chainRepo:          chainRepo,
 		contractRepo:       contractRepo,
+		tokenRepo:          tokenRepo,
+		chainResolver:      NewChainResolver(chainRepo),
 	}
 }
 
@@ -85,38 +90,42 @@ func (uc *PaymentRequestUsecase) CreatePaymentRequest(ctx context.Context, input
 		targetWallet = wallets[0]
 	}
 
-	// Parse ChainID
-	chainID, err := uuid.Parse(input.ChainID)
+	chainUUID, caip2ID, err := uc.chainResolver.ResolveFromAny(ctx, input.ChainID)
 	if err != nil {
 		return nil, errors.BadRequest("invalid chain id format")
 	}
-
-	// Get smart contract for this chain
-	contracts, _, err := uc.contractRepo.GetByChain(ctx, chainID, utils.PaginationParams{Page: 1, Limit: 1})
-	var contract *entities.SmartContract
-	if len(contracts) > 0 {
-		contract = contracts[0]
+	token, err := uc.tokenRepo.GetByAddress(ctx, input.TokenAddress, chainUUID)
+	if err != nil {
+		if input.TokenAddress == "" || input.TokenAddress == "0x0000000000000000000000000000000000000000" || input.TokenAddress == "native" {
+			token, err = uc.tokenRepo.GetNative(ctx, chainUUID)
+		}
+		if err != nil {
+			return nil, errors.BadRequest("invalid token for selected chain")
+		}
 	}
+
+	contract, _ := uc.contractRepo.GetActiveContract(ctx, chainUUID, entities.ContractTypeGateway)
 
 	// Convert human readable amount to smallest unit
 	amountInSmallestUnit := convertToSmallestUnit(input.Amount, input.Decimals)
 
 	// Create payment request
-	requestID := uuid.New()
+	requestID := utils.GenerateUUIDv7()
 	expiresAt := time.Now().Add(PaymentRequestExpiryMinutes * time.Minute)
 
 	paymentRequest := &entities.PaymentRequest{
-		ID:           requestID,
-		MerchantID:   merchant.ID,
-		WalletID:     targetWallet.ID,
-		ChainID:      chainID,
-		NetworkID:    input.ChainID, // Store original input as NetworkID (CAIP-2 or ID)
-		TokenAddress: input.TokenAddress,
-		Amount:       amountInSmallestUnit,
-		Decimals:     input.Decimals,
-		Description:  input.Description,
-		Status:       entities.PaymentRequestStatusPending,
-		ExpiresAt:    expiresAt,
+		ID:            requestID,
+		MerchantID:    merchant.ID,
+		ChainID:       chainUUID,
+		NetworkID:     caip2ID,
+		TokenID:       token.ID,
+		TokenAddress:  input.TokenAddress,
+		WalletAddress: targetWallet.Address,
+		Amount:        amountInSmallestUnit,
+		Decimals:      input.Decimals,
+		Description:   input.Description,
+		Status:        entities.PaymentRequestStatusPending,
+		ExpiresAt:     expiresAt,
 	}
 
 	if err := uc.paymentRequestRepo.Create(ctx, paymentRequest); err != nil {
@@ -147,6 +156,8 @@ func (uc *PaymentRequestUsecase) buildTransactionData(
 
 	if contract != nil {
 		txData.ContractAddress = contract.ContractAddress
+		txData.To = contract.ContractAddress
+		txData.ProgramID = contract.ContractAddress
 	}
 
 	// Determine chain type from CAIP-2
@@ -156,7 +167,7 @@ func (uc *PaymentRequestUsecase) buildTransactionData(
 	case "eip155": // EVM
 		txData.Hex = uc.buildEvmTransactionHex(request)
 	case "solana": // SVM
-		txData.Base64 = uc.buildSvmTransactionBase64(request)
+		txData.Base58 = uc.buildSvmTransactionBase58(request)
 	}
 
 	return txData
@@ -169,7 +180,7 @@ func (uc *PaymentRequestUsecase) buildEvmTransactionHex(
 	functionSelector := PayRequestSelector
 
 	// Encode parameters
-	requestIdBytes := padLeft(strings.TrimPrefix(request.ID.String(), "0x"), EVMWordSizeHex)
+	requestIdBytes := uuidToBytes32Hex(request.ID)
 
 	// Combine
 	calldata := functionSelector + requestIdBytes
@@ -177,16 +188,18 @@ func (uc *PaymentRequestUsecase) buildEvmTransactionHex(
 	return calldata
 }
 
-func (uc *PaymentRequestUsecase) buildSvmTransactionBase64(
+func (uc *PaymentRequestUsecase) buildSvmTransactionBase58(
 	request *entities.PaymentRequest,
 ) string {
-	data := map[string]interface{}{
-		"instruction": "pay_request",
-		"request_id":  request.ID.String(),
-	}
+	// Anchor instruction layout: 8-byte discriminator + args
+	// pay_request(request_id: [u8;32])
+	discriminator := anchorDiscriminator("pay_request")
+	requestID := uuidToBytes32(request.ID)
 
-	jsonData, _ := json.Marshal(data)
-	return hex.EncodeToString(jsonData)
+	data := make([]byte, 0, 40)
+	data = append(data, discriminator[:]...)
+	data = append(data, requestID[:]...)
+	return base58Encode(data)
 }
 
 func (uc *PaymentRequestUsecase) GetPaymentRequest(ctx context.Context, requestID uuid.UUID) (*entities.PaymentRequest, *entities.PaymentRequestTxData, error) {
@@ -202,14 +215,22 @@ func (uc *PaymentRequestUsecase) GetPaymentRequest(ctx context.Context, requestI
 	}
 
 	// Get contract
-	contracts, _, err := uc.contractRepo.GetByChain(ctx, request.ChainID, utils.PaginationParams{Page: 1, Limit: 1})
-	var contract *entities.SmartContract
-	if len(contracts) > 0 {
-		contract = contracts[0]
+	chainID := request.ChainID
+	if chainID == uuid.Nil && request.NetworkID != "" {
+		if cid, _, resolveErr := uc.chainResolver.ResolveFromAny(ctx, request.NetworkID); resolveErr == nil {
+			chainID = cid
+			request.ChainID = cid
+		}
 	}
+	if request.NetworkID == "" && chainID != uuid.Nil {
+		if chain, chainErr := uc.chainRepo.GetByID(ctx, chainID); chainErr == nil && chain != nil {
+			request.NetworkID = chain.GetCAIP2ID()
+		}
+	}
+	contract, _ := uc.contractRepo.GetActiveContract(ctx, chainID, entities.ContractTypeGateway)
 
-	// Get wallet
-	_, _ = uc.walletRepo.GetByID(ctx, request.WalletID)
+	// Get wallet (by address now)
+	// _, _ = uc.walletRepo.GetByID(ctx, request.WalletID) // WalletID removed
 
 	txData := uc.buildTransactionData(request, contract)
 

@@ -114,7 +114,7 @@ func (h *PaymentRequestHandler) ListPaymentRequests(c *gin.Context) {
 	}
 
 	response.Success(c, http.StatusOK, gin.H{
-		"requests": requests,
+		"paymentRequests": requests,
 		"pagination": gin.H{
 			"page":       page,
 			"limit":      limit,
@@ -147,16 +147,20 @@ func (h *PaymentRequestHandler) GetPublicPaymentRequest(c *gin.Context) {
 	// Only return public info
 	response.Success(c, http.StatusOK, gin.H{
 		"requestId":       request.ID,
-		"chainId":         request.ChainID,
+		"chainId":         request.NetworkID,
 		"amount":          request.Amount,
 		"decimals":        request.Decimals,
+		"walletAddress":   request.WalletAddress,
 		"description":     request.Description,
 		"status":          request.Status,
 		"expiresAt":       request.ExpiresAt,
 		"contractAddress": txData.ContractAddress,
 		"txData": gin.H{
-			"hex":    txData.Hex,
-			"base64": txData.Base64,
+			"to":        txData.To,
+			"programId": txData.ProgramID,
+			"hex":       txData.Hex,
+			"base58":    txData.Base58,
+			"base64":    txData.Base64,
 		},
 	})
 }

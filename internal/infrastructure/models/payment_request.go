@@ -8,22 +8,23 @@ import (
 )
 
 type PaymentRequest struct {
-	ID           uuid.UUID `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
-	MerchantID   uuid.UUID `gorm:"type:uuid;not null;index"`
-	WalletID     uuid.UUID `gorm:"type:uuid;not null;index"`
-	ChainID      string    `gorm:"type:varchar(50);not null"` // CAIP-2
-	TokenAddress string    `gorm:"type:varchar(255);not null"`
-	Amount       string    `gorm:"type:varchar(100);not null"` // BigInt
-	Decimals     int       `gorm:"not null"`
-	Description  string    `gorm:"type:text"`
-	Status       string    `gorm:"type:varchar(50);not null;index"`
-	ExpiresAt    time.Time `gorm:"not null"`
-	TxHash       string    `gorm:"type:varchar(255)"`
-	PayerAddress string    `gorm:"type:varchar(255)"`
-	CompletedAt  *time.Time
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
-	DeletedAt    gorm.DeletedAt `gorm:"index"`
+	ID            uuid.UUID `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
+	MerchantID    uuid.UUID `gorm:"type:uuid;not null;index"`
+	ChainID       uuid.UUID `gorm:"type:uuid;not null;index"`
+	TokenID       uuid.UUID `gorm:"type:uuid;not null;index"`
+	WalletAddress string    `gorm:"column:wallet_address;type:varchar(255);not null"`
+	TokenAddress  string    `gorm:"type:varchar(255);not null"`
+	Amount        string    `gorm:"type:decimal(36,18);not null"`
+	Decimals      int       `gorm:"not null"`
+	Description   string    `gorm:"type:text"`
+	Status        string    `gorm:"type:varchar(50);not null;index"`
+	ExpiresAt     time.Time `gorm:"not null"`
+	TxHash        string    `gorm:"type:varchar(255)"`
+	PayerAddress  string    `gorm:"type:varchar(255)"`
+	CompletedAt   *time.Time
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+	DeletedAt     gorm.DeletedAt `gorm:"index"`
 }
 
 type BackgroundJob struct {

@@ -53,13 +53,21 @@ type CreateUserInput struct {
 
 // LoginInput represents input for user login
 type LoginInput struct {
-	Email    string `json:"email" binding:"required,email"`
-	Password string `json:"password" binding:"required"`
+	Email      string `json:"email" binding:"required,email"`
+	Password   string `json:"password" binding:"required"`
+	UseSession bool   `json:"useSession"` // If true, store tokens in Redis and return SessionID
 }
 
 // AuthResponse represents authentication response
 type AuthResponse struct {
-	AccessToken  string `json:"accessToken"`
-	RefreshToken string `json:"refreshToken"`
+	AccessToken  string `json:"accessToken,omitempty"`
+	RefreshToken string `json:"refreshToken,omitempty"`
+	SessionID    string `json:"sessionId,omitempty"`
 	User         *User  `json:"user"`
+}
+
+// ChangePasswordInput represents input for changing user password.
+type ChangePasswordInput struct {
+	CurrentPassword string `json:"currentPassword" binding:"required,min=8"`
+	NewPassword     string `json:"newPassword" binding:"required,min=8"`
 }

@@ -20,12 +20,11 @@ const (
 type PaymentRequest struct {
 	ID            uuid.UUID            `json:"id" gorm:"type:uuid;primary_key;default:uuid_generate_v7()"`
 	MerchantID    uuid.UUID            `json:"merchantId"`
-	WalletID      uuid.UUID            `json:"walletId"`
 	ChainID       uuid.UUID            `json:"chainId"`   // Internal UUID
 	NetworkID     string               `json:"networkId"` // External Chain ID (CAIP-2)
 	TokenID       uuid.UUID            `json:"tokenId"`   // Internal UUID
 	TokenAddress  string               `json:"tokenAddress"`
-	WalletAddress string               `json:"walletAddress"`
+	WalletAddress string               `json:"walletAddress" gorm:"column:wallet_address;not null"`
 	PayerAddress  string               `json:"payerAddress,omitempty"`
 	Amount        string               `json:"amount" gorm:"type:decimal(36,18)"`
 	Decimals      int                  `json:"decimals"`
@@ -51,12 +50,15 @@ type PaymentRequestTxData struct {
 	ChainID         string `json:"chainId"` // Network ID
 	Amount          string `json:"amount"`
 	Decimals        int    `json:"decimals"`
+	To              string `json:"to,omitempty"`
+	ProgramID       string `json:"programId,omitempty"`
 
 	// EVM specific
 	Hex string `json:"hex,omitempty"`
 
 	// SVM specific
-	Base64 string `json:"base64,omitempty"`
+	Base64 string `json:"base64,omitempty"` // backward compatibility
+	Base58 string `json:"base58,omitempty"`
 }
 
 // JobStatus represents background job status

@@ -22,19 +22,20 @@ func NewPaymentRequestRepository(db *gorm.DB) *PaymentRequestRepositoryImpl {
 
 func (r *PaymentRequestRepositoryImpl) Create(ctx context.Context, req *entities.PaymentRequest) error {
 	m := &models.PaymentRequest{
-		ID:           req.ID,
-		MerchantID:   req.MerchantID,
-		WalletID:     req.WalletID,
-		ChainID:      req.NetworkID, // Use NetworkID (string) for Model.ChainID
-		TokenAddress: req.TokenAddress,
-		Amount:       req.Amount,
-		Decimals:     req.Decimals,
-		Description:  req.Description,
-		Status:       string(req.Status),
-		ExpiresAt:    req.ExpiresAt,
-		PayerAddress: req.PayerAddress,
-		CreatedAt:    time.Now(),
-		UpdatedAt:    time.Now(),
+		ID:            req.ID,
+		MerchantID:    req.MerchantID,
+		ChainID:       req.ChainID,
+		TokenID:       req.TokenID,
+		WalletAddress: req.WalletAddress,
+		TokenAddress:  req.TokenAddress,
+		Amount:        req.Amount,
+		Decimals:      req.Decimals,
+		Description:   req.Description,
+		Status:        string(req.Status),
+		ExpiresAt:     req.ExpiresAt,
+		PayerAddress:  req.PayerAddress,
+		CreatedAt:     time.Now(),
+		UpdatedAt:     time.Now(),
 	}
 	return r.db.WithContext(ctx).Create(m).Error
 }
@@ -135,24 +136,22 @@ func (r *PaymentRequestRepositoryImpl) ExpireRequests(ctx context.Context, ids [
 
 func (r *PaymentRequestRepositoryImpl) toEntity(m *models.PaymentRequest) *entities.PaymentRequest {
 	return &entities.PaymentRequest{
-		ID:         m.ID,
-		MerchantID: m.MerchantID,
-		WalletID:   m.WalletID,
-		NetworkID:  m.ChainID, // Map Model.ChainID (string) to Entity.NetworkID
-		// ChainID:      uuid.Nil,      // Cannot resolve UUID
-		// TokenID:      uuid.Nil,      // Cannot resolve UUID
-		TokenAddress: m.TokenAddress,
-		// WalletAddress: "", // Cannot resolve address
-		Amount:       m.Amount,
-		Decimals:     m.Decimals,
-		Description:  m.Description,
-		Status:       entities.PaymentRequestStatus(m.Status),
-		ExpiresAt:    m.ExpiresAt,
-		TxHash:       m.TxHash,
-		PayerAddress: m.PayerAddress,
-		CompletedAt:  m.CompletedAt,
-		CreatedAt:    m.CreatedAt,
-		UpdatedAt:    m.UpdatedAt,
+		ID:            m.ID,
+		MerchantID:    m.MerchantID,
+		ChainID:       m.ChainID,
+		TokenID:       m.TokenID,
+		WalletAddress: m.WalletAddress,
+		TokenAddress:  m.TokenAddress,
+		Amount:        m.Amount,
+		Decimals:      m.Decimals,
+		Description:   m.Description,
+		Status:        entities.PaymentRequestStatus(m.Status),
+		ExpiresAt:     m.ExpiresAt,
+		TxHash:        m.TxHash,
+		PayerAddress:  m.PayerAddress,
+		CompletedAt:   m.CompletedAt,
+		CreatedAt:     m.CreatedAt,
+		UpdatedAt:     m.UpdatedAt,
 	}
 }
 

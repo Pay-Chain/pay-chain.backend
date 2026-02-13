@@ -60,15 +60,25 @@ type CreateSmartContractInput struct {
 	StartBlock      uint64                 `json:"startBlock" binding:"required"`
 	ABI             interface{}            `json:"abi" binding:"required"`
 	Metadata        map[string]interface{} `json:"metadata,omitempty"`
+	IsActive        *bool                  `json:"isActive,omitempty"`
 }
 
 // UpdateSmartContractInput represents input for updating a smart contract
 type UpdateSmartContractInput struct {
-	Name     string                 `json:"name,omitempty"`
-	Version  string                 `json:"version,omitempty"`
-	ABI      interface{}            `json:"abi,omitempty"`
-	IsActive *bool                  `json:"isActive,omitempty"`
-	Metadata map[string]interface{} `json:"metadata,omitempty"`
+	Name            string                 `json:"name,omitempty"`
+	Type            SmartContractType      `json:"type,omitempty"`
+	Version         string                 `json:"version,omitempty"`
+	ChainID         string                 `json:"chainId,omitempty"`
+	ContractAddress string                 `json:"contractAddress,omitempty"`
+	DeployerAddress string                 `json:"deployerAddress,omitempty"`
+	Token0Address   string                 `json:"token0Address,omitempty"`
+	Token1Address   string                 `json:"token1Address,omitempty"`
+	FeeTier         *int                   `json:"feeTier,omitempty"`
+	HookAddress     string                 `json:"hookAddress,omitempty"`
+	StartBlock      *uint64                `json:"startBlock,omitempty"`
+	ABI             interface{}            `json:"abi,omitempty"`
+	IsActive        *bool                  `json:"isActive,omitempty"`
+	Metadata        map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // FilterSmartContractInput represents filter options for listing contracts

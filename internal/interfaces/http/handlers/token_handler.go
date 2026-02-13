@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/volatiletech/null/v8"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"pay-chain.backend/internal/domain/entities"
@@ -99,13 +101,15 @@ func (h *TokenHandler) ListStablecoins(c *gin.Context) {
 // POST /api/v1/admin/tokens
 func (h *TokenHandler) CreateToken(c *gin.Context) {
 	var req struct {
-		Symbol          string `json:"symbol" binding:"required"`
-		Name            string `json:"name" binding:"required"`
-		Decimals        int    `json:"decimals" binding:"required"`
-		LogoURL         string `json:"logoUrl"`
-		Type            string `json:"type" binding:"required"`
-		ChainID         string `json:"chainId" binding:"required"`
-		ContractAddress string `json:"contractAddress"`
+		Symbol          string  `json:"symbol" binding:"required"`
+		Name            string  `json:"name" binding:"required"`
+		Decimals        int     `json:"decimals" binding:"required"`
+		LogoURL         string  `json:"logoUrl"`
+		Type            string  `json:"type" binding:"required"`
+		ChainID         string  `json:"chainId" binding:"required"`
+		ContractAddress string  `json:"contractAddress"`
+		MinAmount       string  `json:"minAmount"`
+		MaxAmount       *string `json:"maxAmount"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -125,7 +129,7 @@ func (h *TokenHandler) CreateToken(c *gin.Context) {
 	}
 
 	token := &entities.Token{
-		ID:              uuid.New(),
+		ID:              utils.GenerateUUIDv7(),
 		Symbol:          req.Symbol,
 		Name:            req.Name,
 		Decimals:        req.Decimals,
@@ -133,6 +137,8 @@ func (h *TokenHandler) CreateToken(c *gin.Context) {
 		Type:            entities.TokenType(req.Type),
 		ChainUUID:       chainID,
 		ContractAddress: req.ContractAddress,
+		MinAmount:       req.MinAmount,
+		MaxAmount:       null.StringFromPtr(req.MaxAmount),
 		IsActive:        true,
 	}
 
@@ -155,13 +161,15 @@ func (h *TokenHandler) UpdateToken(c *gin.Context) {
 	}
 
 	var req struct {
-		Symbol          string `json:"symbol"`
-		Name            string `json:"name"`
-		Decimals        int    `json:"decimals"`
-		LogoURL         string `json:"logoUrl"`
-		Type            string `json:"type"`
-		ContractAddress string `json:"contractAddress"`
-		ChainID         string `json:"chainId"`
+		Symbol          string  `json:"symbol"`
+		Name            string  `json:"name"`
+		Decimals        int     `json:"decimals"`
+		LogoURL         string  `json:"logoUrl"`
+		Type            string  `json:"type"`
+		ContractAddress string  `json:"contractAddress"`
+		ChainID         string  `json:"chainId"`
+		MinAmount       string  `json:"minAmount"`
+		MaxAmount       *string `json:"maxAmount"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -192,6 +200,12 @@ func (h *TokenHandler) UpdateToken(c *gin.Context) {
 	}
 	if req.ContractAddress != "" {
 		token.ContractAddress = req.ContractAddress
+	}
+	if req.MinAmount != "" {
+		token.MinAmount = req.MinAmount
+	}
+	if req.MaxAmount != nil {
+		token.MaxAmount = null.StringFromPtr(req.MaxAmount)
 	}
 	if req.ChainID != "" {
 		chainID, err := uuid.Parse(req.ChainID)

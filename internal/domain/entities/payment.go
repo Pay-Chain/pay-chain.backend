@@ -71,6 +71,33 @@ type PaymentBridge struct {
 	Name string    `json:"name"`
 }
 
+// BridgeConfig represents routing config for a source/destination chain pair.
+type BridgeConfig struct {
+	ID            uuid.UUID      `json:"id"`
+	BridgeID      uuid.UUID      `json:"bridgeId"`
+	SourceChainID uuid.UUID      `json:"sourceChainId"`
+	DestChainID   uuid.UUID      `json:"destChainId"`
+	RouterAddress string         `json:"routerAddress"`
+	FeePercentage string         `json:"feePercentage"`
+	Config        string         `json:"config"`
+	IsActive      bool           `json:"isActive"`
+	Bridge        *PaymentBridge `json:"bridge,omitempty"`
+}
+
+// FeeConfig represents fee rules for specific chain/token pair.
+type FeeConfig struct {
+	ID                 uuid.UUID  `json:"id"`
+	ChainID            uuid.UUID  `json:"chainId"`
+	TokenID            uuid.UUID  `json:"tokenId"`
+	PlatformFeePercent string     `json:"platformFeePercent"`
+	FixedBaseFee       string     `json:"fixedBaseFee"`
+	MinFee             string     `json:"minFee"`
+	MaxFee             *string    `json:"maxFee,omitempty"`
+	CreatedAt          time.Time  `json:"createdAt"`
+	UpdatedAt          time.Time  `json:"updatedAt"`
+	DeletedAt          *time.Time `json:"-"`
+}
+
 // CreatePaymentInput represents input for creating a payment
 type CreatePaymentInput struct {
 	SourceChainID      string `json:"sourceChainId" binding:"required"` // UUID or NetworkID? Likely NetworkID in API
@@ -120,4 +147,15 @@ type PaymentEvent struct {
 	BlockNumber int64            `json:"blockNumber,omitempty"`
 	Metadata    interface{}      `json:"metadata,omitempty" gorm:"type:jsonb"`
 	CreatedAt   time.Time        `json:"createdAt"`
+}
+
+type CreatePaymentAppInput struct {
+	SourceChainID       string `json:"sourceChainId" binding:"required"`
+	DestChainID         string `json:"destChainId" binding:"required"`
+	SourceTokenAddress  string `json:"sourceTokenAddress" binding:"required"`
+	DestTokenAddress    string `json:"destTokenAddress" binding:"required"`
+	Amount              string `json:"amount" binding:"required"`
+	Decimals            int    `json:"decimals" binding:"required"`
+	SenderWalletAddress string `json:"senderWalletAddress" binding:"required"`
+	ReceiverAddress     string `json:"receiverAddress" binding:"required"`
 }

@@ -8,26 +8,28 @@ import (
 	"github.com/google/uuid"
 	"pay-chain.backend/internal/domain/entities"
 	"pay-chain.backend/internal/domain/repositories"
-	infra_repos "pay-chain.backend/internal/infrastructure/repositories"
 )
 
 // WebhookUsecase handles incoming notifications from the indexer
 type WebhookUsecase struct {
 	paymentRepo        repositories.PaymentRepository
-	paymentEventRepo   *infra_repos.PaymentEventRepository
-	paymentRequestRepo *infra_repos.PaymentRequestRepositoryImpl
+	paymentEventRepo   repositories.PaymentEventRepository
+	paymentRequestRepo repositories.PaymentRequestRepository
+	uow                repositories.UnitOfWork
 }
 
 // NewWebhookUsecase creates a new webhook usecase
 func NewWebhookUsecase(
 	paymentRepo repositories.PaymentRepository,
-	paymentEventRepo *infra_repos.PaymentEventRepository,
-	paymentRequestRepo *infra_repos.PaymentRequestRepositoryImpl,
+	paymentEventRepo repositories.PaymentEventRepository,
+	paymentRequestRepo repositories.PaymentRequestRepository,
+	uow repositories.UnitOfWork,
 ) *WebhookUsecase {
 	return &WebhookUsecase{
 		paymentRepo:        paymentRepo,
 		paymentEventRepo:   paymentEventRepo,
 		paymentRequestRepo: paymentRequestRepo,
+		uow:                uow,
 	}
 }
 
@@ -66,20 +68,39 @@ func (u *WebhookUsecase) ProcessIndexerWebhook(ctx context.Context, eventType st
 		}
 
 		paymentUUID, _ := uuid.Parse(paymentData.PaymentId)
-		status := mapStatus(paymentData.Status)
+		newStatus := mapStatus(paymentData.Status)
 
-		// Update payment status
-		err := u.paymentRepo.UpdateStatus(ctx, paymentUUID, status)
-		if err != nil {
-			log.Printf("Error updating payment status: %v", err)
-		}
+		// Update payment status with locking to prevent race conditions
+		err := u.uow.Do(ctx, func(txCtx context.Context) error {
+			lockCtx := u.uow.WithLock(txCtx)
 
-		// Create event
-		_ = u.paymentEventRepo.Create(ctx, &entities.PaymentEvent{
-			PaymentID: paymentUUID,
-			EventType: entities.PaymentEventType(eventType),
-			TxHash:    paymentData.SourceTxHash,
+			// 1. Get current Payment with Lock
+			// Note: We need GetByID on repository. Assuming it's available.
+			_, err := u.paymentRepo.GetByID(lockCtx, paymentUUID)
+			if err != nil {
+				return err // Or ignore if not found?
+			}
+
+			// 2. Validate Transition (Optional state machine check can be added here)
+			// For now, we trust the indexer but having the lock ensures we serialize updates.
+
+			// 3. Update status
+			if err := u.paymentRepo.UpdateStatus(lockCtx, paymentUUID, newStatus); err != nil {
+				return err
+			}
+
+			// 4. Create event
+			return u.paymentEventRepo.Create(lockCtx, &entities.PaymentEvent{
+				PaymentID: paymentUUID,
+				EventType: entities.PaymentEventType(eventType),
+				TxHash:    paymentData.SourceTxHash,
+			})
 		})
+
+		if err != nil {
+			log.Printf("Error processing payment update: %v", err)
+			return err
+		}
 
 	case "PAYMENT_REQUEST_CREATED":
 		// No action needed if backend already created it,

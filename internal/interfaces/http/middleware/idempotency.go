@@ -87,7 +87,7 @@ func IdempotencyMiddleware() gin.HandlerFunc {
 			c.String(http.StatusOK, val) // Assuming val is the JSON body
 			c.Abort()
 			return
-		} else if err != nil && err.Error() != "redis: nil" {
+		} else if err.Error() != "redis: nil" {
 			// Redis error
 			// Log and proceed? Or fail? Fail safe.
 			c.Next()
@@ -117,8 +117,7 @@ func IdempotencyMiddleware() gin.HandlerFunc {
 			redis.Set(ctx, storageKey, w.body.String(), RetentionDuration)
 		} else {
 			// Remove key so retry is possible
-			// redis.Del(ctx, storageKey) // Need Del method
-			// Or let it expire (30s)
+			redis.Del(ctx, storageKey)
 		}
 	}
 }

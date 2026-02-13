@@ -3,11 +3,13 @@ package middleware
 import (
 	"log"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"pay-chain.backend/pkg/jwt"
+	"pay-chain.backend/pkg/redis"
 )
 
 const (
@@ -24,26 +26,36 @@ const (
 )
 
 // AuthMiddleware creates a new authentication middleware
-func AuthMiddleware(jwtService *jwt.JWTService) gin.HandlerFunc {
+func AuthMiddleware(jwtService *jwt.JWTService, sessionStore *redis.SessionStore) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		authHeader := c.GetHeader(AuthorizationHeader)
-		if authHeader == "" {
-			log.Printf("[AuthMiddleware] Request to %s failed: Authorization header is missing", c.Request.URL.Path)
+		tokenString := ""
+		strictSessionMode := os.Getenv("INTERNAL_PROXY_SECRET") != ""
+
+		// 1. Check for X-Session-Id header (from trusted proxy)
+		sessionID := c.GetHeader("X-Session-Id")
+		if sessionID != "" && IsTrustedProxyRequest(c) {
+			session, err := sessionStore.GetSession(c.Request.Context(), sessionID)
+			if err == nil && session != nil {
+				tokenString = session.AccessToken
+			}
+		}
+
+		// 2. Legacy fallback to Authorization header when strict mode is disabled.
+		if tokenString == "" && !strictSessionMode {
+			authHeader := c.GetHeader(AuthorizationHeader)
+			if authHeader != "" && strings.HasPrefix(authHeader, BearerPrefix) {
+				tokenString = strings.TrimPrefix(authHeader, BearerPrefix)
+			}
+		}
+
+		if tokenString == "" {
+			log.Printf("[AuthMiddleware] Request to %s failed: No valid session or token found", c.Request.URL.Path)
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"error": "Authorization header is required",
+				"error": "Authentication required",
 			})
 			return
 		}
 
-		if !strings.HasPrefix(authHeader, BearerPrefix) {
-			log.Printf("[AuthMiddleware] Request to %s failed: Invalid authorization format", c.Request.URL.Path)
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"error": "Invalid authorization format. Use: Bearer <token>",
-			})
-			return
-		}
-
-		tokenString := strings.TrimPrefix(authHeader, BearerPrefix)
 		claims, err := jwtService.ValidateToken(tokenString)
 		if err != nil {
 			log.Printf("[AuthMiddleware] Token validation failed for %s: %v", c.Request.URL.Path, err)
@@ -68,6 +80,14 @@ func AuthMiddleware(jwtService *jwt.JWTService) gin.HandlerFunc {
 
 		c.Next()
 	}
+}
+
+func IsTrustedProxyRequest(c *gin.Context) bool {
+	secret := os.Getenv("INTERNAL_PROXY_SECRET")
+	if secret == "" {
+		return true // backward compatible for local/dev without configured secret
+	}
+	return c.GetHeader("X-Internal-Proxy-Secret") == secret
 }
 
 // GetUserID gets the user ID from context

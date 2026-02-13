@@ -57,7 +57,7 @@ func (r *TokenRepository) GetBySymbol(ctx context.Context, symbol string, chainI
 // GetByAddress gets a token by contract address and chain ID
 func (r *TokenRepository) GetByAddress(ctx context.Context, address string, chainID uuid.UUID) (*entities.Token, error) {
 	var m models.Token
-	if err := r.db.WithContext(ctx).Preload("Chain").Where("contract_address = ? AND chain_id = ?", address, chainID).First(&m).Error; err != nil {
+	if err := r.db.WithContext(ctx).Preload("Chain").Where("address = ? AND chain_id = ?", address, chainID).First(&m).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, domainerrors.ErrNotFound
 		}
@@ -152,7 +152,7 @@ func (r *TokenRepository) GetAllTokens(ctx context.Context, chainID *uuid.UUID, 
 	}
 	if search != nil && *search != "" {
 		term := "%" + *search + "%"
-		query = query.Where("symbol ILIKE ? OR name ILIKE ? OR contract_address ILIKE ?", term, term, term)
+		query = query.Where("symbol ILIKE ? OR name ILIKE ? OR address ILIKE ?", term, term, term)
 	}
 
 	if err := query.Count(&totalCount).Error; err != nil {
@@ -224,11 +224,10 @@ func (r *TokenRepository) toEntity(m *models.Token) *entities.Token {
 	return e
 }
 
-// Create creates a new token
-func (r *TokenRepository) Create(ctx context.Context, token *entities.Token) error {
-	m := &models.Token{
+func (r *TokenRepository) toModel(token *entities.Token) *models.Token {
+	return &models.Token{
 		ID:              token.ID,
-		ChainID:         token.ChainUUID, // Changed ChainID to ChainUUID
+		ChainID:         token.ChainUUID,
 		Symbol:          token.Symbol,
 		Name:            token.Name,
 		Decimals:        token.Decimals,
@@ -239,10 +238,15 @@ func (r *TokenRepository) Create(ctx context.Context, token *entities.Token) err
 		IsNative:        token.IsNative,
 		IsStablecoin:    token.IsStablecoin,
 		MinAmount:       token.MinAmount,
-		MaxAmount:       token.MaxAmount.Ptr(), // Added MaxAmount
+		MaxAmount:       token.MaxAmount.Ptr(),
 		CreatedAt:       token.CreatedAt,
-		UpdatedAt:       token.UpdatedAt, // Fixed line break
+		UpdatedAt:       token.UpdatedAt,
 	}
+}
+
+// Create creates a new token
+func (r *TokenRepository) Create(ctx context.Context, token *entities.Token) error {
+	m := r.toModel(token)
 
 	if err := r.db.WithContext(ctx).Create(m).Error; err != nil {
 		return err
@@ -252,11 +256,8 @@ func (r *TokenRepository) Create(ctx context.Context, token *entities.Token) err
 
 // Update updates an existing token
 func (r *TokenRepository) Update(ctx context.Context, token *entities.Token) error {
-	// Simple updates
-	return r.db.WithContext(ctx).Save(&models.Token{
-		ID: token.ID,
-		// ... populate all
-	}).Error
+	m := r.toModel(token)
+	return r.db.WithContext(ctx).Save(m).Error
 }
 
 // SoftDelete soft deletes a token

@@ -2,14 +2,20 @@ package usecases
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"pay-chain.backend/internal/domain/entities"
 	domainerrors "pay-chain.backend/internal/domain/errors"
 	"pay-chain.backend/internal/domain/repositories"
+
 	"pay-chain.backend/pkg/crypto"
 	"pay-chain.backend/pkg/jwt"
+	"pay-chain.backend/pkg/redis"
+	"pay-chain.backend/pkg/utils"
 )
 
 // AuthUsecase handles authentication business logic
@@ -17,6 +23,8 @@ type AuthUsecase struct {
 	userRepo       repositories.UserRepository
 	emailVerifRepo repositories.EmailVerificationRepository
 	walletRepo     repositories.WalletRepository
+	chainRepo      repositories.ChainRepository
+	chainResolver  *ChainResolver
 	jwtService     *jwt.JWTService
 }
 
@@ -25,12 +33,15 @@ func NewAuthUsecase(
 	userRepo repositories.UserRepository,
 	emailVerifRepo repositories.EmailVerificationRepository,
 	walletRepo repositories.WalletRepository,
+	chainRepo repositories.ChainRepository,
 	jwtService *jwt.JWTService,
 ) *AuthUsecase {
 	return &AuthUsecase{
 		userRepo:       userRepo,
 		emailVerifRepo: emailVerifRepo,
 		walletRepo:     walletRepo,
+		chainRepo:      chainRepo,
+		chainResolver:  NewChainResolver(chainRepo),
 		jwtService:     jwtService,
 	}
 }
@@ -59,11 +70,11 @@ func (u *AuthUsecase) Register(ctx context.Context, input *entities.CreateUserIn
 	}
 
 	// Check if wallet already registered to another user
-	checkChainID, err := uuid.Parse(input.WalletChainID)
+	chainUUID, _, err := u.chainResolver.ResolveFromAny(ctx, input.WalletChainID)
 	if err != nil {
 		return nil, "", domainerrors.ErrInvalidInput
 	}
-	existingWallet, err := u.walletRepo.GetByAddress(ctx, checkChainID, input.WalletAddress)
+	existingWallet, err := u.walletRepo.GetByAddress(ctx, chainUUID, input.WalletAddress)
 	if err != nil && !errors.Is(err, domainerrors.ErrNotFound) {
 		return nil, "", err
 	}
@@ -91,14 +102,9 @@ func (u *AuthUsecase) Register(ctx context.Context, input *entities.CreateUserIn
 	}
 
 	// Create wallet linked to user (as primary)
-	chainID, err := uuid.Parse(input.WalletChainID)
-	if err != nil {
-		return nil, "", domainerrors.ErrInvalidInput
-	}
-
 	wallet := &entities.Wallet{
 		UserID:    &user.ID,
-		ChainID:   chainID,
+		ChainID:   chainUUID,
 		Address:   input.WalletAddress,
 		IsPrimary: true,
 	}
@@ -143,6 +149,37 @@ func (u *AuthUsecase) Login(ctx context.Context, input *entities.LoginInput) (*e
 	tokenPair, err := u.jwtService.GenerateTokenPair(user.ID, user.Email, string(user.Role))
 	if err != nil {
 		return nil, err
+	}
+
+	// Handle Session Request
+	if input.UseSession {
+		sessionID := utils.GenerateUUIDv7().String()
+		sessionKey := fmt.Sprintf("session:%s", sessionID)
+
+		// Store session data in Redis
+		expiration := 7 * 24 * time.Hour
+
+		sessionData := map[string]interface{}{
+			"userId":       user.ID.String(),
+			"email":        user.Email,
+			"role":         string(user.Role),
+			"accessToken":  tokenPair.AccessToken,
+			"refreshToken": tokenPair.RefreshToken,
+		}
+
+		jsonData, err := json.Marshal(sessionData)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal session data: %w", err)
+		}
+
+		if err := redis.Set(ctx, sessionKey, jsonData, expiration); err != nil {
+			return nil, fmt.Errorf("failed to store session in redis: %w", err)
+		}
+
+		return &entities.AuthResponse{
+			SessionID: sessionID,
+			User:      user,
+		}, nil
 	}
 
 	return &entities.AuthResponse{
@@ -192,4 +229,35 @@ func (u *AuthUsecase) RefreshToken(ctx context.Context, refreshToken string) (*j
 // GetUserByID gets a user by ID
 func (u *AuthUsecase) GetUserByID(ctx context.Context, id uuid.UUID) (*entities.User, error) {
 	return u.userRepo.GetByID(ctx, id)
+}
+
+// GetTokenExpiry returns token expiry unix timestamp.
+func (u *AuthUsecase) GetTokenExpiry(token string) (int64, error) {
+	claims, err := u.jwtService.ValidateToken(token)
+	if err != nil {
+		return 0, err
+	}
+	if claims.RegisteredClaims.ExpiresAt == nil {
+		return 0, fmt.Errorf("token missing exp claim")
+	}
+	return claims.RegisteredClaims.ExpiresAt.Time.Unix(), nil
+}
+
+// ChangePassword updates password after verifying current password.
+func (u *AuthUsecase) ChangePassword(ctx context.Context, userID uuid.UUID, input *entities.ChangePasswordInput) error {
+	user, err := u.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return err
+	}
+
+	if !crypto.CheckPassword(input.CurrentPassword, user.PasswordHash) {
+		return domainerrors.NewAppError(401, domainerrors.CodeInvalidCredentials, "Current password is incorrect", domainerrors.ErrInvalidCredentials)
+	}
+
+	newPasswordHash, err := crypto.HashPassword(input.NewPassword)
+	if err != nil {
+		return err
+	}
+
+	return u.userRepo.UpdatePassword(ctx, userID, newPasswordHash)
 }

@@ -14,13 +14,21 @@ import (
 type WalletUsecase struct {
 	walletRepo repositories.WalletRepository
 	userRepo   repositories.UserRepository
+	chainRepo  repositories.ChainRepository
+	resolver   *ChainResolver
 }
 
 // NewWalletUsecase creates a new wallet usecase
-func NewWalletUsecase(walletRepo repositories.WalletRepository, userRepo repositories.UserRepository) *WalletUsecase {
+func NewWalletUsecase(
+	walletRepo repositories.WalletRepository,
+	userRepo repositories.UserRepository,
+	chainRepo repositories.ChainRepository,
+) *WalletUsecase {
 	return &WalletUsecase{
 		walletRepo: walletRepo,
 		userRepo:   userRepo,
+		chainRepo:  chainRepo,
+		resolver:   NewChainResolver(chainRepo),
 	}
 }
 
@@ -61,7 +69,7 @@ func (u *WalletUsecase) ConnectWallet(ctx context.Context, userID uuid.UUID, inp
 	// 3. Verify message format and timestamp
 
 	// Check if wallet already exists
-	checkChainID, err := uuid.Parse(input.ChainID)
+	checkChainID, _, err := u.resolver.ResolveFromAny(ctx, input.ChainID)
 	if err != nil {
 		return nil, domainerrors.ErrInvalidInput
 	}
@@ -80,7 +88,7 @@ func (u *WalletUsecase) ConnectWallet(ctx context.Context, userID uuid.UUID, inp
 	isPrimary := len(existingWallets) == 0
 
 	// Parse chain ID to uuid
-	chainID, err := uuid.Parse(input.ChainID)
+	chainID, _, err := u.resolver.ResolveFromAny(ctx, input.ChainID)
 	if err != nil {
 		return nil, domainerrors.ErrInvalidInput
 	}

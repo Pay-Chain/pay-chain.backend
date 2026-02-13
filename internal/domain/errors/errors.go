@@ -101,3 +101,8 @@ func NewError(message string, err error) error {
 		Err:     err,
 	}
 }
+
+// InternalServerError creates an internal server error with a message
+func InternalServerError(message string) *AppError {
+	return NewAppError(http.StatusInternalServerError, CodeInternalError, message, nil)
+}

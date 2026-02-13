@@ -3,18 +3,22 @@ package usecases
 import (
 	"context"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"math/big"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/google/uuid"
 	"github.com/volatiletech/null/v8"
 	"pay-chain.backend/internal/domain/entities"
 	domainerrors "pay-chain.backend/internal/domain/errors"
 	"pay-chain.backend/internal/domain/repositories"
 	"pay-chain.backend/internal/infrastructure/blockchain"
+	"pay-chain.backend/pkg/utils"
 )
 
 // PaymentUsecase handles payment business logic
@@ -26,8 +30,11 @@ type PaymentUsecase struct {
 	contractRepo     repositories.SmartContractRepository
 	chainRepo        repositories.ChainRepository
 	tokenRepo        repositories.TokenRepository
+	bridgeConfigRepo repositories.BridgeConfigRepository
+	feeConfigRepo    repositories.FeeConfigRepository
 	uow              repositories.UnitOfWork
 	clientFactory    *blockchain.ClientFactory
+	chainResolver    *ChainResolver
 }
 
 // NewPaymentUsecase creates a new payment usecase
@@ -39,6 +46,8 @@ func NewPaymentUsecase(
 	contractRepo repositories.SmartContractRepository,
 	chainRepo repositories.ChainRepository,
 	tokenRepo repositories.TokenRepository,
+	bridgeConfigRepo repositories.BridgeConfigRepository,
+	feeConfigRepo repositories.FeeConfigRepository,
 	uow repositories.UnitOfWork,
 	clientFactory *blockchain.ClientFactory,
 ) *PaymentUsecase {
@@ -50,64 +59,106 @@ func NewPaymentUsecase(
 		contractRepo:     contractRepo,
 		chainRepo:        chainRepo,
 		tokenRepo:        tokenRepo,
+		bridgeConfigRepo: bridgeConfigRepo,
+		feeConfigRepo:    feeConfigRepo,
 		uow:              uow,
 		clientFactory:    clientFactory,
+		chainResolver:    NewChainResolver(chainRepo),
 	}
 }
 
 // FeeConfig holds fee configuration
 type FeeConfig struct {
-	BaseFeeCents     int64   // Base fee in cents (e.g., 50 = $0.50)
+	BaseFeeToken     float64 // Base fee in token amount
 	PercentageFee    float64 // Percentage fee (e.g., 0.003 = 0.3%)
-	BridgeFeeFlat    int64   // Flat bridge fee in cents
+	BridgeFeeFlat    float64 // Flat bridge fee in token amount
 	MerchantDiscount float64 // Merchant discount percentage
 }
 
 // DefaultFeeConfig returns default fee configuration
 func DefaultFeeConfig() *FeeConfig {
 	return &FeeConfig{
-		BaseFeeCents:  int64(DefaultFixedFeeUSD * 100),   // $0.50
-		PercentageFee: DefaultPercentageFee,              // 0.3%
-		BridgeFeeFlat: int64(DefaultBridgeFeeFlat * 100), // $0.10
+		BaseFeeToken:  DefaultFixedFeeUSD,
+		PercentageFee: DefaultPercentageFee,
+		BridgeFeeFlat: DefaultBridgeFeeFlat,
 	}
 }
 
 // CalculateFees calculates fees for a payment
-func (u *PaymentUsecase) CalculateFees(ctx context.Context, amount *big.Int, decimals int, sourceChainID, destChainID string, merchantDiscount float64) *entities.FeeBreakdown {
+func (u *PaymentUsecase) CalculateFees(
+	ctx context.Context,
+	amount *big.Int,
+	decimals int,
+	sourceChainID, destChainID string,
+	sourceChainUUID uuid.UUID,
+	sourceTokenID uuid.UUID,
+	sourceTokenAddress string,
+	destTokenAddress string,
+	merchantDiscount float64,
+) *entities.FeeBreakdown {
 	// Convert amount to float for calculation
 	divisor := new(big.Float).SetInt(new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(decimals)), nil))
-	amountFloat, _ := new(big.Float).SetInt(amount).Float64()
-	amountFloat = amountFloat / float64(divisor.Acc())
+	dist := new(big.Float).SetInt(amount)
+	amountFloat, _ := new(big.Float).Quo(dist, divisor).Float64()
 
 	config := DefaultFeeConfig()
+	minFeeToken := 0.0
+	maxFeeToken := -1.0
+	if u.feeConfigRepo != nil {
+		if feeCfg, err := u.feeConfigRepo.GetByChainAndToken(ctx, sourceChainUUID, sourceTokenID); err == nil && feeCfg != nil {
+			if v, parseErr := strconv.ParseFloat(feeCfg.FixedBaseFee, 64); parseErr == nil {
+				config.BaseFeeToken = v
+			}
+			if v, parseErr := strconv.ParseFloat(feeCfg.PlatformFeePercent, 64); parseErr == nil {
+				config.PercentageFee = v
+			}
+			if v, parseErr := strconv.ParseFloat(feeCfg.MinFee, 64); parseErr == nil {
+				minFeeToken = v
+			}
+			if feeCfg.MaxFee != nil && *feeCfg.MaxFee != "" {
+				if v, parseErr := strconv.ParseFloat(*feeCfg.MaxFee, 64); parseErr == nil {
+					maxFeeToken = v
+				}
+			}
+		}
+	}
 
 	// Platform fee: base + percentage
-	platformFee := float64(config.BaseFeeCents)/100 + amountFloat*config.PercentageFee
+	platformFee := config.BaseFeeToken + amountFloat*config.PercentageFee
 
 	// Apply merchant discount
 	if merchantDiscount > 0 {
 		platformFee = platformFee * (1 - merchantDiscount)
 	}
+	if platformFee < minFeeToken {
+		platformFee = minFeeToken
+	}
+	if maxFeeToken >= 0 && platformFee > maxFeeToken {
+		platformFee = maxFeeToken
+	}
 
 	// Bridge fee (only for cross-chain)
-	bridgeFeeNative := new(big.Int)
 	isCrossChain := sourceChainID != destChainID // Defined here
+	bridgeFeeToken := 0.0
 	if isCrossChain {
-		// New: Fetch dynamic bridge fee from blockchain
-		quote, err := u.getBridgeFeeQuote(ctx, sourceChainID, destChainID)
-		if err == nil {
-			bridgeFeeNative = quote
+		if quotedBridgeFeeWei, err := u.getBridgeFeeQuote(ctx, sourceChainID, destChainID, sourceTokenAddress, destTokenAddress, amount); err == nil && quotedBridgeFeeWei != nil {
+			bridgeFeeFloat := new(big.Float).SetInt(quotedBridgeFeeWei)
+			divisor := new(big.Float).SetInt(new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(decimals)), nil))
+			feeTokens, _ := new(big.Float).Quo(bridgeFeeFloat, divisor).Float64()
+			bridgeFeeToken = feeTokens
+		} else {
+			bridgeFeeToken = config.BridgeFeeFlat
 		}
 	}
 
-	// Total Fee in Token (Platform Fee)
-	totalFeeToken := platformFee
+	// Total Fee in Token (Platform Fee + bridge flat fee)
+	totalFeeToken := platformFee + bridgeFeeToken
 	netAmount := amountFloat - totalFeeToken
 
 	return &entities.FeeBreakdown{
 		PlatformFee: formatAmount(platformFee, decimals),
-		BridgeFee:   bridgeFeeNative.String(), // Now returning Native Fee (Wei)
-		GasFee:      "0",                      // Gas is handled separately
+		BridgeFee:   formatAmount(bridgeFeeToken, decimals),
+		GasFee:      "0", // Gas is handled separately
 		TotalFee:    formatAmount(totalFeeToken, decimals),
 		NetAmount:   formatAmount(netAmount, decimals),
 	}
@@ -143,16 +194,22 @@ func (u *PaymentUsecase) CreatePayment(ctx context.Context, userID uuid.UUID, in
 		return nil, domainerrors.ErrBadRequest
 	}
 
-	// Resolve Source Chain
-	sourceChain, err := u.chainRepo.GetByChainID(ctx, input.SourceChainID)
+	sourceChainUUID, sourceCAIP2, err := u.chainResolver.ResolveFromAny(ctx, input.SourceChainID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid source chain: %w", err)
 	}
-
-	// Resolve Dest Chain
-	destChain, err := u.chainRepo.GetByChainID(ctx, input.DestChainID)
+	destChainUUID, destCAIP2, err := u.chainResolver.ResolveFromAny(ctx, input.DestChainID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid dest chain: %w", err)
+	}
+
+	sourceChain, err := u.chainRepo.GetByID(ctx, sourceChainUUID)
+	if err != nil {
+		return nil, fmt.Errorf("error fetching source chain: %w", err)
+	}
+	destChain, err := u.chainRepo.GetByID(ctx, destChainUUID)
+	if err != nil {
+		return nil, fmt.Errorf("error fetching dest chain: %w", err)
 	}
 
 	// Parse amount
@@ -161,14 +218,12 @@ func (u *PaymentUsecase) CreatePayment(ctx context.Context, userID uuid.UUID, in
 		return nil, domainerrors.ErrBadRequest
 	}
 
-	// Calculate fees (Pass strings as before, logic uses them for config/math)
-	feeBreakdown := u.CalculateFees(ctx, amount, input.Decimals, input.SourceChainID, input.DestChainID, 0)
-
 	// Select bridge
 	bridgeType := ""
-	isCrossChain := input.SourceChainID != input.DestChainID
+	var bridgeID *uuid.UUID
+	isCrossChain := sourceCAIP2 != destCAIP2
 	if isCrossChain {
-		bridgeType = u.SelectBridge(input.SourceChainID, input.DestChainID)
+		bridgeType, bridgeID = u.decideBridge(ctx, sourceChainUUID, destChainUUID, sourceCAIP2, destCAIP2)
 	}
 
 	// Get specific gateway contract for source chain using UUID
@@ -209,20 +264,35 @@ func (u *PaymentUsecase) CreatePayment(ctx context.Context, userID uuid.UUID, in
 		return nil, fmt.Errorf("dest token not found for address %s on chain %s", input.DestTokenAddress, input.DestChainID)
 	}
 
+	// Calculate fees after token is resolved so chain/token-specific fee_configs can be applied.
+	feeBreakdown := u.CalculateFees(
+		ctx,
+		amount,
+		input.Decimals,
+		sourceCAIP2,
+		destCAIP2,
+		sourceChainUUID,
+		sourceTokenID,
+		input.SourceTokenAddress,
+		input.DestTokenAddress,
+		0,
+	)
+
 	// Create payment entity
 	payment := &entities.Payment{
-		ID:                 uuid.New(), // Generate ID
+		ID:                 utils.GenerateUUIDv7(), // Generate ID
 		SenderID:           &userID,
 		MerchantID:         nil, // userID is User, not Merchant in this context? Or need to check if User is Merchant?
-		SourceChainID:      sourceChain.ID,
-		DestChainID:        destChain.ID,
+		BridgeID:           bridgeID,
+		SourceChainID:      sourceChainUUID,
+		DestChainID:        destChainUUID,
 		SourceTokenID:      &sourceTokenID,
 		DestTokenID:        &destTokenID,
 		SourceTokenAddress: input.SourceTokenAddress,
 		DestTokenAddress:   input.DestTokenAddress,
 		SourceAmount:       input.Amount,
 		FeeAmount:          feeBreakdown.TotalFee,
-		TotalCharged:       input.Amount, // Should simplify/clarify
+		TotalCharged:       input.Amount,
 		// BridgeType:         bridgeType, // Field removed from model/entity in favor of BridgeID?
 		// Wait, Entity Definition:
 		// `BridgeID *uuid.UUID`
@@ -247,6 +317,11 @@ func (u *PaymentUsecase) CreatePayment(ctx context.Context, userID uuid.UUID, in
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
+	payment.SourceChain = sourceChain
+	payment.DestChain = destChain
+	if totalCharged, calcErr := addDecimalStrings(input.Amount, feeBreakdown.TotalFee); calcErr == nil {
+		payment.TotalCharged = totalCharged
+	}
 
 	// Set nullable DestAmount
 	if feeBreakdown.NetAmount != "" {
@@ -255,7 +330,7 @@ func (u *PaymentUsecase) CreatePayment(ctx context.Context, userID uuid.UUID, in
 
 	// Save payment
 	// Wrap DB operations in Transaction
-	if err := u.uow.Do(ctx, func(txCtx context.Context) error {
+	if err = u.uow.Do(ctx, func(txCtx context.Context) error {
 		// Save payment
 		if err := u.paymentRepo.Create(txCtx, payment); err != nil {
 			return err
@@ -263,7 +338,7 @@ func (u *PaymentUsecase) CreatePayment(ctx context.Context, userID uuid.UUID, in
 
 		// Create initial event
 		event := &entities.PaymentEvent{
-			ID:        uuid.New(),
+			ID:        utils.GenerateUUIDv7(),
 			PaymentID: payment.ID,
 			EventType: entities.PaymentEventTypeCreated, // Use Enum
 			ChainID:   &sourceChain.ID,
@@ -283,8 +358,8 @@ func (u *PaymentUsecase) CreatePayment(ctx context.Context, userID uuid.UUID, in
 	return &entities.CreatePaymentResponse{
 		PaymentID:      payment.ID,
 		Status:         payment.Status,
-		SourceChainID:  input.SourceChainID, // Return the Input String (Network ID) for frontend consistency
-		DestChainID:    input.DestChainID,
+		SourceChainID:  sourceCAIP2,
+		DestChainID:    destCAIP2,
 		SourceAmount:   payment.SourceAmount,
 		SourceDecimals: input.Decimals,
 		DestAmount:     payment.DestAmount.String,
@@ -294,6 +369,24 @@ func (u *PaymentUsecase) CreatePayment(ctx context.Context, userID uuid.UUID, in
 		ExpiresAt:      time.Now().Add(PaymentExpiryDuration),
 		SignatureData:  signatureData,
 	}, nil
+}
+
+func (u *PaymentUsecase) decideBridge(
+	ctx context.Context,
+	sourceChainUUID, destChainUUID uuid.UUID,
+	sourceCAIP2, destCAIP2 string,
+) (string, *uuid.UUID) {
+	if u.bridgeConfigRepo != nil {
+		if cfg, err := u.bridgeConfigRepo.GetActive(ctx, sourceChainUUID, destChainUUID); err == nil && cfg != nil {
+			if cfg.Bridge != nil && cfg.Bridge.Name != "" {
+				id := cfg.Bridge.ID
+				return cfg.Bridge.Name, &id
+			}
+		}
+	}
+
+	// Fallback to legacy deterministic selection.
+	return u.SelectBridge(sourceCAIP2, destCAIP2), nil
 }
 
 // Helper to resolve token
@@ -324,9 +417,11 @@ func (u *PaymentUsecase) buildTransactionData(payment *entities.Payment, contrac
 	// Determine chain type using SourceChain relation if available, else standard EVM default or fetch
 	// For now, assuming standard EVM if not Sol
 	// But better: use SourceChain.ChainID (string/CAIP-2) if preloaded.
-	var sourceChainID string
+	sourceChainID := ""
 	if payment.SourceChain != nil {
-		sourceChainID = payment.SourceChain.ChainID
+		sourceChainID = payment.SourceChain.GetCAIP2ID()
+	} else if chain, err := u.chainRepo.GetByID(context.Background(), payment.SourceChainID); err == nil && chain != nil {
+		sourceChainID = chain.GetCAIP2ID()
 	}
 	chainType := getChainTypeFromCAIP2(sourceChainID)
 
@@ -341,7 +436,7 @@ func (u *PaymentUsecase) buildTransactionData(payment *entities.Payment, contrac
 	case "solana":
 		return map[string]string{
 			"programId": contract.ContractAddress,
-			"data":      u.buildSvmPaymentBase64(payment),
+			"data":      u.buildSvmPaymentBase58(payment),
 		}
 	}
 
@@ -392,17 +487,25 @@ func (u *PaymentUsecase) buildEvmPaymentHex(payment *entities.Payment) string {
 		destChainIdLenHex + destChainIdDataHex + receiverLenHex + receiverDataHex
 }
 
-func (u *PaymentUsecase) buildSvmPaymentBase64(payment *entities.Payment) string {
-	data := map[string]interface{}{
-		"instruction":   "create_payment",
-		"payment_id":    payment.ID.String(),
-		"dest_chain_id": payment.DestChainID,
-		"dest_token":    payment.DestTokenAddress,
-		"amount":        payment.SourceAmount,
-		"receiver":      payment.ReceiverAddress,
+func (u *PaymentUsecase) buildSvmPaymentBase58(payment *entities.Payment) string {
+	discriminator := anchorDiscriminator("create_payment")
+	paymentID := uuidToBytes32(payment.ID)
+	destChainID := payment.DestChainID.String()
+	if payment.DestChain != nil {
+		destChainID = payment.DestChain.GetCAIP2ID()
 	}
-	jsonData, _ := json.Marshal(data)
-	return hex.EncodeToString(jsonData)
+	destToken := addressToBytes32(payment.DestTokenAddress)
+	receiver := addressToBytes32(payment.ReceiverAddress)
+	amount := decimalStringToUint64(payment.SourceAmount)
+
+	data := make([]byte, 0, 8+32+4+len(destChainID)+32+8+32)
+	data = append(data, discriminator[:]...)
+	data = append(data, paymentID[:]...)
+	data = append(data, encodeAnchorString(destChainID)...)
+	data = append(data, destToken[:]...)
+	data = append(data, u64ToLE(amount)...)
+	data = append(data, receiver[:]...)
+	return base58Encode(data)
 }
 
 // GetPayment gets a payment by ID
@@ -422,11 +525,24 @@ func (u *PaymentUsecase) GetPaymentEvents(ctx context.Context, paymentID uuid.UU
 }
 
 // getBridgeFeeQuote fetches fee from on-chain Router
-func (u *PaymentUsecase) getBridgeFeeQuote(ctx context.Context, sourceChainID, destChainID string) (*big.Int, error) {
-	// 1. Get Chain Config to resolve UUID and RPCs (SourceChainID is NetworkID)
-	chain, err := u.chainRepo.GetByChainID(ctx, sourceChainID)
+func (u *PaymentUsecase) getBridgeFeeQuote(
+	ctx context.Context,
+	sourceChainID, destChainID string,
+	sourceTokenAddress, destTokenAddress string,
+	amount *big.Int,
+) (*big.Int, error) {
+	sourceChainUUID, sourceCAIP2, err := u.chainResolver.ResolveFromAny(ctx, sourceChainID)
 	if err != nil {
-		return nil, fmt.Errorf("chain config not found: %w", err)
+		return nil, fmt.Errorf("source chain config not found: %w", err)
+	}
+	destChainUUID, destCAIP2, err := u.chainResolver.ResolveFromAny(ctx, destChainID)
+	if err != nil {
+		return nil, fmt.Errorf("dest chain config not found: %w", err)
+	}
+
+	chain, err := u.chainRepo.GetByID(ctx, sourceChainUUID)
+	if err != nil {
+		return nil, fmt.Errorf("source chain not found: %w", err)
 	}
 
 	// 2. Get Active Router
@@ -468,71 +584,70 @@ func (u *PaymentUsecase) getBridgeFeeQuote(ctx context.Context, sourceChainID, d
 		return nil, fmt.Errorf("failed to connect to any RPC endpoint: %w", clientErr)
 	}
 
-	// 3. Select Bridge Type
-	bridgeTypeStr := u.SelectBridge(sourceChainID, destChainID)
-	var bridgeType uint8
-	if bridgeTypeStr == "CCIP" {
+	// 4. Select bridge type from DB config first, fallback deterministic rule
+	bridgeTypeStr, _ := u.decideBridge(ctx, sourceChainUUID, destChainUUID, sourceCAIP2, destCAIP2)
+	bridgeType := uint8(0)
+	if strings.EqualFold(bridgeTypeStr, "CCIP") {
 		bridgeType = 1
-	} else {
-		bridgeType = 0 // Hyperbridge/Hyperlane default
 	}
 
-	// 4. Encode Calldata: quoteFee(string destChainId, uint8 bridgeType)
-	// Selector: 0x9a8f4304 (calculated for quoteFee(string,uint8))
-	// Actually let's assume standard packing.
-	// Since I can't look up selector easily, I'll trust my calculation or use a known one.
-	// keccak256("quoteFee(string,uint8)") = 9a8f4304...
-
-	// Manual ABI Packing
-	// DestChainID (string) -> offset 64 (0x40)
-	// BridgeType (uint8) -> offset 32 (0x20) (padded) -> Wait, method(string, uint8)
-	// Stack: [OffsetString, Uint8]
-	// 0x00: Offset to string data (0x40 = 64 bytes)
-	// 0x20: BridgeType (padded to 32 bytes)
-	// 0x40: String Length
-	// 0x60: String Data (padded)
-
-	selector := "9a8f4304"
-
-	// Bridge Type (uint8) padded to 32 bytes
-	bridgeTypeHex := fmt.Sprintf("%064x", bridgeType)
-
-	// DestChainID String
-	strData := []byte(destChainID)
-	lenStr := len(strData)
-	lenStrHex := fmt.Sprintf("%064x", lenStr)
-	strDataHex := hex.EncodeToString(strData)
-	// Pad string data to 32 bytes multiple
-	if lenStr%32 != 0 {
-		padding := 32 - (lenStr % 32)
-		strDataHex += strings.Repeat("00", padding)
+	// 5. ABI encode quotePaymentFee(string,uint8,(bytes32,address,address,address,uint256,string,uint256))
+	messageTupleType, err := abi.NewType("tuple", "", []abi.ArgumentMarshaling{
+		{Name: "paymentId", Type: "bytes32"},
+		{Name: "receiver", Type: "address"},
+		{Name: "sourceToken", Type: "address"},
+		{Name: "destToken", Type: "address"},
+		{Name: "amount", Type: "uint256"},
+		{Name: "destChainId", Type: "string"},
+		{Name: "minAmountOut", Type: "uint256"},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to build ABI tuple type: %w", err)
+	}
+	stringType, _ := abi.NewType("string", "", nil)
+	uint8Type, _ := abi.NewType("uint8", "", nil)
+	args := abi.Arguments{
+		{Type: stringType},
+		{Type: uint8Type},
+		{Type: messageTupleType},
 	}
 
-	// Offset is 0x40 (64) because param 1 is string (dynamic), param 2 is uint8 (static).
-	// WAIT: in ABI encoding, static types come first in Head? No.
-	// Params are encoded in order.
-	// 1. String (Dynamic) -> Head is Offset.
-	// 2. Uint8 (Static) -> Head is Value.
-	// So:
-	// 0x00: Offset of String (0x40 = 64)
-	// 0x20: BridgeType Value
-	// 0x40: String Length
-	// 0x60: String Content
+	type bridgeMessage struct {
+		PaymentId    [32]byte
+		Receiver     common.Address
+		SourceToken  common.Address
+		DestToken    common.Address
+		Amount       *big.Int
+		DestChainId  string
+		MinAmountOut *big.Int
+	}
+	msgStruct := bridgeMessage{
+		PaymentId:    [32]byte{},
+		Receiver:     common.Address{},
+		SourceToken:  common.HexToAddress(normalizeEvmAddress(sourceTokenAddress)),
+		DestToken:    common.HexToAddress(normalizeEvmAddress(destTokenAddress)),
+		Amount:       amount,
+		DestChainId:  destCAIP2,
+		MinAmountOut: big.NewInt(0),
+	}
 
-	offsetHex := fmt.Sprintf("%064x", 64)
+	packedArgs, err := args.Pack(destCAIP2, bridgeType, msgStruct)
+	if err != nil {
+		return nil, fmt.Errorf("failed to pack quotePaymentFee args: %w", err)
+	}
+	methodSig := []byte("quotePaymentFee(string,uint8,(bytes32,address,address,address,uint256,string,uint256))")
+	methodID := crypto.Keccak256(methodSig)[:4]
+	calldata := append(methodID, packedArgs...)
 
-	calldataHex := selector + offsetHex + bridgeTypeHex + lenStrHex + strDataHex
-	calldata, _ := hex.DecodeString(calldataHex)
-
-	// 5. Call Contract
+	// 6. Call Contract
 	result, err := client.CallView(ctx, router.ContractAddress, calldata)
 	if err != nil {
 		return nil, fmt.Errorf("contract call failed: %w", err)
 	}
 
-	// 6. Decode Result (uint256)
+	// 7. Decode Result (uint256)
 	if len(result) == 0 {
-		return nil, fmt.Errorf("empty result from quoteFee")
+		return nil, fmt.Errorf("empty result from quotePaymentFee")
 	}
 	fee := new(big.Int).SetBytes(result)
 

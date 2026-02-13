@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/volatiletech/null/v8"
+	"gorm.io/gorm"
 )
 
 // ChainType represents blockchain type
@@ -39,15 +40,16 @@ type Chain struct {
 
 // ChainRPC represents a blockchain RPC endpoint
 type ChainRPC struct {
-	ID          uuid.UUID  `json:"id" gorm:"type:uuid;primary_key;default:uuid_generate_v7()"`
-	ChainID     uuid.UUID  `json:"chainId"`
-	URL         string     `json:"url"`
-	Priority    int        `json:"priority"`
-	IsActive    bool       `json:"isActive"`
-	CreatedAt   time.Time  `json:"createdAt"`
-	UpdatedAt   time.Time  `json:"updatedAt"`
-	LastErrorAt *time.Time `json:"lastErrorAt,omitempty"`
-	ErrorCount  int        `json:"errorCount"`
+	ID          uuid.UUID      `json:"id" gorm:"type:uuid;primary_key;default:uuid_generate_v7()"`
+	ChainID     uuid.UUID      `json:"chainId"`
+	URL         string         `json:"url"`
+	Priority    int            `json:"priority"`
+	IsActive    bool           `json:"isActive"`
+	CreatedAt   time.Time      `json:"createdAt"`
+	UpdatedAt   time.Time      `json:"updatedAt"`
+	LastErrorAt *time.Time     `json:"lastErrorAt,omitempty"`
+	ErrorCount  int            `json:"errorCount"`
+	DeletedAt   gorm.DeletedAt `json:"-" gorm:"index"`
 
 	// Joined fields
 	Chain *Chain `json:"chain,omitempty"`
@@ -96,26 +98,4 @@ type Token struct {
 	CreatedAt       time.Time   `json:"createdAt"`
 	UpdatedAt       time.Time   `json:"updatedAt"`
 	DeletedAt       *time.Time  `json:"deletedAt,omitempty" gorm:"index"`
-}
-
-// Wallet represents a user wallet
-type Wallet struct {
-	ID         uuid.UUID  `json:"id" gorm:"type:uuid;primary_key;default:uuid_generate_v7()"`
-	UserID     *uuid.UUID `json:"userId,omitempty"`
-	MerchantID *uuid.UUID `json:"merchantId,omitempty"`
-	ChainID    uuid.UUID  `json:"chainId"`
-	Address    string     `json:"address"`
-	Type       string     `json:"type" gorm:"default:'EOA'"`
-	IsPrimary  bool       `json:"isPrimary"`
-	CreatedAt  time.Time  `json:"createdAt"`
-	UpdatedAt  time.Time  `json:"updatedAt"`
-	DeletedAt  *time.Time `json:"-"`
-}
-
-// ConnectWalletInput represents input for connecting a wallet
-type ConnectWalletInput struct {
-	ChainID   string `json:"chainId" binding:"required"` // The Network ID (e.g. "1")
-	Address   string `json:"address" binding:"required"`
-	Signature string `json:"signature" binding:"required"`
-	Message   string `json:"message" binding:"required"`
 }

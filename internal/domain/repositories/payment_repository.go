@@ -17,10 +17,3 @@ type PaymentRepository interface {
 	UpdateDestTxHash(ctx context.Context, id uuid.UUID, txHash string) error
 	MarkRefunded(ctx context.Context, id uuid.UUID) error
 }
-
-// PaymentEventRepository defines payment event data operations
-type PaymentEventRepository interface {
-	Create(ctx context.Context, event *entities.PaymentEvent) error
-	GetByPaymentID(ctx context.Context, paymentID uuid.UUID) ([]*entities.PaymentEvent, error)
-	GetLatestByPaymentID(ctx context.Context, paymentID uuid.UUID) (*entities.PaymentEvent, error)
-}

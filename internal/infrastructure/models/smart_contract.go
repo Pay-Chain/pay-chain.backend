@@ -12,7 +12,7 @@ type SmartContract struct {
 	ID              uuid.UUID      `gorm:"type:uuid;primaryKey;default:uuid_generate_v7()"`
 	Name            string         `gorm:"type:varchar(100);not null"`
 	ChainID         uuid.UUID      `gorm:"type:uuid;not null;index"`
-	ContractAddress string         `gorm:"type:varchar(66);not null;uniqueIndex:idx_chain_contract"`
+	ContractAddress string         `gorm:"column:address;type:varchar(255);not null;uniqueIndex:idx_chain_address"`
 	ABI             string         `gorm:"type:jsonb;not null"`
 	Type            string         `gorm:"type:varchar(50);not null;default:'GATEWAY'"`
 	Version         string         `gorm:"type:varchar(20);not null;default:'1.0.0'"`

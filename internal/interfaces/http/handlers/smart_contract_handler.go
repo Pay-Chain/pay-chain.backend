@@ -1,11 +1,14 @@
 package handlers
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/volatiletech/null/v8"
 	"pay-chain.backend/internal/domain/entities"
 	domainerrors "pay-chain.backend/internal/domain/errors"
 	"pay-chain.backend/internal/domain/repositories"
@@ -50,9 +53,27 @@ func (h *SmartContractHandler) CreateSmartContract(c *gin.Context) {
 
 	contract := &entities.SmartContract{
 		Name:            input.Name,
-		ChainUUID:       chainUUID, // Changed to ChainUUID
+		Type:            input.Type,
+		Version:         input.Version,
+		ChainUUID:       chainUUID,
 		ContractAddress: input.ContractAddress,
+		DeployerAddress: null.NewString(input.DeployerAddress, input.DeployerAddress != ""),
+		Token0Address:   null.NewString(input.Token0Address, input.Token0Address != ""),
+		Token1Address:   null.NewString(input.Token1Address, input.Token1Address != ""),
+		FeeTier:         null.NewInt(input.FeeTier, input.FeeTier != 0),
+		HookAddress:     null.NewString(input.HookAddress, input.HookAddress != ""),
+		StartBlock:      input.StartBlock,
 		ABI:             input.ABI,
+		IsActive:        true,
+	}
+	if input.IsActive != nil {
+		contract.IsActive = *input.IsActive
+	}
+
+	if input.Metadata != nil {
+		if raw, marshalErr := json.Marshal(input.Metadata); marshalErr == nil {
+			contract.Metadata = null.JSONFrom(raw)
+		}
 	}
 
 	if err := h.repo.Create(c.Request.Context(), contract); err != nil {
@@ -96,6 +117,7 @@ func (h *SmartContractHandler) ListSmartContracts(c *gin.Context) {
 	pagination := utils.GetPaginationParams(page, limit)
 
 	chainUUIDStr := c.Query("chainId")
+	typeStr := strings.ToUpper(strings.TrimSpace(c.Query("type")))
 	var chainUUID *uuid.UUID
 	if chainUUIDStr != "" {
 		id, err := uuid.Parse(chainUUIDStr)
@@ -113,12 +135,12 @@ func (h *SmartContractHandler) ListSmartContracts(c *gin.Context) {
 	var contracts []*entities.SmartContract
 	var totalCount int64
 	var err error
-
-	if chainUUID != nil {
-		contracts, totalCount, err = h.repo.GetByChain(c.Request.Context(), *chainUUID, pagination)
-	} else {
-		contracts, totalCount, err = h.repo.GetAll(c.Request.Context(), pagination)
-	}
+	contracts, totalCount, err = h.repo.GetFiltered(
+		c.Request.Context(),
+		chainUUID,
+		entities.SmartContractType(typeStr),
+		pagination,
+	)
 
 	if err != nil {
 		response.Error(c, err)
@@ -214,8 +236,44 @@ func (h *SmartContractHandler) UpdateSmartContract(c *gin.Context) {
 	if input.Name != "" {
 		contract.Name = input.Name
 	}
+	if input.Type != "" {
+		contract.Type = input.Type
+	}
 	if input.Version != "" {
 		contract.Version = input.Version
+	}
+	if input.ChainID != "" {
+		chainUUID, parseErr := uuid.Parse(input.ChainID)
+		if parseErr != nil {
+			chain, chainErr := h.chainRepo.GetByChainID(c.Request.Context(), input.ChainID)
+			if chainErr != nil {
+				response.Error(c, domainerrors.BadRequest("Invalid chain ID"))
+				return
+			}
+			chainUUID = chain.ID
+		}
+		contract.ChainUUID = chainUUID
+	}
+	if input.ContractAddress != "" {
+		contract.ContractAddress = input.ContractAddress
+	}
+	if input.DeployerAddress != "" {
+		contract.DeployerAddress = null.NewString(input.DeployerAddress, true)
+	}
+	if input.Token0Address != "" {
+		contract.Token0Address = null.NewString(input.Token0Address, true)
+	}
+	if input.Token1Address != "" {
+		contract.Token1Address = null.NewString(input.Token1Address, true)
+	}
+	if input.FeeTier != nil {
+		contract.FeeTier = null.NewInt(*input.FeeTier, true)
+	}
+	if input.HookAddress != "" {
+		contract.HookAddress = null.NewString(input.HookAddress, true)
+	}
+	if input.StartBlock != nil {
+		contract.StartBlock = *input.StartBlock
 	}
 	if input.ABI != nil {
 		contract.ABI = input.ABI
@@ -224,9 +282,9 @@ func (h *SmartContractHandler) UpdateSmartContract(c *gin.Context) {
 		contract.IsActive = *input.IsActive
 	}
 	if input.Metadata != nil {
-		// Conversion needed if entity and input types differ slightly
-		// Assuming map[string]interface{} to null.JSON conversion logic here...
-		// For now simple placeholder if needed, or if json.Marshal works
+		if raw, marshalErr := json.Marshal(input.Metadata); marshalErr == nil {
+			contract.Metadata = null.JSONFrom(raw)
+		}
 	}
 
 	if err := h.repo.Update(c.Request.Context(), contract); err != nil {

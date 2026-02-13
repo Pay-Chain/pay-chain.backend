@@ -93,23 +93,36 @@ func main() {
 	walletRepo := repositories.NewWalletRepository(db)
 	chainRepo := repositories.NewChainRepository(db)
 	tokenRepo := repositories.NewTokenRepository(db, chainRepo)
+	bridgeConfigRepo := repositories.NewBridgeConfigRepository(db)
+	feeConfigRepo := repositories.NewFeeConfigRepository(db)
 	smartContractRepo := repositories.NewSmartContractRepository(db, chainRepo)
 	paymentRequestRepo := repositories.NewPaymentRequestRepository(db)
+	apiKeyRepo := repositories.NewApiKeyRepository(db) // Added
 	uow := repositories.NewUnitOfWork(db)
+
+	// Initialize Session Store
+	sessionStore, err := redis.NewSessionStore(cfg.Security.SessionEncryptionKey)
+	if err != nil {
+		log.Fatalf("Failed to initialize session store: %v", err)
+	}
 
 	// Initialize blockchain client factory
 	clientFactory := blockchain.NewClientFactory()
 
 	// Initialize usecases
-	authUsecase := usecases.NewAuthUsecase(userRepo, emailVerifRepo, walletRepo, jwtService)
-	paymentUsecase := usecases.NewPaymentUsecase(paymentRepo, paymentEventRepo, walletRepo, merchantRepo, smartContractRepo, chainRepo, tokenRepo, uow, clientFactory)
+	authUsecase := usecases.NewAuthUsecase(userRepo, emailVerifRepo, walletRepo, chainRepo, jwtService)
+	// ApiKeyUsecase needs Config for Encryption Key
+	apiKeyUsecase := usecases.NewApiKeyUsecase(apiKeyRepo, userRepo, cfg.Security.ApiKeyEncryptionKey)
+	paymentUsecase := usecases.NewPaymentUsecase(paymentRepo, paymentEventRepo, walletRepo, merchantRepo, smartContractRepo, chainRepo, tokenRepo, bridgeConfigRepo, feeConfigRepo, uow, clientFactory)
+	// PaymentAppUsecase needs PaymentUsecase, UserRepo, WalletRepo, ChainRepo
+	paymentAppUsecase := usecases.NewPaymentAppUsecase(paymentUsecase, userRepo, walletRepo, chainRepo)
 	merchantUsecase := usecases.NewMerchantUsecase(merchantRepo, userRepo)
-	walletUsecase := usecases.NewWalletUsecase(walletRepo, userRepo)
-	paymentRequestUsecase := usecases.NewPaymentRequestUsecase(paymentRequestRepo, merchantRepo, walletRepo, smartContractRepo)
-	webhookUsecase := usecases.NewWebhookUsecase(paymentRepo, paymentEventRepo, paymentRequestRepo)
+	walletUsecase := usecases.NewWalletUsecase(walletRepo, userRepo, chainRepo)
+	paymentRequestUsecase := usecases.NewPaymentRequestUsecase(paymentRequestRepo, merchantRepo, walletRepo, chainRepo, smartContractRepo, tokenRepo)
+	webhookUsecase := usecases.NewWebhookUsecase(paymentRepo, paymentEventRepo, paymentRequestRepo, uow)
 
 	// Initialize handlers
-	authHandler := handlers.NewAuthHandler(authUsecase)
+	authHandler := handlers.NewAuthHandler(authUsecase, sessionStore)
 	paymentHandler := handlers.NewPaymentHandler(paymentUsecase)
 	merchantHandler := handlers.NewMerchantHandler(merchantUsecase)
 	walletHandler := handlers.NewWalletHandler(walletUsecase)
@@ -119,9 +132,11 @@ func main() {
 	paymentRequestHandler := handlers.NewPaymentRequestHandler(paymentRequestUsecase)
 	webhookHandler := handlers.NewWebhookHandler(webhookUsecase)
 	adminHandler := handlers.NewAdminHandler(userRepo, merchantRepo, paymentRepo)
+	apiKeyHandler := handlers.NewApiKeyHandler(apiKeyUsecase)             // Added
+	paymentAppHandler := handlers.NewPaymentAppHandler(paymentAppUsecase) // Added
 
-	// Create auth middleware
-	authMiddleware := middleware.AuthMiddleware(jwtService)
+	// Create dual auth middleware
+	dualAuthMiddleware := middleware.DualAuthMiddleware(jwtService, apiKeyUsecase, sessionStore) // Added
 
 	// Start background jobs
 	ctx, cancel := context.WithCancel(context.Background())
@@ -177,12 +192,14 @@ func main() {
 			auth.POST("/login", authHandler.Login)
 			auth.POST("/verify-email", authHandler.VerifyEmail)
 			auth.POST("/refresh", authHandler.RefreshToken)
-			auth.GET("/me", authMiddleware, authHandler.GetMe)
+			auth.GET("/session-expiry", authHandler.GetSessionExpiry)
+			auth.GET("/me", dualAuthMiddleware, authHandler.GetMe) // Updated to Dual Auth
+			auth.POST("/change-password", dualAuthMiddleware, authHandler.ChangePassword)
 		}
 
 		// Payment routes (protected)
 		payments := v1.Group("/payments")
-		payments.Use(authMiddleware)
+		payments.Use(dualAuthMiddleware) // Updated to Dual Auth
 		{
 			// Apply Idempotency only to Create Payment
 			payments.POST("", middleware.IdempotencyMiddleware(), paymentHandler.CreatePayment)
@@ -193,7 +210,7 @@ func main() {
 
 		// Payment Request routes (protected for merchants)
 		paymentRequests := v1.Group("/payment-requests")
-		paymentRequests.Use(authMiddleware)
+		paymentRequests.Use(dualAuthMiddleware) // Updated to Dual Auth
 		{
 			paymentRequests.POST("", paymentRequestHandler.CreatePaymentRequest)
 			paymentRequests.GET("", paymentRequestHandler.ListPaymentRequests)
@@ -205,7 +222,7 @@ func main() {
 
 		// Wallet routes (protected)
 		wallets := v1.Group("/wallets")
-		wallets.Use(authMiddleware)
+		wallets.Use(dualAuthMiddleware) // Updated to Dual Auth
 		{
 			wallets.POST("/connect", walletHandler.ConnectWallet)
 			wallets.GET("", walletHandler.ListWallets)
@@ -215,7 +232,7 @@ func main() {
 
 		// Merchant routes (protected)
 		merchants := v1.Group("/merchants")
-		merchants.Use(authMiddleware)
+		merchants.Use(dualAuthMiddleware) // Updated to Dual Auth
 		{
 			merchants.POST("/apply", merchantHandler.ApplyMerchant)
 			merchants.GET("/status", merchantHandler.GetMerchantStatus)
@@ -244,11 +261,29 @@ func main() {
 
 		// Protected smart contract routes (admin only)
 		contractsAdmin := v1.Group("/contracts")
-		contractsAdmin.Use(authMiddleware)
+		contractsAdmin.Use(dualAuthMiddleware) // Updated to Dual Auth
 		{
 			contractsAdmin.POST("", smartContractHandler.CreateSmartContract)
 			contractsAdmin.PUT("/:id", smartContractHandler.UpdateSmartContract)
 			contractsAdmin.DELETE("/:id", smartContractHandler.DeleteSmartContract)
+		}
+
+		// API Key routes (protected)
+		apiKeys := v1.Group("/api-keys")
+		apiKeys.Use(dualAuthMiddleware)
+		{
+			apiKeys.POST("", apiKeyHandler.CreateApiKey)
+			apiKeys.GET("", apiKeyHandler.ListApiKeys)
+			apiKeys.DELETE("/:id", apiKeyHandler.RevokeApiKey)
+		}
+
+		// Payment App (Public App Endpoint)
+		// It uses DualAuthMiddleware (Api Key + Sig) OR potentially Wallet Sig (future).
+		// For now, we enforce DualAuthMiddleware.
+		paymentApp := v1.Group("/payment-app")
+		paymentApp.Use(dualAuthMiddleware)
+		{
+			paymentApp.POST("", paymentAppHandler.CreatePaymentApp)
 		}
 
 		// Webhook for indexer (internal)
@@ -259,7 +294,7 @@ func main() {
 
 		// Admin routes (protected)
 		admin := v1.Group("/admin")
-		admin.Use(authMiddleware, middleware.RequireAdmin())
+		admin.Use(dualAuthMiddleware, middleware.RequireAdmin())
 		{
 			admin.GET("/users", adminHandler.ListUsers)
 			admin.GET("/merchants", adminHandler.ListMerchants)

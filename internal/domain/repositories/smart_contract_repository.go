@@ -15,6 +15,7 @@ type SmartContractRepository interface {
 	GetByChainAndAddress(ctx context.Context, chainID uuid.UUID, address string) (*entities.SmartContract, error)
 	// GetActiveContract returns the currently active contract of a specific type on a chain
 	GetActiveContract(ctx context.Context, chainID uuid.UUID, contractType entities.SmartContractType) (*entities.SmartContract, error)
+	GetFiltered(ctx context.Context, chainID *uuid.UUID, contractType entities.SmartContractType, pagination utils.PaginationParams) ([]*entities.SmartContract, int64, error)
 	GetByChain(ctx context.Context, chainID uuid.UUID, pagination utils.PaginationParams) ([]*entities.SmartContract, int64, error)
 	GetAll(ctx context.Context, pagination utils.PaginationParams) ([]*entities.SmartContract, int64, error)
 	Update(ctx context.Context, contract *entities.SmartContract) error

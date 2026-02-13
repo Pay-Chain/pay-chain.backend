@@ -10,6 +10,7 @@ import (
 	"pay-chain.backend/internal/domain/entities"
 	domainerrors "pay-chain.backend/internal/domain/errors"
 	"pay-chain.backend/internal/infrastructure/models"
+	"pay-chain.backend/pkg/utils"
 )
 
 // UserRepository implements user data operations
@@ -80,6 +81,21 @@ func (r *UserRepository) Update(ctx context.Context, user *entities.User) error 
 	}
 
 	result := r.db.WithContext(ctx).Model(&models.User{}).Where("id = ?", user.ID).Updates(updates)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return domainerrors.ErrNotFound
+	}
+	return nil
+}
+
+// UpdatePassword updates user password hash.
+func (r *UserRepository) UpdatePassword(ctx context.Context, id uuid.UUID, passwordHash string) error {
+	result := r.db.WithContext(ctx).Model(&models.User{}).Where("id = ?", id).Updates(map[string]interface{}{
+		"password_hash": passwordHash,
+		"updated_at":    time.Now(),
+	})
 	if result.Error != nil {
 		return result.Error
 	}
@@ -168,7 +184,7 @@ func NewEmailVerificationRepository(db *gorm.DB) *EmailVerificationRepository {
 // Create creates a new email verification
 func (r *EmailVerificationRepository) Create(ctx context.Context, userID uuid.UUID, token string) error {
 	m := &models.EmailVerification{
-		ID:        uuid.New(),
+		ID:        utils.GenerateUUIDv7(),
 		UserID:    userID,
 		Token:     token,
 		ExpiresAt: time.Now().Add(24 * time.Hour),

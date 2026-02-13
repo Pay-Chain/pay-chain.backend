@@ -86,7 +86,7 @@ func (r *SmartContractRepositoryImpl) GetByID(ctx context.Context, id uuid.UUID)
 
 func (r *SmartContractRepositoryImpl) GetByChainAndAddress(ctx context.Context, chainID uuid.UUID, address string) (*entities.SmartContract, error) {
 	var m models.SmartContract
-	if err := r.db.WithContext(ctx).Where("chain_id = ? AND contract_address = ?", chainID, address).First(&m).Error; err != nil {
+	if err := r.db.WithContext(ctx).Where("chain_id = ? AND address = ?", chainID, address).First(&m).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, nil
 		}
@@ -169,6 +169,49 @@ func (r *SmartContractRepositoryImpl) GetAll(ctx context.Context, pagination uti
 	return entitiesList, totalCount, nil
 }
 
+func (r *SmartContractRepositoryImpl) GetFiltered(ctx context.Context, chainID *uuid.UUID, contractType entities.SmartContractType, pagination utils.PaginationParams) ([]*entities.SmartContract, int64, error) {
+	var ms []models.SmartContract
+	var totalCount int64
+
+	query := r.db.WithContext(ctx).Model(&models.SmartContract{})
+
+	if chainID != nil {
+		query = query.Where("chain_id = ?", *chainID)
+	}
+	if contractType != "" {
+		// Backward compatibility: older data may still use DEX_POOL.
+		if contractType == entities.ContractTypePool {
+			query = query.Where("type IN ?", []string{string(entities.ContractTypePool), "DEX_POOL"})
+		} else {
+			query = query.Where("type = ?", string(contractType))
+		}
+	}
+
+	if err := query.Count(&totalCount).Error; err != nil {
+		return nil, 0, err
+	}
+
+	if pagination.Limit > 0 {
+		query = query.Limit(pagination.Limit).Offset(pagination.CalculateOffset())
+	}
+
+	if err := query.Order("created_at DESC").Find(&ms).Error; err != nil {
+		return nil, 0, err
+	}
+
+	var entitiesList []*entities.SmartContract
+	for _, m := range ms {
+		model := m
+		e, err := r.toEntity(&model)
+		if err != nil {
+			return nil, 0, err
+		}
+		entitiesList = append(entitiesList, e)
+	}
+
+	return entitiesList, totalCount, nil
+}
+
 func (r *SmartContractRepositoryImpl) Update(ctx context.Context, contract *entities.SmartContract) error {
 	abiBytes, _ := json.Marshal(contract.ABI)
 	metadataStr := "{}"
@@ -177,15 +220,20 @@ func (r *SmartContractRepositoryImpl) Update(ctx context.Context, contract *enti
 	}
 
 	updates := map[string]interface{}{
-		"name":           contract.Name,
-		"version":        contract.Version,
-		"is_active":      contract.IsActive,
-		"abi":            string(abiBytes),
-		"metadata":       metadataStr,
-		"token0_address": contract.Token0Address.String,
-		"token1_address": contract.Token1Address.String,
-		"fee_tier":       contract.FeeTier.Int,
-		"hook_address":   contract.HookAddress.String,
+		"name":             contract.Name,
+		"type":             string(contract.Type),
+		"version":          contract.Version,
+		"chain_id":         contract.ChainUUID,
+		"address":          contract.ContractAddress,
+		"deployer_address": contract.DeployerAddress.String,
+		"is_active":        contract.IsActive,
+		"abi":              string(abiBytes),
+		"metadata":         metadataStr,
+		"token0_address":   contract.Token0Address.String,
+		"token1_address":   contract.Token1Address.String,
+		"fee_tier":         contract.FeeTier.Int,
+		"hook_address":     contract.HookAddress.String,
+		"start_block":      int64(contract.StartBlock),
 	}
 
 	result := r.db.WithContext(ctx).Model(&models.SmartContract{}).Where("id = ?", contract.ID).Updates(updates)

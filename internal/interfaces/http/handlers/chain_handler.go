@@ -98,7 +98,7 @@ func (h *ChainHandler) CreateChain(c *gin.Context) {
 	}
 
 	chain := &entities.Chain{
-		ID:             uuid.New(),
+		ID:             utils.GenerateUUIDv7(),
 		ChainID:        input.NetworkID,
 		Name:           input.Name,
 		Type:           entities.ChainType(input.ChainType),

@@ -52,6 +52,11 @@ func Get(ctx context.Context, key string) (string, error) {
 	return client.Get(ctx, key).Result()
 }
 
+// Del removes a key
+func Del(ctx context.Context, key string) error {
+	return client.Del(ctx, key).Err()
+}
+
 // SetNX sets a key only if it does not exist
 func SetNX(ctx context.Context, key string, value interface{}, expiration time.Duration) (bool, error) {
 	return client.SetNX(ctx, key, value, expiration).Result()

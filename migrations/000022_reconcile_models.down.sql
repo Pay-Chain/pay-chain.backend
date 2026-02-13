@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS api_keys;
+ALTER TABLE chain_rpcs DROP COLUMN IF EXISTS deleted_at;

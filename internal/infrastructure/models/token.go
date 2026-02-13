@@ -13,7 +13,7 @@ type Token struct {
 	Symbol          string    `gorm:"type:varchar(20);not null"`
 	Name            string    `gorm:"type:varchar(100);not null"`
 	Decimals        int       `gorm:"not null"`
-	ContractAddress string    `gorm:"type:varchar(255);index"` // Nullable for native
+	ContractAddress string    `gorm:"column:address;type:varchar(255);index"` // Nullable for native
 	Type            string    `gorm:"type:varchar(20);not null;default:'ERC20'"`
 	LogoURL         string    `gorm:"type:text"`
 	IsActive        bool      `gorm:"default:true"`
