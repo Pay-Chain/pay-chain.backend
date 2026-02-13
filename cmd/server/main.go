@@ -97,6 +97,7 @@ func main() {
 	feeConfigRepo := repositories.NewFeeConfigRepository(db)
 	smartContractRepo := repositories.NewSmartContractRepository(db, chainRepo)
 	paymentRequestRepo := repositories.NewPaymentRequestRepository(db)
+	teamRepo := repositories.NewTeamRepository(db)
 	apiKeyRepo := repositories.NewApiKeyRepository(db) // Added
 	uow := repositories.NewUnitOfWork(db)
 
@@ -132,6 +133,7 @@ func main() {
 	paymentRequestHandler := handlers.NewPaymentRequestHandler(paymentRequestUsecase)
 	webhookHandler := handlers.NewWebhookHandler(webhookUsecase)
 	adminHandler := handlers.NewAdminHandler(userRepo, merchantRepo, paymentRepo)
+	teamHandler := handlers.NewTeamHandler(teamRepo)
 	apiKeyHandler := handlers.NewApiKeyHandler(apiKeyUsecase)             // Added
 	paymentAppHandler := handlers.NewPaymentAppHandler(paymentAppUsecase) // Added
 
@@ -259,6 +261,12 @@ func main() {
 			contracts.GET("/:id", smartContractHandler.GetSmartContract)
 		}
 
+		// Team routes (public read)
+		teams := v1.Group("/teams")
+		{
+			teams.GET("", teamHandler.ListPublicTeams)
+		}
+
 		// Protected smart contract routes (admin only)
 		contractsAdmin := v1.Group("/contracts")
 		contractsAdmin.Use(dualAuthMiddleware) // Updated to Dual Auth
@@ -315,6 +323,12 @@ func main() {
 			admin.POST("/tokens", tokenHandler.CreateToken)
 			admin.PUT("/tokens/:id", tokenHandler.UpdateToken)
 			admin.DELETE("/tokens/:id", tokenHandler.DeleteToken)
+
+			// Team management
+			admin.GET("/teams", teamHandler.ListAdminTeams)
+			admin.POST("/teams", teamHandler.CreateTeam)
+			admin.PUT("/teams/:id", teamHandler.UpdateTeam)
+			admin.DELETE("/teams/:id", teamHandler.DeleteTeam)
 		}
 	}
 
