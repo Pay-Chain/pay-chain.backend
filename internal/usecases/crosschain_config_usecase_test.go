@@ -53,3 +53,33 @@ func TestCrosschainConfigUsecase_RecheckRoute_InvalidInput(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid input")
 }
+
+func TestCrosschainConfigUsecase_Preflight_InvalidInput(t *testing.T) {
+	chainRepo := new(MockChainRepository)
+	tokenRepo := new(MockTokenRepository)
+	contractRepo := new(MockSmartContractRepository)
+
+	chainRepo.On("GetByChainID", mock.Anything, "invalid-source").Return((*entities.Chain)(nil), errors.New("not found")).Twice()
+
+	u := uc.NewCrosschainConfigUsecase(chainRepo, tokenRepo, contractRepo, nil, &uc.OnchainAdapterUsecase{})
+	_, err := u.Preflight(context.Background(), "invalid-source", "eip155:42161")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "invalid input")
+}
+
+func TestCrosschainConfigUsecase_AutoFix_InvalidSourceInput(t *testing.T) {
+	chainRepo := new(MockChainRepository)
+	tokenRepo := new(MockTokenRepository)
+	contractRepo := new(MockSmartContractRepository)
+
+	chainRepo.On("GetByChainID", mock.Anything, "invalid-source").Return((*entities.Chain)(nil), errors.New("not found")).Twice()
+
+	adapterUsecase := uc.NewOnchainAdapterUsecase(chainRepo, contractRepo, nil, "")
+	u := uc.NewCrosschainConfigUsecase(chainRepo, tokenRepo, contractRepo, nil, adapterUsecase)
+	_, err := u.AutoFix(context.Background(), &uc.AutoFixRequest{
+		SourceChainID: "invalid-source",
+		DestChainID:   "eip155:42161",
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "invalid input")
+}

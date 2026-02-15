@@ -103,3 +103,22 @@ func TestWalletUsecase_DisconnectWallet_Success(t *testing.T) {
 	err := uc.DisconnectWallet(context.Background(), userID, walletID)
 	assert.NoError(t, err)
 }
+
+func TestWalletUsecase_GetWallets_And_SetPrimary(t *testing.T) {
+	mockWalletRepo := new(MockWalletRepository)
+	uc := usecases.NewWalletUsecase(mockWalletRepo, new(MockUserRepository), new(MockChainRepository))
+
+	userID := uuid.New()
+	walletID := uuid.New()
+	wallets := []*entities.Wallet{{ID: walletID, UserID: &userID}}
+
+	mockWalletRepo.On("GetByUserID", context.Background(), userID).Return(wallets, nil).Once()
+	got, err := uc.GetWallets(context.Background(), userID)
+	assert.NoError(t, err)
+	assert.Len(t, got, 1)
+	assert.Equal(t, walletID, got[0].ID)
+
+	mockWalletRepo.On("SetPrimary", context.Background(), userID, walletID).Return(nil).Once()
+	err = uc.SetPrimaryWallet(context.Background(), userID, walletID)
+	assert.NoError(t, err)
+}

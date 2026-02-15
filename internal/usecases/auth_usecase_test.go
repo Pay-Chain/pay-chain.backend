@@ -225,3 +225,16 @@ func TestAuthUsecase_ChangePassword(t *testing.T) {
 	})
 	assert.NoError(t, err)
 }
+
+func TestAuthUsecase_GetUserByID(t *testing.T) {
+	userRepo := new(MockUserRepository)
+	uc := newAuthUsecaseForTest(userRepo, new(MockEmailVerificationRepository), new(MockWalletRepository), new(MockChainRepository))
+
+	id := uuid.New()
+	user := &entities.User{ID: id, Email: "u@paychain.io"}
+	userRepo.On("GetByID", context.Background(), id).Return(user, nil).Once()
+
+	got, err := uc.GetUserByID(context.Background(), id)
+	assert.NoError(t, err)
+	assert.Equal(t, id, got.ID)
+}

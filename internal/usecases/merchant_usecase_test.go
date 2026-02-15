@@ -94,3 +94,17 @@ func TestMerchantUsecase_GetMerchantStatus_Active(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "Your merchant account is active", resp.Message)
 }
+
+func TestMerchantUsecase_AdminStatusActions(t *testing.T) {
+	mockMerchantRepo := new(MockMerchantRepository)
+	uc := usecases.NewMerchantUsecase(mockMerchantRepo, new(MockUserRepository))
+
+	merchantID := uuid.New()
+	mockMerchantRepo.On("UpdateStatus", context.Background(), merchantID, entities.MerchantStatusActive).Return(nil).Once()
+	mockMerchantRepo.On("UpdateStatus", context.Background(), merchantID, entities.MerchantStatusRejected).Return(nil).Once()
+	mockMerchantRepo.On("UpdateStatus", context.Background(), merchantID, entities.MerchantStatusSuspended).Return(nil).Once()
+
+	assert.NoError(t, uc.ApproveMerchant(context.Background(), merchantID))
+	assert.NoError(t, uc.RejectMerchant(context.Background(), merchantID))
+	assert.NoError(t, uc.SuspendMerchant(context.Background(), merchantID))
+}

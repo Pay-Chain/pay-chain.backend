@@ -6,12 +6,18 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"pay-chain.backend/internal/domain/entities"
 	"pay-chain.backend/internal/infrastructure/repositories"
 )
 
+type paymentRequestExpiryRepo interface {
+	GetExpiredPending(ctx context.Context, limit int) ([]*entities.PaymentRequest, error)
+	ExpireRequests(ctx context.Context, ids []uuid.UUID) error
+}
+
 // PaymentRequestExpiryJob handles expiring payment requests
 type PaymentRequestExpiryJob struct {
-	repo     *repositories.PaymentRequestRepositoryImpl
+	repo     paymentRequestExpiryRepo
 	interval time.Duration
 	stop     chan struct{}
 }

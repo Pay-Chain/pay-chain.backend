@@ -1,11 +1,13 @@
 package usecases
 
 import (
+	"context"
 		"testing"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"pay-chain.backend/internal/domain/entities"
+	"pay-chain.backend/internal/infrastructure/blockchain"
 
 	"github.com/volatiletech/null/v8"
 )
@@ -98,4 +100,29 @@ func TestBuildContractReport(t *testing.T) {
 		codes = append(codes, c.Code)
 	}
 	require.Contains(t, codes, "POOL_TOKEN_PAIR_MISSING")
+}
+
+func TestRunEVMOnchainChecks_RPCMissing(t *testing.T) {
+	u := &ContractConfigAuditUsecase{}
+	source := &entities.Chain{ID: uuid.New(), ChainID: "8453", Type: entities.ChainTypeEVM}
+
+	checks := u.runEVMOnchainChecks(context.Background(), source, nil, "eip155:42161")
+	require.Len(t, checks, 1)
+	require.Equal(t, "RPC_MISSING", checks[0].Code)
+}
+
+func TestRunEVMOnchainChecks_RPCConnectFailed(t *testing.T) {
+	u := &ContractConfigAuditUsecase{
+		clientFactory: blockchain.NewClientFactory(),
+	}
+	source := &entities.Chain{
+		ID:     uuid.New(),
+		ChainID: "8453",
+		Type:   entities.ChainTypeEVM,
+		RPCURL: "http://127.0.0.1:0",
+	}
+
+	checks := u.runEVMOnchainChecks(context.Background(), source, nil, "eip155:42161")
+	require.NotEmpty(t, checks)
+	require.Equal(t, "RPC_CONNECT_FAILED", checks[0].Code)
 }

@@ -1,0 +1,60 @@
+package repositories
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/require"
+	"pay-chain.backend/internal/domain/entities"
+	domainerrors "pay-chain.backend/internal/domain/errors"
+)
+
+func TestPaymentEventRepository_CreateAndReads(t *testing.T) {
+	db := newTestDB(t)
+	createPaymentTables(t, db)
+	repo := NewPaymentEventRepository(db)
+	ctx := context.Background()
+
+	paymentID := uuid.New()
+	eventID := uuid.New()
+	chainID := uuid.New()
+	now := time.Now()
+
+	mustExec(t, db, `INSERT INTO payments(
+		id,sender_id,source_chain_id,dest_chain_id,source_token_id,dest_token_id,source_amount,fee_amount,total_charged,status,created_at,updated_at
+	) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+		paymentID.String(), uuid.NewString(), uuid.NewString(), uuid.NewString(), uuid.NewString(), uuid.NewString(),
+		"1", "0", "1", "PENDING", now, now)
+
+	err := repo.Create(ctx, &entities.PaymentEvent{
+		ID:          eventID,
+		PaymentID:   paymentID,
+		EventType:   entities.PaymentEventTypeCreated,
+		TxHash:      "0xtx",
+		ChainID:     &chainID,
+		BlockNumber: 12,
+		CreatedAt:   now,
+	})
+	require.NoError(t, err)
+
+	events, err := repo.GetByPaymentID(ctx, paymentID)
+	require.NoError(t, err)
+	require.Len(t, events, 1)
+	require.Equal(t, entities.PaymentEventTypeCreated, events[0].EventType)
+
+	latest, err := repo.GetLatestByPaymentID(ctx, paymentID)
+	require.NoError(t, err)
+	require.Equal(t, eventID, latest.ID)
+}
+
+func TestPaymentEventRepository_NotFoundLatest(t *testing.T) {
+	db := newTestDB(t)
+	createPaymentTables(t, db)
+	repo := NewPaymentEventRepository(db)
+	ctx := context.Background()
+
+	_, err := repo.GetLatestByPaymentID(ctx, uuid.New())
+	require.ErrorIs(t, err, domainerrors.ErrNotFound)
+}
