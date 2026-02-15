@@ -3,6 +3,8 @@ package repositories
 import (
 	"context"
 	"errors"
+	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -23,23 +25,50 @@ func NewPaymentEventRepository(db *gorm.DB) *PaymentEventRepository {
 
 // Create creates a new payment event
 func (r *PaymentEventRepository) Create(ctx context.Context, event *entities.PaymentEvent) error {
-	meta := "{}"
-	// if event.Metadata != nil ...
+	fmt.Printf("DEBUG: PaymentEventRepository.Create - PaymentID: %s\n", event.PaymentID)
 
+	meta := "{}"
+	createdAt := event.CreatedAt
+	if createdAt.IsZero() {
+		createdAt = time.Now()
+	}
+
+	// Use transaction-aware DB instance
+	db := GetDB(ctx, r.db).WithContext(ctx)
+	isTx := false
+	if _, ok := ctx.Value(txKey).(*gorm.DB); ok {
+		isTx = true
+	}
+	fmt.Printf("DEBUG: PaymentEventRepository.Create - IsTX: %v\n", isTx)
+
+	// Map Entity -> Model
 	m := &models.PaymentEvent{
 		ID:          event.ID,
 		PaymentID:   event.PaymentID,
-		EventType:   string(event.EventType), // Cast Enum to string
-		ChainID:     event.ChainID,           // UUID pointer
+		EventType:   string(event.EventType),
 		TxHash:      event.TxHash,
-		BlockNumber: event.BlockNumber,
 		Metadata:    meta,
-		CreatedAt:   event.CreatedAt,
+		CreatedAt:   createdAt,
+		ChainID:     event.ChainID,
+		Chain:       r.resolveLegacyChainValue(event.ChainID),
+		BlockNumber: event.BlockNumber,
 	}
 
-	// Use the transaction-aware DB instance
-	db := GetDB(ctx, r.db)
-	return db.WithContext(ctx).Create(m).Error
+	return db.Create(m).Error
+}
+
+func (r *PaymentEventRepository) resolveLegacyChainValue(chainID *uuid.UUID) string {
+	const maxLegacyLen = 20
+	if chainID == nil {
+		return "UNKNOWN"
+	}
+
+	// Legacy table expects short varchar(20)
+	short := fmt.Sprintf("chain-%s", chainID.String()[:8])
+	if len(short) > maxLegacyLen {
+		return short[:maxLegacyLen]
+	}
+	return short
 }
 
 // GetByPaymentID gets events for a payment
@@ -58,9 +87,9 @@ func (r *PaymentEventRepository) GetByPaymentID(ctx context.Context, paymentID u
 			ID:          m.ID,
 			PaymentID:   m.PaymentID,
 			EventType:   entities.PaymentEventType(m.EventType),
-			ChainID:     m.ChainID,
 			TxHash:      m.TxHash,
-			BlockNumber: m.BlockNumber,
+			ChainID:     nil,
+			BlockNumber: 0,
 			// Metadata:    ...,
 			CreatedAt: m.CreatedAt,
 		}
@@ -87,9 +116,9 @@ func (r *PaymentEventRepository) GetLatestByPaymentID(ctx context.Context, payme
 		ID:          m.ID,
 		PaymentID:   m.PaymentID,
 		EventType:   entities.PaymentEventType(m.EventType),
-		ChainID:     m.ChainID,
 		TxHash:      m.TxHash,
-		BlockNumber: m.BlockNumber,
+		ChainID:     nil,
+		BlockNumber: 0,
 		CreatedAt:   m.CreatedAt,
 	}, nil
 }

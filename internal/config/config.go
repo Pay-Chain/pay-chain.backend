@@ -61,6 +61,7 @@ type BlockchainConfig struct {
 	BaseSepoliaRPC  string
 	BSCSepoliaRPC   string
 	SolanaDevnetRPC string
+	OwnerPrivateKey string
 }
 
 // SecurityConfig holds security encryption keys
@@ -100,6 +101,7 @@ func Load() *Config {
 			BaseSepoliaRPC:  getEnv("BASE_SEPOLIA_RPC_URL", "https://sepolia.base.org"),
 			BSCSepoliaRPC:   getEnv("BSC_SEPOLIA_RPC_URL", "https://data-seed-prebsc-1-s1.binance.org:8545"),
 			SolanaDevnetRPC: getEnv("SOLANA_DEVNET_RPC_URL", "https://api.devnet.solana.com"),
+			OwnerPrivateKey: getEnv("EVM_OWNER_PRIVATE_KEY", getEnv("PRIVATE_KEY", "")),
 		},
 		Security: SecurityConfig{
 			ApiKeyEncryptionKey:  getEnv("API_KEY_ENCRYPTION_KEY", "0000000000000000000000000000000000000000000000000000000000000000"), // 32-bytes hex string

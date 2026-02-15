@@ -2,6 +2,7 @@ package entities
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -59,14 +60,22 @@ type ChainRPC struct {
 // Deprecated: Logic moved to specific adapters.
 // However, useful helper: if ChainType is EVM, generic logic applies.
 func (c *Chain) GetCAIP2ID() string {
+	raw := strings.TrimSpace(c.ChainID)
+	if strings.Contains(raw, ":") {
+		return raw
+	}
+
 	// Simple heuristic. ideally implementation details should handle this.
 	// For EVM: eip155:ChainID
 	if c.Type == ChainTypeEVM {
-		return fmt.Sprintf("eip155:%s", c.ChainID)
+		return fmt.Sprintf("eip155:%s", raw)
 	}
 	// For SVM: solana:ChainID?
 	// This might need refinement based on exact storage of ChainID for Solana.
-	return c.ChainID
+	if c.Type == ChainTypeSVM {
+		return fmt.Sprintf("solana:%s", raw)
+	}
+	return raw
 }
 
 // TokenType represents token type

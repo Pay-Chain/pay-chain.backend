@@ -3,6 +3,7 @@ package usecases
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 	"pay-chain.backend/internal/domain/repositories"
@@ -24,9 +25,10 @@ func (r *ChainResolver) ResolveFromAny(ctx context.Context, input string) (uuid.
 	if input == "" {
 		return uuid.Nil, "", fmt.Errorf("chain identifier cannot be empty")
 	}
+	value := strings.TrimSpace(input)
 
 	// 1. Try to parse as UUID
-	if id, err := uuid.Parse(input); err == nil {
+	if id, err := uuid.Parse(value); err == nil {
 		chain, err := r.chainRepo.GetByID(ctx, id)
 		if err != nil {
 			return uuid.Nil, "", fmt.Errorf("failed to get chain by ID %s: %w", id, err)
@@ -35,26 +37,34 @@ func (r *ChainResolver) ResolveFromAny(ctx context.Context, input string) (uuid.
 	}
 
 	// 2. Try direct lookup by full input first (covers DB that stores CAIP-2).
-	chain, err := r.chainRepo.GetByChainID(ctx, input)
+	// 2. Handle CAIP-2 explicitly first to avoid noisy misses on chain_id lookup.
+	if strings.Contains(value, ":") {
+		if chain, err := r.chainRepo.GetByCAIP2(ctx, value); err == nil {
+			return chain.ID, chain.GetCAIP2ID(), nil
+		}
+	}
+
+	// 3. Try direct lookup by raw chain_id
+	chain, err := r.chainRepo.GetByChainID(ctx, value)
 	if err == nil {
 		return chain.ID, chain.GetCAIP2ID(), nil
 	}
 
-	// 3. Try to look up by raw blockchain ChainID (e.g. "84532" or "devnet")
+	// 4. Try to look up by raw blockchain ChainID (e.g. "84532" or "devnet")
 	// when the input is CAIP-2.
 
-	rawID := input
+	rawID := value
 	// Handle CAIP-2 format "eip155:84532" or "solana:devnet"
 	// Note: for solana, the ref might be "devnet"
-	if len(input) > 7 && input[0:7] == "eip155:" {
-		rawID = input[7:]
-	} else if len(input) > 7 && input[0:7] == "solana:" {
-		rawID = input[7:]
+	if len(value) > 7 && value[0:7] == "eip155:" {
+		rawID = value[7:]
+	} else if len(value) > 7 && value[0:7] == "solana:" {
+		rawID = value[7:]
 	}
 
 	chain, err = r.chainRepo.GetByChainID(ctx, rawID)
 	if err != nil {
-		return uuid.Nil, "", fmt.Errorf("failed to find chain for %s: %w", input, err)
+		return uuid.Nil, "", fmt.Errorf("failed to find chain for %s: %w", value, err)
 	}
 
 	return chain.ID, chain.GetCAIP2ID(), nil

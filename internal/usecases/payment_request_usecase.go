@@ -8,7 +8,6 @@ import (
 	"pay-chain.backend/internal/domain/entities"
 	"pay-chain.backend/internal/domain/errors"
 	domainRepos "pay-chain.backend/internal/domain/repositories"
-	"pay-chain.backend/internal/infrastructure/repositories"
 	"pay-chain.backend/pkg/utils"
 )
 
@@ -17,9 +16,9 @@ const (
 )
 
 type PaymentRequestUsecase struct {
-	paymentRequestRepo *repositories.PaymentRequestRepositoryImpl
-	merchantRepo       *repositories.MerchantRepository
-	walletRepo         *repositories.WalletRepository
+	paymentRequestRepo domainRepos.PaymentRequestRepository
+	merchantRepo       domainRepos.MerchantRepository
+	walletRepo         domainRepos.WalletRepository
 	chainRepo          domainRepos.ChainRepository
 	contractRepo       domainRepos.SmartContractRepository
 	tokenRepo          domainRepos.TokenRepository
@@ -27,9 +26,9 @@ type PaymentRequestUsecase struct {
 }
 
 func NewPaymentRequestUsecase(
-	paymentRequestRepo *repositories.PaymentRequestRepositoryImpl,
-	merchantRepo *repositories.MerchantRepository,
-	walletRepo *repositories.WalletRepository,
+	paymentRequestRepo domainRepos.PaymentRequestRepository,
+	merchantRepo domainRepos.MerchantRepository,
+	walletRepo domainRepos.WalletRepository,
 	chainRepo domainRepos.ChainRepository,
 	contractRepo domainRepos.SmartContractRepository,
 	tokenRepo domainRepos.TokenRepository,
@@ -106,8 +105,16 @@ func (uc *PaymentRequestUsecase) CreatePaymentRequest(ctx context.Context, input
 
 	contract, _ := uc.contractRepo.GetActiveContract(ctx, chainUUID, entities.ContractTypeGateway)
 
+	decimals := token.Decimals
+	if input.Decimals > 0 && input.Decimals != decimals {
+		return nil, errors.BadRequest("token decimals mismatch")
+	}
+
 	// Convert human readable amount to smallest unit
-	amountInSmallestUnit := convertToSmallestUnit(input.Amount, input.Decimals)
+	amountInSmallestUnit, convErr := convertToSmallestUnit(input.Amount, decimals)
+	if convErr != nil {
+		return nil, errors.BadRequest(convErr.Error())
+	}
 
 	// Create payment request
 	requestID := utils.GenerateUUIDv7()
@@ -122,7 +129,7 @@ func (uc *PaymentRequestUsecase) CreatePaymentRequest(ctx context.Context, input
 		TokenAddress:  input.TokenAddress,
 		WalletAddress: targetWallet.Address,
 		Amount:        amountInSmallestUnit,
-		Decimals:      input.Decimals,
+		Decimals:      decimals,
 		Description:   input.Description,
 		Status:        entities.PaymentRequestStatusPending,
 		ExpiresAt:     expiresAt,

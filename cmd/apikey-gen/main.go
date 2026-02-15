@@ -8,29 +8,41 @@ import (
 	"log"
 )
 
+func validateInputs(mode string, hexLen int) error {
+	if mode != "live" && mode != "test" {
+		return fmt.Errorf("invalid mode: %s (allowed: live, test)", mode)
+	}
+	if hexLen <= 0 || hexLen%2 != 0 {
+		return fmt.Errorf("invalid hex-len: %d (must be positive and even)", hexLen)
+	}
+	return nil
+}
+
+func buildCredentials(mode string, hexLen int) (string, string, error) {
+	if err := validateInputs(mode, hexLen); err != nil {
+		return "", "", err
+	}
+
+	apiKeyRaw, err := generateRandomHex(hexLen)
+	if err != nil {
+		return "", "", err
+	}
+	secretKeyRaw, err := generateRandomHex(hexLen)
+	if err != nil {
+		return "", "", err
+	}
+	return fmt.Sprintf("pk_%s_%s", mode, apiKeyRaw), fmt.Sprintf("sk_%s_%s", mode, secretKeyRaw), nil
+}
+
 func main() {
 	mode := flag.String("mode", "live", "key mode: live or test")
 	hexLen := flag.Int("hex-len", 32, "random hex length (must be even)")
 	flag.Parse()
 
-	if *mode != "live" && *mode != "test" {
-		log.Fatalf("invalid mode: %s (allowed: live, test)", *mode)
-	}
-	if *hexLen <= 0 || *hexLen%2 != 0 {
-		log.Fatalf("invalid hex-len: %d (must be positive and even)", *hexLen)
-	}
-
-	apiKeyRaw, err := generateRandomHex(*hexLen)
+	apiKey, secretKey, err := buildCredentials(*mode, *hexLen)
 	if err != nil {
-		log.Fatalf("failed to generate api key: %v", err)
+		log.Fatal(err)
 	}
-	secretKeyRaw, err := generateRandomHex(*hexLen)
-	if err != nil {
-		log.Fatalf("failed to generate secret key: %v", err)
-	}
-
-	apiKey := fmt.Sprintf("pk_%s_%s", *mode, apiKeyRaw)
-	secretKey := fmt.Sprintf("sk_%s_%s", *mode, secretKeyRaw)
 
 	fmt.Println("Generated API credentials")
 	fmt.Printf("API_KEY=%s\n", apiKey)
@@ -44,4 +56,3 @@ func generateRandomHex(n int) (string, error) {
 	}
 	return hex.EncodeToString(b), nil
 }
-

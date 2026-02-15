@@ -39,6 +39,7 @@ func TestCreatePayment_Success(t *testing.T) {
 		mockTokenRepo,
 		nil,
 		nil,
+		nil,
 		mockUOW,
 		clientFactory,
 	)
@@ -65,8 +66,8 @@ func TestCreatePayment_Success(t *testing.T) {
 		DestChainID:        "eip155:137",
 		SourceTokenAddress: "0x123",
 		DestTokenAddress:   "0x456",
-		Amount:             "1000000000000000000",
-		Decimals:           18,
+		Amount:             "1",
+		Decimals:           6,
 		ReceiverAddress:    "0xReceiver",
 	}
 
@@ -103,7 +104,7 @@ func TestCreatePayment_Success(t *testing.T) {
 	// Assert
 	assert.NoError(t, err)
 	assert.NotNil(t, payment)
-	assert.Equal(t, req.Amount, payment.SourceAmount)
+	assert.Equal(t, "1000000", payment.SourceAmount)
 	assert.Equal(t, entities.PaymentStatusPending, payment.Status)
 
 	mockPaymentRepo.AssertExpectations(t)

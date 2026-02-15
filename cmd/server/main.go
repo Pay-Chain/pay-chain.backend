@@ -93,8 +93,11 @@ func main() {
 	walletRepo := repositories.NewWalletRepository(db)
 	chainRepo := repositories.NewChainRepository(db)
 	tokenRepo := repositories.NewTokenRepository(db, chainRepo)
+	paymentBridgeRepo := repositories.NewPaymentBridgeRepository(db)
 	bridgeConfigRepo := repositories.NewBridgeConfigRepository(db)
 	feeConfigRepo := repositories.NewFeeConfigRepository(db)
+	routePolicyRepo := repositories.NewRoutePolicyRepository(db)
+	layerZeroConfigRepo := repositories.NewLayerZeroConfigRepository(db)
 	smartContractRepo := repositories.NewSmartContractRepository(db, chainRepo)
 	paymentRequestRepo := repositories.NewPaymentRequestRepository(db)
 	teamRepo := repositories.NewTeamRepository(db)
@@ -114,13 +117,16 @@ func main() {
 	authUsecase := usecases.NewAuthUsecase(userRepo, emailVerifRepo, walletRepo, chainRepo, jwtService)
 	// ApiKeyUsecase needs Config for Encryption Key
 	apiKeyUsecase := usecases.NewApiKeyUsecase(apiKeyRepo, userRepo, cfg.Security.ApiKeyEncryptionKey)
-	paymentUsecase := usecases.NewPaymentUsecase(paymentRepo, paymentEventRepo, walletRepo, merchantRepo, smartContractRepo, chainRepo, tokenRepo, bridgeConfigRepo, feeConfigRepo, uow, clientFactory)
+	paymentUsecase := usecases.NewPaymentUsecase(paymentRepo, paymentEventRepo, walletRepo, merchantRepo, smartContractRepo, chainRepo, tokenRepo, bridgeConfigRepo, feeConfigRepo, routePolicyRepo, uow, clientFactory)
 	// PaymentAppUsecase needs PaymentUsecase, UserRepo, WalletRepo, ChainRepo
 	paymentAppUsecase := usecases.NewPaymentAppUsecase(paymentUsecase, userRepo, walletRepo, chainRepo)
 	merchantUsecase := usecases.NewMerchantUsecase(merchantRepo, userRepo)
 	walletUsecase := usecases.NewWalletUsecase(walletRepo, userRepo, chainRepo)
 	paymentRequestUsecase := usecases.NewPaymentRequestUsecase(paymentRequestRepo, merchantRepo, walletRepo, chainRepo, smartContractRepo, tokenRepo)
 	webhookUsecase := usecases.NewWebhookUsecase(paymentRepo, paymentEventRepo, paymentRequestRepo, uow)
+	onchainAdapterUsecase := usecases.NewOnchainAdapterUsecase(chainRepo, smartContractRepo, clientFactory, cfg.Blockchain.OwnerPrivateKey)
+	contractConfigAuditUsecase := usecases.NewContractConfigAuditUsecase(chainRepo, smartContractRepo, clientFactory)
+	crosschainConfigUsecase := usecases.NewCrosschainConfigUsecase(chainRepo, tokenRepo, smartContractRepo, clientFactory, onchainAdapterUsecase)
 
 	// Initialize handlers
 	authHandler := handlers.NewAuthHandler(authUsecase, sessionStore)
@@ -136,6 +142,11 @@ func main() {
 	teamHandler := handlers.NewTeamHandler(teamRepo)
 	apiKeyHandler := handlers.NewApiKeyHandler(apiKeyUsecase)             // Added
 	paymentAppHandler := handlers.NewPaymentAppHandler(paymentAppUsecase) // Added
+	paymentConfigHandler := handlers.NewPaymentConfigHandler(paymentBridgeRepo, bridgeConfigRepo, feeConfigRepo, chainRepo, tokenRepo)
+	onchainAdapterHandler := handlers.NewOnchainAdapterHandler(onchainAdapterUsecase)
+	contractConfigAuditHandler := handlers.NewContractConfigAuditHandler(contractConfigAuditUsecase)
+	crosschainConfigHandler := handlers.NewCrosschainConfigHandler(crosschainConfigUsecase)
+	crosschainPolicyHandler := handlers.NewCrosschainPolicyHandler(routePolicyRepo, layerZeroConfigRepo, chainRepo)
 
 	// Create dual auth middleware
 	dualAuthMiddleware := middleware.DualAuthMiddleware(jwtService, apiKeyUsecase, sessionStore) // Added
@@ -267,6 +278,20 @@ func main() {
 			teams.GET("", teamHandler.ListPublicTeams)
 		}
 
+		// Payment config routes (public read)
+		paymentBridges := v1.Group("/payment-bridges")
+		{
+			paymentBridges.GET("", paymentConfigHandler.ListPaymentBridges)
+		}
+		bridgeConfigs := v1.Group("/bridge-configs")
+		{
+			bridgeConfigs.GET("", paymentConfigHandler.ListBridgeConfigs)
+		}
+		feeConfigs := v1.Group("/fee-configs")
+		{
+			feeConfigs.GET("", paymentConfigHandler.ListFeeConfigs)
+		}
+
 		// Protected smart contract routes (admin only)
 		contractsAdmin := v1.Group("/contracts")
 		contractsAdmin.Use(dualAuthMiddleware) // Updated to Dual Auth
@@ -329,6 +354,52 @@ func main() {
 			admin.POST("/teams", teamHandler.CreateTeam)
 			admin.PUT("/teams/:id", teamHandler.UpdateTeam)
 			admin.DELETE("/teams/:id", teamHandler.DeleteTeam)
+
+			// Payment bridge management
+			admin.GET("/payment-bridges", paymentConfigHandler.ListPaymentBridges)
+			admin.POST("/payment-bridges", paymentConfigHandler.CreatePaymentBridge)
+			admin.PUT("/payment-bridges/:id", paymentConfigHandler.UpdatePaymentBridge)
+			admin.DELETE("/payment-bridges/:id", paymentConfigHandler.DeletePaymentBridge)
+
+			// Bridge config management
+			admin.GET("/bridge-configs", paymentConfigHandler.ListBridgeConfigs)
+			admin.POST("/bridge-configs", paymentConfigHandler.CreateBridgeConfig)
+			admin.PUT("/bridge-configs/:id", paymentConfigHandler.UpdateBridgeConfig)
+			admin.DELETE("/bridge-configs/:id", paymentConfigHandler.DeleteBridgeConfig)
+
+			// Fee config management
+			admin.GET("/fee-configs", paymentConfigHandler.ListFeeConfigs)
+			admin.POST("/fee-configs", paymentConfigHandler.CreateFeeConfig)
+			admin.PUT("/fee-configs/:id", paymentConfigHandler.UpdateFeeConfig)
+			admin.DELETE("/fee-configs/:id", paymentConfigHandler.DeleteFeeConfig)
+
+			// On-chain adapter management
+			admin.GET("/onchain-adapters/status", onchainAdapterHandler.GetStatus)
+			admin.POST("/onchain-adapters/register", onchainAdapterHandler.RegisterAdapter)
+			admin.POST("/onchain-adapters/default-bridge", onchainAdapterHandler.SetDefaultBridgeType)
+			admin.POST("/onchain-adapters/hyperbridge-config", onchainAdapterHandler.SetHyperbridgeConfig)
+			admin.POST("/onchain-adapters/ccip-config", onchainAdapterHandler.SetCCIPConfig)
+			admin.POST("/onchain-adapters/layerzero-config", onchainAdapterHandler.SetLayerZeroConfig)
+			admin.GET("/contracts/config-check", contractConfigAuditHandler.Check)
+			admin.GET("/contracts/:id/config-check", contractConfigAuditHandler.CheckByContract)
+			admin.GET("/crosschain-config/overview", crosschainConfigHandler.Overview)
+			admin.GET("/crosschain-config/preflight", crosschainConfigHandler.Preflight)
+			admin.POST("/crosschain-config/recheck", crosschainConfigHandler.Recheck)
+			admin.POST("/crosschain-config/recheck-bulk", crosschainConfigHandler.RecheckBulk)
+			admin.POST("/crosschain-config/auto-fix", crosschainConfigHandler.AutoFix)
+			admin.POST("/crosschain-config/auto-fix-bulk", crosschainConfigHandler.AutoFixBulk)
+
+			// Cross-chain route policy management
+			admin.GET("/route-policies", crosschainPolicyHandler.ListRoutePolicies)
+			admin.POST("/route-policies", crosschainPolicyHandler.CreateRoutePolicy)
+			admin.PUT("/route-policies/:id", crosschainPolicyHandler.UpdateRoutePolicy)
+			admin.DELETE("/route-policies/:id", crosschainPolicyHandler.DeleteRoutePolicy)
+
+			// LayerZero route config management (DB level)
+			admin.GET("/layerzero-configs", crosschainPolicyHandler.ListLayerZeroConfigs)
+			admin.POST("/layerzero-configs", crosschainPolicyHandler.CreateLayerZeroConfig)
+			admin.PUT("/layerzero-configs/:id", crosschainPolicyHandler.UpdateLayerZeroConfig)
+			admin.DELETE("/layerzero-configs/:id", crosschainPolicyHandler.DeleteLayerZeroConfig)
 		}
 	}
 

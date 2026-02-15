@@ -18,6 +18,8 @@ const (
 	ContractTypeTokenSwapper       SmartContractType = "TOKEN_SWAPPER"
 	ContractTypeAdapterCCIP        SmartContractType = "ADAPTER_CCIP"
 	ContractTypeAdapterHyperbridge SmartContractType = "ADAPTER_HYPERBRIDGE"
+	ContractTypeAdapterLayerZero   SmartContractType = "ADAPTER_LAYERZERO"
+	ContractTypeReceiverLayerZero  SmartContractType = "RECEIVER_LAYERZERO"
 	ContractTypePool               SmartContractType = "POOL" // DEX Pool
 	ContractTypeMock               SmartContractType = "MOCK" // For testing
 )

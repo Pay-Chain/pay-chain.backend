@@ -8,6 +8,7 @@ import (
 	"math"
 	"math/big"
 	"strings"
+	"unicode"
 
 	"github.com/google/uuid"
 )
@@ -51,19 +52,59 @@ func formatAmount(amount float64, decimals int) string {
 	return intResult.String()
 }
 
-func convertToSmallestUnit(amount string, decimals int) string {
-	// Simple conversion - in production use proper decimal library
-	multiplier := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(decimals)), nil)
+func convertToSmallestUnit(amount string, decimals int) (string, error) {
+	if decimals < 0 {
+		return "", fmt.Errorf("invalid decimals: %d", decimals)
+	}
 
-	// Parse amount as float then convert
-	amountFloat := new(big.Float)
-	amountFloat.SetString(amount)
+	normalized := strings.TrimSpace(amount)
+	if normalized == "" {
+		return "", fmt.Errorf("amount is required")
+	}
+	if strings.HasPrefix(normalized, "-") {
+		return "", fmt.Errorf("amount must be positive")
+	}
+	if after, ok := strings.CutPrefix(normalized, "+"); ok {
+		normalized = after
+	}
 
-	multiplierFloat := new(big.Float).SetInt(multiplier)
-	result := new(big.Float).Mul(amountFloat, multiplierFloat)
+	parts := strings.Split(normalized, ".")
+	if len(parts) > 2 {
+		return "", fmt.Errorf("invalid amount format")
+	}
 
-	resultInt, _ := result.Int(nil)
-	return resultInt.String()
+	wholePart := parts[0]
+	if wholePart == "" {
+		wholePart = "0"
+	}
+	fractionalPart := ""
+	if len(parts) == 2 {
+		fractionalPart = parts[1]
+	}
+
+	isDigits := func(s string) bool {
+		for _, r := range s {
+			if !unicode.IsDigit(r) {
+				return false
+			}
+		}
+		return true
+	}
+
+	if !isDigits(wholePart) || (fractionalPart != "" && !isDigits(fractionalPart)) {
+		return "", fmt.Errorf("amount must be numeric")
+	}
+
+	if len(fractionalPart) > decimals {
+		return "", fmt.Errorf("amount has too many decimal places (max %d)", decimals)
+	}
+
+	fractionalPadded := fractionalPart + strings.Repeat("0", decimals-len(fractionalPart))
+	raw := strings.TrimLeft(wholePart+fractionalPadded, "0")
+	if raw == "" {
+		raw = "0"
+	}
+	return raw, nil
 }
 
 func uuidToBytes32Hex(id uuid.UUID) string {

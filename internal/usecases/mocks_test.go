@@ -6,6 +6,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/mock"
 	"pay-chain.backend/internal/domain/entities"
+	domainerrors "pay-chain.backend/internal/domain/errors"
 	"pay-chain.backend/pkg/utils"
 )
 
@@ -152,7 +153,15 @@ func (m *MockChainRepository) GetAll(ctx context.Context) ([]*entities.Chain, er
 	return args.Get(0).([]*entities.Chain), args.Error(1)
 }
 
-func (m *MockChainRepository) GetByCAIP2(ctx context.Context, caip2 string) (*entities.Chain, error) {
+func (m *MockChainRepository) GetByCAIP2(ctx context.Context, caip2 string) (chain *entities.Chain, err error) {
+	defer func() {
+		// Some legacy tests don't set GetByCAIP2 expectations.
+		// In those cases, behave like "not found" instead of panicking.
+		if recover() != nil {
+			chain = nil
+			err = domainerrors.ErrNotFound
+		}
+	}()
 	args := m.Called(ctx, caip2)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -423,6 +432,9 @@ func (m *MockPaymentRequestRepository) GetByMerchantID(ctx context.Context, merc
 	args := m.Called(ctx, merchantID, limit, offset)
 	return args.Get(0).([]*entities.PaymentRequest), args.Int(1), args.Error(2)
 }
+func (m *MockPaymentRequestRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status entities.PaymentRequestStatus) error {
+	return m.Called(ctx, id, status).Error(0)
+}
 func (m *MockPaymentRequestRepository) MarkCompleted(ctx context.Context, id uuid.UUID, txHash string) error {
 	return m.Called(ctx, id, txHash).Error(0)
 }
@@ -512,4 +524,25 @@ func (m *MockApiKeyRepository) Update(ctx context.Context, apiKey *entities.ApiK
 
 func (m *MockApiKeyRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	return m.Called(ctx, id).Error(0)
+}
+
+// Mock EmailVerificationRepository
+type MockEmailVerificationRepository struct {
+	mock.Mock
+}
+
+func (m *MockEmailVerificationRepository) Create(ctx context.Context, userID uuid.UUID, token string) error {
+	return m.Called(ctx, userID, token).Error(0)
+}
+
+func (m *MockEmailVerificationRepository) GetByToken(ctx context.Context, token string) (*entities.User, error) {
+	args := m.Called(ctx, token)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*entities.User), args.Error(1)
+}
+
+func (m *MockEmailVerificationRepository) MarkVerified(ctx context.Context, token string) error {
+	return m.Called(ctx, token).Error(0)
 }

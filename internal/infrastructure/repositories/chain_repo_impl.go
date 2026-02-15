@@ -50,16 +50,26 @@ func (r *chainRepo) GetByChainID(ctx context.Context, chainID string) (*entities
 
 // GetByCAIP2 gets a chain by CAIP-2 ID (namespace:reference)
 func (r *chainRepo) GetByCAIP2(ctx context.Context, caip2 string) (*entities.Chain, error) {
-	parts := strings.Split(caip2, ":")
-	if len(parts) != 2 {
+	value := strings.TrimSpace(caip2)
+	if value == "" {
 		return nil, domainerrors.ErrInvalidInput
 	}
-	namespace := parts[0]
-	networkID := parts[1]
 
 	var m models.Chain
-	// Map NetworkID to chain_id column (Chain Model NetworkID field)
-	if err := r.db.WithContext(ctx).Preload("RPCs").Where("namespace = ? AND chain_id = ?", namespace, networkID).First(&m).Error; err != nil {
+	// 1) Direct match when chain_id is stored as full CAIP-2.
+	if err := r.db.WithContext(ctx).Preload("RPCs").Where("chain_id = ?", value).First(&m).Error; err == nil {
+		return r.toEntity(&m), nil
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, err
+	}
+
+	// 2) Fallback match by reference part (e.g. "eip155:8453" -> "8453").
+	parts := strings.SplitN(value, ":", 2)
+	if len(parts) != 2 || strings.TrimSpace(parts[1]) == "" {
+		return nil, domainerrors.ErrNotFound
+	}
+	reference := strings.TrimSpace(parts[1])
+	if err := r.db.WithContext(ctx).Preload("RPCs").Where("chain_id = ?", reference).First(&m).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, domainerrors.ErrNotFound
 		}

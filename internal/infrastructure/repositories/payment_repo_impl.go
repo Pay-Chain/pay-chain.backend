@@ -3,6 +3,7 @@ package repositories
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -25,6 +26,8 @@ func NewPaymentRepository(db *gorm.DB) *PaymentRepository {
 
 // Create creates a new payment
 func (r *PaymentRepository) Create(ctx context.Context, payment *entities.Payment) error {
+	fmt.Printf("DEBUG: PaymentRepository.Create - ID: %s\n", payment.ID)
+
 	// Handle nullable fields from Entity -> Model (*type)
 	m := &models.Payment{
 		ID:            payment.ID,
@@ -73,13 +76,26 @@ func (r *PaymentRepository) Create(ctx context.Context, payment *entities.Paymen
 	}
 	m.FeeAmount = payment.FeeAmount
 	m.TotalCharged = payment.TotalCharged
+	m.SenderAddress = payment.SenderAddress
+	m.DestAddress = payment.ReceiverAddress
 	m.Status = string(payment.Status)
 	m.CreatedAt = payment.CreatedAt
 	m.UpdatedAt = payment.UpdatedAt
 
 	// Use the transaction-aware DB instance
 	db := GetDB(ctx, r.db)
-	return db.WithContext(ctx).Create(m).Error
+	isTx := false
+	if _, ok := ctx.Value(txKey).(*gorm.DB); ok {
+		isTx = true
+	}
+	fmt.Printf("DEBUG: PaymentRepository.Create - IsTX: %v\n", isTx)
+
+	if err := db.WithContext(ctx).Create(m).Error; err != nil {
+		return err
+	}
+	// Ensure caller uses the actual persisted ID (important for subsequent FK inserts in same tx).
+	payment.ID = m.ID
+	return nil
 }
 
 // GetByID gets a payment by ID
@@ -186,9 +202,8 @@ func (r *PaymentRepository) MarkRefunded(ctx context.Context, id uuid.UUID) erro
 	result := db.WithContext(ctx).Model(&models.Payment{}).
 		Where("id = ?", id).
 		Updates(map[string]interface{}{
-			"status":      entities.PaymentStatusRefunded,
-			"refunded_at": now,
-			"updated_at":  now,
+			"status":     entities.PaymentStatusRefunded,
+			"updated_at": now,
 		})
 
 	if result.Error != nil {
@@ -202,16 +217,17 @@ func (r *PaymentRepository) MarkRefunded(ctx context.Context, id uuid.UUID) erro
 
 func (r *PaymentRepository) toEntity(m *models.Payment) *entities.Payment {
 	p := &entities.Payment{
-		ID:            m.ID,
-		SenderID:      &m.SenderID,
-		MerchantID:    m.MerchantID,
-		BridgeID:      m.BridgeID,
-		SourceChainID: m.SourceChainID,
-		DestChainID:   m.DestChainID,
-		SourceTokenID: &m.SourceTokenID,
-		DestTokenID:   &m.DestTokenID,
-		// ReceiverAddress is in Model? Yes.
-		ReceiverAddress:     m.ReceiverAddress,
+		ID:                  m.ID,
+		SenderID:            &m.SenderID,
+		MerchantID:          m.MerchantID,
+		BridgeID:            m.BridgeID,
+		SourceChainID:       m.SourceChainID,
+		DestChainID:         m.DestChainID,
+		SourceTokenID:       &m.SourceTokenID,
+		DestTokenID:         &m.DestTokenID,
+		SenderAddress:       m.SenderAddress,
+		DestAddress:         m.DestAddress,
+		ReceiverAddress:     m.DestAddress,
 		SourceAmount:        m.SourceAmount,
 		DestAmount:          null.StringFromPtr(m.DestAmount),
 		FeeAmount:           m.FeeAmount,

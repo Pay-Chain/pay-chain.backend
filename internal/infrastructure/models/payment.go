@@ -20,14 +20,14 @@ type Payment struct {
 	DestAmount          *string    `gorm:"type:decimal(36,18)"`
 	FeeAmount           string     `gorm:"type:decimal(36,18);default:0"`
 	TotalCharged        string     `gorm:"type:decimal(36,18);default:0"`
-	ReceiverAddress     string     `gorm:"type:varchar(255);not null"`
+	SenderAddress       string     `gorm:"column:sender_address;type:varchar(255)"`
+	DestAddress         string     `gorm:"column:dest_address;type:varchar(255)"`
 	Status              string     `gorm:"type:varchar(50);not null;index"`
 	SourceTxHash        *string    `gorm:"type:varchar(255);index"`
 	DestTxHash          *string    `gorm:"type:varchar(255);index"`
 	RefundTxHash        *string    `gorm:"type:varchar(255)"`
 	CrossChainMessageID *string    `gorm:"type:varchar(255);index"`
 	ExpiresAt           *time.Time
-	RefundedAt          *time.Time
 	CreatedAt           time.Time
 	UpdatedAt           time.Time
 	DeletedAt           gorm.DeletedAt `gorm:"index"`
@@ -46,11 +46,11 @@ type PaymentEvent struct {
 	PaymentID   uuid.UUID  `gorm:"type:uuid;not null;index"`
 	EventType   string     `gorm:"type:varchar(50);not null;index"`
 	ChainID     *uuid.UUID `gorm:"type:uuid;index"`
+	Chain       string     `gorm:"type:varchar(20);column:chain"` // Legacy support
 	TxHash      string     `gorm:"type:varchar(255)"`
-	BlockNumber int64
-	Metadata    string `gorm:"type:jsonb;default:'{}'"`
+	BlockNumber int64      `gorm:"type:bigint"`
+	Metadata    string     `gorm:"type:jsonb;default:'{}'"`
 	CreatedAt   time.Time
-	DeletedAt   gorm.DeletedAt `gorm:"index"`
 
 	Payment Payment `gorm:"foreignKey:PaymentID"`
 }
@@ -61,6 +61,10 @@ type PaymentBridge struct {
 	CreatedAt time.Time
 	UpdatedAt time.Time
 	DeletedAt gorm.DeletedAt `gorm:"index"`
+}
+
+func (PaymentBridge) TableName() string {
+	return "payment_bridge"
 }
 
 type BridgeConfig struct {
