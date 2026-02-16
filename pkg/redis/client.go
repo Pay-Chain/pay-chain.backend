@@ -9,6 +9,10 @@ import (
 
 var client *redis.Client
 
+var pingClient = func(ctx context.Context, c *redis.Client) error {
+	return c.Ping(ctx).Err()
+}
+
 // Init initializes the Redis client
 func Init(url, password string) error {
 	opts, err := redis.ParseURL(url)
@@ -25,7 +29,7 @@ func Init(url, password string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	if err := client.Ping(ctx).Err(); err != nil {
+	if err := pingClient(ctx, client); err != nil {
 		return err
 	}
 

@@ -180,3 +180,157 @@ func TestPaymentUsecase_ResolveVaultAddressForApproval_FromGatewayView(t *testin
 	got := u.resolveVaultAddressForApproval(chainID, "0x1111111111111111111111111111111111111111")
 	require.Equal(t, vaultAddress.Hex(), got)
 }
+
+func TestPaymentUsecase_ResolveVaultAddressForApproval_FallbackBranches(t *testing.T) {
+	t.Run("chain repo miss", func(t *testing.T) {
+		u := &PaymentUsecase{
+			contractRepo:  &scRepoStub{getActiveFn: func(context.Context, uuid.UUID, entities.SmartContractType) (*entities.SmartContract, error) { return nil, domainerrors.ErrNotFound }},
+			chainRepo:     &approvalChainRepoStub{chain: nil},
+			clientFactory: blockchain.NewClientFactory(),
+		}
+		got := u.resolveVaultAddressForApproval(uuid.New(), "0x1111111111111111111111111111111111111111")
+		require.Equal(t, "", got)
+	})
+
+	t.Run("fallback to active rpc list with bad url", func(t *testing.T) {
+		chainID := uuid.New()
+		u := &PaymentUsecase{
+			contractRepo: &scRepoStub{getActiveFn: func(context.Context, uuid.UUID, entities.SmartContractType) (*entities.SmartContract, error) {
+				return nil, domainerrors.ErrNotFound
+			}},
+			chainRepo: &approvalChainRepoStub{chain: &entities.Chain{
+				ID:     chainID,
+				RPCURL: "",
+				RPCs:   []entities.ChainRPC{{URL: "://bad", IsActive: true}},
+			}},
+			clientFactory: blockchain.NewClientFactory(),
+		}
+		got := u.resolveVaultAddressForApproval(chainID, "0x1111111111111111111111111111111111111111")
+		require.Equal(t, "", got)
+	})
+
+	t.Run("short call output", func(t *testing.T) {
+		srv := newPaymentRPCServer(t, func(_ int, _ string) string { return "0x01" })
+		defer srv.Close()
+
+		chainID := uuid.New()
+		u := &PaymentUsecase{
+			contractRepo: &scRepoStub{getActiveFn: func(context.Context, uuid.UUID, entities.SmartContractType) (*entities.SmartContract, error) {
+				return nil, domainerrors.ErrNotFound
+			}},
+			chainRepo: &approvalChainRepoStub{chain: &entities.Chain{
+				ID:     chainID,
+				RPCURL: srv.URL,
+			}},
+			clientFactory: blockchain.NewClientFactory(),
+		}
+		got := u.resolveVaultAddressForApproval(chainID, "0x1111111111111111111111111111111111111111")
+		require.Equal(t, "", got)
+	})
+}
+
+func TestPaymentUsecase_CalculateOnchainApprovalAmount_ErrorBranches(t *testing.T) {
+	t.Run("invalid payment input", func(t *testing.T) {
+		u := &PaymentUsecase{}
+		_, err := u.calculateOnchainApprovalAmount(nil, "")
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "invalid payment or gateway address")
+	})
+
+	t.Run("invalid source amount", func(t *testing.T) {
+		u := &PaymentUsecase{}
+		_, err := u.calculateOnchainApprovalAmount(&entities.Payment{
+			SourceAmount: "not-number",
+		}, "0x1111111111111111111111111111111111111111")
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "invalid source amount")
+	})
+
+	t.Run("source chain missing", func(t *testing.T) {
+		u := &PaymentUsecase{
+			chainRepo:     &approvalChainRepoStub{chain: nil},
+			clientFactory: blockchain.NewClientFactory(),
+		}
+		_, err := u.calculateOnchainApprovalAmount(&entities.Payment{
+			SourceChainID: uuid.New(),
+			SourceAmount:  "1000",
+			TotalCharged:  "1000",
+		}, "0x1111111111111111111111111111111111111111")
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "failed to resolve source chain")
+	})
+
+	t.Run("no active rpc", func(t *testing.T) {
+		chainID := uuid.New()
+		u := &PaymentUsecase{
+			chainRepo: &approvalChainRepoStub{chain: &entities.Chain{
+				ID:     chainID,
+				RPCURL: "",
+			}},
+			clientFactory: blockchain.NewClientFactory(),
+		}
+		_, err := u.calculateOnchainApprovalAmount(&entities.Payment{
+			SourceChainID: chainID,
+			SourceAmount:  "1000",
+			TotalCharged:  "1000",
+		}, "0x1111111111111111111111111111111111111111")
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "no active source chain rpc url")
+	})
+
+	t.Run("invalid fixed fee decode", func(t *testing.T) {
+		srv := newPaymentRPCServer(t, func(callIndex int, _ string) string {
+			switch callIndex {
+			case 1:
+				return "0x" // quote path fails, fallback starts
+			case 2:
+				return "0x" // fixed fee decode fails
+			default:
+				return "0x"
+			}
+		})
+		defer srv.Close()
+
+		chainID := uuid.New()
+		u := &PaymentUsecase{
+			chainRepo:     &approvalChainRepoStub{chain: &entities.Chain{ID: chainID, RPCURL: srv.URL}},
+			clientFactory: blockchain.NewClientFactory(),
+		}
+		_, err := u.calculateOnchainApprovalAmount(&entities.Payment{
+			SourceChainID: chainID,
+			SourceAmount:  "1000",
+			TotalCharged:  "1000",
+		}, "0x1111111111111111111111111111111111111111")
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "failed to decode FIXED_BASE_FEE")
+	})
+
+	t.Run("fallback on invalid total charged keeps amount", func(t *testing.T) {
+		srv := newPaymentRPCServer(t, func(callIndex int, _ string) string {
+			switch callIndex {
+			case 1:
+				return "0x" // quote path fails, fallback starts
+			case 2:
+				return mustPackOutputs(t, []string{"uint256"}, big.NewInt(30))
+			case 3:
+				return mustPackOutputs(t, []string{"uint256"}, big.NewInt(50)) // 0.5%
+			default:
+				return "0x"
+			}
+		})
+		defer srv.Close()
+
+		chainID := uuid.New()
+		u := &PaymentUsecase{
+			chainRepo:     &approvalChainRepoStub{chain: &entities.Chain{ID: chainID, RPCURL: srv.URL}},
+			clientFactory: blockchain.NewClientFactory(),
+		}
+		amount, err := u.calculateOnchainApprovalAmount(&entities.Payment{
+			SourceChainID: chainID,
+			SourceAmount:  "1000",
+			TotalCharged:  "invalid",
+		}, "0x1111111111111111111111111111111111111111")
+		require.NoError(t, err)
+		require.Equal(t, "1030", amount)
+	})
+}

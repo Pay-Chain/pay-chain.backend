@@ -46,3 +46,11 @@ func (f *ClientFactory) GetEVMClient(rpcURL string) (*EVMClient, error) {
 	f.evmClients[rpcURL] = newClient
 	return newClient, nil
 }
+
+// RegisterEVMClient injects/overrides cached client for a specific rpcURL.
+// Useful for deterministic unit tests.
+func (f *ClientFactory) RegisterEVMClient(rpcURL string, client *EVMClient) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.evmClients[rpcURL] = client
+}

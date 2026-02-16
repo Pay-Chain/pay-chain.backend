@@ -48,6 +48,42 @@ var (
 		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"}],"name":"enforcedOptions","outputs":[{"internalType":"bytes","name":"","type":"bytes"}],"stateMutability":"view","type":"function"},
 		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"}],"name":"isRouteConfigured","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"}
 	]`)
+	performContractTransact = func(client *ethclient.Client, contractAddress string, parsedABI abi.ABI, auth *bind.TransactOpts, method string, args ...interface{}) (string, error) {
+		contract := bind.NewBoundContract(common.HexToAddress(contractAddress), parsedABI, client, client, client)
+		tx, err := contract.Transact(auth, method, args...)
+		if err != nil {
+			return "", err
+		}
+		return tx.Hash().Hex(), nil
+	}
+	executeOnchainTx = func(ctx context.Context, rpcURL string, ownerPrivateKey string, contractAddress string, parsedABI abi.ABI, method string, args ...interface{}) (string, error) {
+		client, err := ethclient.DialContext(ctx, rpcURL)
+		if err != nil {
+			return "", err
+		}
+		defer client.Close()
+
+		privateKeyHex := strings.TrimPrefix(ownerPrivateKey, "0x")
+		privateKey, err := crypto.HexToECDSA(privateKeyHex)
+		if err != nil {
+			return "", domainerrors.BadRequest("invalid owner private key")
+		}
+
+		chainID, err := client.ChainID(ctx)
+		if err != nil {
+			return "", err
+		}
+		if chainID == nil {
+			return "", fmt.Errorf("chain id is nil")
+		}
+		auth, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
+		if err != nil {
+			return "", err
+		}
+		auth.Context = ctx
+
+		return performContractTransact(client, contractAddress, parsedABI, auth, method, args...)
+	}
 )
 
 type OnchainAdapterStatus struct {
@@ -330,35 +366,7 @@ func (u *OnchainAdapterUsecase) sendTx(
 	if rpcURL == "" {
 		return "", domainerrors.BadRequest("no active rpc url for source chain")
 	}
-
-	client, err := ethclient.DialContext(ctx, rpcURL)
-	if err != nil {
-		return "", err
-	}
-	defer client.Close()
-
-	privateKeyHex := strings.TrimPrefix(u.ownerPrivateKey, "0x")
-	privateKey, err := crypto.HexToECDSA(privateKeyHex)
-	if err != nil {
-		return "", domainerrors.BadRequest("invalid owner private key")
-	}
-
-	chainID, err := client.ChainID(ctx)
-	if err != nil {
-		return "", err
-	}
-	auth, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
-	if err != nil {
-		return "", err
-	}
-	auth.Context = ctx
-
-	contract := bind.NewBoundContract(common.HexToAddress(contractAddress), parsedABI, client, client, client)
-	tx, err := contract.Transact(auth, method, args...)
-	if err != nil {
-		return "", err
-	}
-	return tx.Hash().Hex(), nil
+	return executeOnchainTx(ctx, rpcURL, u.ownerPrivateKey, contractAddress, parsedABI, method, args...)
 }
 
 func (u *OnchainAdapterUsecase) callDefaultBridgeType(ctx context.Context, client *blockchain.EVMClient, gatewayAddress, destCAIP2 string) (uint8, error) {

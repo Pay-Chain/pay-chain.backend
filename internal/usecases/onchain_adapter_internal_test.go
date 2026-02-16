@@ -3,10 +3,14 @@ package usecases
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"pay-chain.backend/internal/domain/entities"
@@ -75,6 +79,8 @@ func TestOnchainAdapterUsecase_New(t *testing.T) {
 }
 
 func TestOnchainAdapterUsecase_SendTx_Branches(t *testing.T) {
+	validKey := "0x4c0883a69102937d6231471b5dbb6204fe51296170827931e8f95f6f8d5d2f66"
+
 	t.Run("source chain not found", func(t *testing.T) {
 		u := &OnchainAdapterUsecase{
 			ownerPrivateKey: "0xabc123",
@@ -127,5 +133,134 @@ func TestOnchainAdapterUsecase_SendTx_Branches(t *testing.T) {
 		_, err := u.sendTx(context.Background(), chainID, "0x0000000000000000000000000000000000000001", abi.ABI{}, "set", "arg")
 		require.Error(t, err)
 		require.Equal(t, "invalid input", err.Error())
+	})
+
+	t.Run("chain id rpc error", func(t *testing.T) {
+		srv := newSafeHTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			defer r.Body.Close()
+			var req map[string]interface{}
+			_ = json.NewDecoder(r.Body).Decode(&req)
+			res := map[string]interface{}{"jsonrpc": "2.0", "id": req["id"]}
+			if req["method"] == "eth_chainId" {
+				res["error"] = map[string]interface{}{"code": -32000, "message": "rpc down"}
+			} else {
+				res["result"] = "0x0"
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(res)
+		}))
+		defer srv.Close()
+
+		chainID := uuid.New()
+		u := &OnchainAdapterUsecase{
+			ownerPrivateKey: validKey,
+			chainRepo: &quoteChainRepoStub{
+				byID: map[uuid.UUID]*entities.Chain{
+					chainID: {ID: chainID, ChainID: "8453", Type: entities.ChainTypeEVM, RPCURL: srv.URL},
+				},
+			},
+		}
+		parsed := mustParseABI(`[{"inputs":[{"internalType":"uint256","name":"x","type":"uint256"}],"name":"setValue","outputs":[],"stateMutability":"nonpayable","type":"function"}]`)
+		_, err := u.sendTx(context.Background(), chainID, "0x0000000000000000000000000000000000000001", parsed, "setValue", 1)
+		require.Error(t, err)
+		require.Contains(t, strings.ToLower(err.Error()), "rpc down")
+	})
+
+	t.Run("transact method missing", func(t *testing.T) {
+		srv := newSafeHTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			defer r.Body.Close()
+			var req map[string]interface{}
+			_ = json.NewDecoder(r.Body).Decode(&req)
+			res := map[string]interface{}{"jsonrpc": "2.0", "id": req["id"]}
+			if req["method"] == "eth_chainId" {
+				res["result"] = "0x1"
+			} else {
+				res["result"] = "0x0"
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(res)
+		}))
+		defer srv.Close()
+
+		chainID := uuid.New()
+		u := &OnchainAdapterUsecase{
+			ownerPrivateKey: validKey,
+			chainRepo: &quoteChainRepoStub{
+				byID: map[uuid.UUID]*entities.Chain{
+					chainID: {ID: chainID, ChainID: "8453", Type: entities.ChainTypeEVM, RPCURL: srv.URL},
+				},
+			},
+		}
+		parsed := mustParseABI(`[{"inputs":[{"internalType":"uint256","name":"x","type":"uint256"}],"name":"setValue","outputs":[],"stateMutability":"nonpayable","type":"function"}]`)
+		_, err := u.sendTx(context.Background(), chainID, "0x0000000000000000000000000000000000000001", parsed, "unknownMethod", 1)
+		require.Error(t, err)
+		require.Contains(t, strings.ToLower(err.Error()), "method")
+	})
+
+	t.Run("transact hook success", func(t *testing.T) {
+		srv := newSafeHTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			defer r.Body.Close()
+			var req map[string]interface{}
+			_ = json.NewDecoder(r.Body).Decode(&req)
+			res := map[string]interface{}{"jsonrpc": "2.0", "id": req["id"]}
+			if req["method"] == "eth_chainId" {
+				res["result"] = "0x1"
+			} else {
+				res["result"] = "0x0"
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(res)
+		}))
+		defer srv.Close()
+
+		orig := performContractTransact
+		t.Cleanup(func() { performContractTransact = orig })
+		performContractTransact = func(_ *ethclient.Client, _ string, _ abi.ABI, _ *bind.TransactOpts, _ string, _ ...interface{}) (string, error) {
+			return "0xdeadbeef", nil
+		}
+
+		chainID := uuid.New()
+		u := &OnchainAdapterUsecase{
+			ownerPrivateKey: validKey,
+			chainRepo: &quoteChainRepoStub{
+				byID: map[uuid.UUID]*entities.Chain{
+					chainID: {ID: chainID, ChainID: "8453", Type: entities.ChainTypeEVM, RPCURL: srv.URL},
+				},
+			},
+		}
+		parsed := mustParseABI(`[{"inputs":[{"internalType":"uint256","name":"x","type":"uint256"}],"name":"setValue","outputs":[],"stateMutability":"nonpayable","type":"function"}]`)
+		txHash, err := u.sendTx(context.Background(), chainID, "0x0000000000000000000000000000000000000001", parsed, "setValue", 1)
+		require.NoError(t, err)
+		require.Equal(t, "0xdeadbeef", txHash)
+	})
+
+	t.Run("executeOnchainTx hook branches", func(t *testing.T) {
+		origExec := executeOnchainTx
+		t.Cleanup(func() { executeOnchainTx = origExec })
+
+		chainID := uuid.New()
+		u := &OnchainAdapterUsecase{
+			ownerPrivateKey: validKey,
+			chainRepo: &quoteChainRepoStub{
+				byID: map[uuid.UUID]*entities.Chain{
+					chainID: {ID: chainID, ChainID: "8453", Type: entities.ChainTypeEVM, RPCURL: "mock://chain"},
+				},
+			},
+		}
+		parsed := mustParseABI(`[{"inputs":[{"internalType":"uint256","name":"x","type":"uint256"}],"name":"setValue","outputs":[],"stateMutability":"nonpayable","type":"function"}]`)
+
+		executeOnchainTx = func(context.Context, string, string, string, abi.ABI, string, ...interface{}) (string, error) {
+			return "", errors.New("tx failed")
+		}
+		_, err := u.sendTx(context.Background(), chainID, "0x0000000000000000000000000000000000000001", parsed, "setValue", 1)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "tx failed")
+
+		executeOnchainTx = func(context.Context, string, string, string, abi.ABI, string, ...interface{}) (string, error) {
+			return "0xabc", nil
+		}
+		tx, err := u.sendTx(context.Background(), chainID, "0x0000000000000000000000000000000000000001", parsed, "setValue", 1)
+		require.NoError(t, err)
+		require.Equal(t, "0xabc", tx)
 	})
 }

@@ -23,6 +23,12 @@ type SessionStore struct {
 	encryptionKey []byte
 }
 
+var (
+	setSessionValue = Set
+	getSessionValue = Get
+	delSessionValue = Del
+)
+
 // NewSessionStore creates a new session store
 func NewSessionStore(encryptionKeyHex string) (*SessionStore, error) {
 	key, err := hex.DecodeString(encryptionKeyHex)
@@ -47,12 +53,12 @@ func (s *SessionStore) CreateSession(ctx context.Context, sessionID string, data
 		return err
 	}
 
-	return Set(ctx, "session:"+sessionID, encryptedData, expiration)
+	return setSessionValue(ctx, "session:"+sessionID, encryptedData, expiration)
 }
 
 // GetSession retrieves and decrypts session data from Redis
 func (s *SessionStore) GetSession(ctx context.Context, sessionID string) (*SessionData, error) {
-	encryptedDataStr, err := Get(ctx, "session:"+sessionID)
+	encryptedDataStr, err := getSessionValue(ctx, "session:"+sessionID)
 	if err != nil {
 		return nil, err
 	}
@@ -72,7 +78,7 @@ func (s *SessionStore) GetSession(ctx context.Context, sessionID string) (*Sessi
 
 // DeleteSession removes a session from Redis
 func (s *SessionStore) DeleteSession(ctx context.Context, sessionID string) error {
-	return Del(ctx, "session:"+sessionID)
+	return delSessionValue(ctx, "session:"+sessionID)
 }
 
 func (s *SessionStore) encrypt(plaintext []byte) (string, error) {

@@ -45,4 +45,5 @@ func TestAppError_Constructors(t *testing.T) {
 	internalMsg := InternalServerError("boom")
 	assert.Equal(t, http.StatusInternalServerError, internalMsg.Status)
 	assert.Equal(t, "boom", internalMsg.Message)
+	assert.Equal(t, "boom", internalMsg.Error())
 }

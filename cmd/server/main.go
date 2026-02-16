@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -26,25 +27,46 @@ import (
 	"pay-chain.backend/pkg/redis"
 )
 
+var (
+	loadDotenv = godotenv.Load
+	loadCfg    = config.Load
+	initLog    = logger.Init
+	initRedis  = redis.Init
+	openDB     = func(dsn string) (*gorm.DB, error) {
+		return gorm.Open(postgres.New(postgres.Config{
+			DSN:                  dsn,
+			PreferSimpleProtocol: true,
+		}), &gorm.Config{
+			PrepareStmt: false,
+		})
+	}
+	newSessionStore = redis.NewSessionStore
+	runServer       = func(r *gin.Engine, port string) error { return r.Run(":" + port) }
+)
+
 func main() {
+	if err := runMainProcess(); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func runMainProcess() error {
 	// Load .env file
-	if err := godotenv.Load(); err != nil {
+	if err := loadDotenv(); err != nil {
 		log.Println("No .env file found, using environment variables")
 	}
 
 	// Load configuration
-	cfg := config.Load()
+	cfg := loadCfg()
 
 	// Initialize Logger
-	logger.Init(cfg.Server.Env)
+	initLog(cfg.Server.Env)
 	logger.Info(context.Background(), "Logger initialized", zap.String("env", cfg.Server.Env))
 
 	// Initialize Redis
-	if err := redis.Init(cfg.Redis.URL, cfg.Redis.PASSWORD); err != nil {
+	if err := initRedis(cfg.Redis.URL, cfg.Redis.PASSWORD); err != nil {
 		logger.Error(context.Background(), "Failed to initialize Redis", zap.Error(err))
-		// Fail hard if Redis is critical for Idempotency?
-		// For now, log error but maybe don't crash if idempotent is critical.
-		log.Fatalf("Failed to initialize Redis: %v", err)
+		return fmt.Errorf("failed to initialize redis: %w", err)
 	}
 	logger.Info(context.Background(), "Redis initialized")
 
@@ -55,19 +77,14 @@ func main() {
 
 	// Connect to database using GORM
 	dsn := cfg.Database.URL()
-	db, err := gorm.Open(postgres.New(postgres.Config{
-		DSN:                  dsn,
-		PreferSimpleProtocol: true,
-	}), &gorm.Config{
-		PrepareStmt: false,
-	})
+	db, err := openDB(dsn)
 	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
+		return fmt.Errorf("failed to connect to database: %w", err)
 	}
 
 	sqlDB, err := db.DB()
 	if err != nil {
-		log.Fatalf("Failed to get generic database object: %v", err)
+		return fmt.Errorf("failed to get generic database object: %w", err)
 	}
 	defer sqlDB.Close()
 
@@ -105,9 +122,9 @@ func main() {
 	uow := repositories.NewUnitOfWork(db)
 
 	// Initialize Session Store
-	sessionStore, err := redis.NewSessionStore(cfg.Security.SessionEncryptionKey)
+	sessionStore, err := newSessionStore(cfg.Security.SessionEncryptionKey)
 	if err != nil {
-		log.Fatalf("Failed to initialize session store: %v", err)
+		return fmt.Errorf("failed to initialize session store: %w", err)
 	}
 
 	// Initialize blockchain client factory
@@ -212,7 +229,8 @@ func main() {
 	log.Printf("📚 API: http://localhost:%s/api/v1", cfg.Server.Port)
 	log.Printf("❤️ Health: http://localhost:%s/health", cfg.Server.Port)
 
-	if err := r.Run(":" + cfg.Server.Port); err != nil {
-		log.Fatalf("Failed to start server: %v", err)
+	if err := runServer(r, cfg.Server.Port); err != nil {
+		return fmt.Errorf("failed to start server: %w", err)
 	}
+	return nil
 }

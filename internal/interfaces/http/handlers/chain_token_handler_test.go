@@ -334,3 +334,46 @@ func TestTokenHandler_InvalidInputs(t *testing.T) {
 		t.Fatalf("expected 400 got %d", rec.Code)
 	}
 }
+
+func TestTokenHandler_CreateAndUpdate_LegacyChainFallback(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	chainRepo := newChainRepoStub()
+	tokenRepo := newTokenRepoStub()
+
+	legacyChain := &entities.Chain{ID: uuid.New(), ChainID: "8453", Type: entities.ChainTypeEVM, Name: "Base", IsActive: true}
+	chainRepo.items[legacyChain.ID] = legacyChain
+
+	h := NewTokenHandler(tokenRepo, chainRepo)
+	r := gin.New()
+	r.POST("/admin/tokens", h.CreateToken)
+	r.PUT("/admin/tokens/:id", h.UpdateToken)
+
+	createBody := `{"symbol":"IDRX","name":"IDRX","decimals":6,"type":"ERC20","chainId":"8453","contractAddress":"0xidrx","minAmount":"1","maxAmount":"100"}`
+	req := httptest.NewRequest(http.MethodPost, "/admin/tokens", bytes.NewReader([]byte(createBody)))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201 got %d body=%s", rec.Code, rec.Body.String())
+	}
+	if len(tokenRepo.items) != 1 {
+		t.Fatalf("expected token created")
+	}
+
+	var created *entities.Token
+	for _, item := range tokenRepo.items {
+		created = item
+	}
+	if created == nil || created.ChainUUID != legacyChain.ID {
+		t.Fatalf("expected chain fallback to legacy chain id")
+	}
+
+	updateBody := `{"name":"IDRX Updated","chainId":"invalid-legacy-id"}`
+	req = httptest.NewRequest(http.MethodPut, "/admin/tokens/"+created.ID.String(), bytes.NewReader([]byte(updateBody)))
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 got %d body=%s", rec.Code, rec.Body.String())
+	}
+}

@@ -178,4 +178,45 @@ func TestPaymentUsecase_GetBridgeFeeQuote_ErrorBranches(t *testing.T) {
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "failed to connect to any RPC endpoint")
 	})
+
+	t.Run("source chain lookup by id failed", func(t *testing.T) {
+		repo := &quoteChainRepoStub{
+			byCAIP2: map[string]*entities.Chain{"eip155:8453": source, "eip155:42161": dest},
+			byID:    map[uuid.UUID]*entities.Chain{destID: dest}, // source intentionally missing
+		}
+		u := &PaymentUsecase{
+			chainRepo:     repo,
+			chainResolver: NewChainResolver(repo),
+			contractRepo:  &quoteContractRepoStub{router: router},
+			clientFactory: blockchain.NewClientFactory(),
+		}
+		_, err := u.getBridgeFeeQuote(context.Background(), "eip155:8453", "eip155:42161", "0x1", "0x2", big.NewInt(1))
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "source chain not found")
+	})
+
+	t.Run("all bridge quote invalid", func(t *testing.T) {
+		rpcURL := "mock://quote-invalid"
+		sourceWithRPC := &entities.Chain{ID: sourceID, ChainID: "8453", Type: entities.ChainTypeEVM, RPCURL: rpcURL}
+		repo := &quoteChainRepoStub{
+			byCAIP2: map[string]*entities.Chain{"eip155:8453": sourceWithRPC, "eip155:42161": dest},
+			byID:    map[uuid.UUID]*entities.Chain{sourceID: sourceWithRPC, destID: dest},
+		}
+
+		factory := blockchain.NewClientFactory()
+		factory.RegisterEVMClient(rpcURL, blockchain.NewEVMClientWithCallView(big.NewInt(8453), func(context.Context, string, []byte) ([]byte, error) {
+			return []byte{0x00}, nil // fee == 0 -> invalid quote
+		}))
+
+		u := &PaymentUsecase{
+			chainRepo:      repo,
+			chainResolver:  NewChainResolver(repo),
+			contractRepo:   &quoteContractRepoStub{router: router},
+			clientFactory:  factory,
+			routePolicyRepo: nil,
+		}
+		_, err := u.getBridgeFeeQuote(context.Background(), "eip155:8453", "eip155:42161", "0x1", "0x2", big.NewInt(100))
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "invalid fee quote")
+	})
 }

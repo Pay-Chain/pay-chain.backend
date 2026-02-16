@@ -10,21 +10,30 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 )
 
+var (
+	dialEVMClient = ethclient.Dial
+	getClientChainID = func(client *ethclient.Client, ctx context.Context) (*big.Int, error) {
+		return client.ChainID(ctx)
+	}
+)
+
 // EVMClient provides EVM blockchain interaction
 type EVMClient struct {
 	client  *ethclient.Client
 	chainID *big.Int
 	rpcURL  string
+	// testCallView allows deterministic unit tests without network sockets.
+	testCallView func(ctx context.Context, to string, data []byte) ([]byte, error)
 }
 
 // NewEVMClient creates a new EVM client
 func NewEVMClient(rpcURL string) (*EVMClient, error) {
-	client, err := ethclient.Dial(rpcURL)
+	client, err := dialEVMClient(rpcURL)
 	if err != nil {
 		return nil, err
 	}
 
-	chainID, err := client.ChainID(context.Background())
+	chainID, err := getClientChainID(client, context.Background())
 	if err != nil {
 		return nil, err
 	}
@@ -34,6 +43,18 @@ func NewEVMClient(rpcURL string) (*EVMClient, error) {
 		chainID: chainID,
 		rpcURL:  rpcURL,
 	}, nil
+}
+
+// NewEVMClientWithCallView creates an EVM client that uses an injected CallView implementation.
+// This is intended for unit tests where RPC sockets are unavailable.
+func NewEVMClientWithCallView(chainID *big.Int, callViewFn func(ctx context.Context, to string, data []byte) ([]byte, error)) *EVMClient {
+	if chainID == nil {
+		chainID = big.NewInt(1)
+	}
+	return &EVMClient{
+		chainID:      chainID,
+		testCallView: callViewFn,
+	}
 }
 
 // ChainID returns the chain ID
@@ -92,6 +113,9 @@ func (c *EVMClient) EstimateGas(ctx context.Context, msg ethereum.CallMsg) (uint
 
 // CallView executes a read-only contract call
 func (c *EVMClient) CallView(ctx context.Context, to string, data []byte) ([]byte, error) {
+	if c.testCallView != nil {
+		return c.testCallView(ctx, to, data)
+	}
 	addr := common.HexToAddress(to)
 	msg := ethereum.CallMsg{
 		To:   &addr,
@@ -102,5 +126,7 @@ func (c *EVMClient) CallView(ctx context.Context, to string, data []byte) ([]byt
 
 // Close closes the client connection
 func (c *EVMClient) Close() {
-	c.client.Close()
+	if c.client != nil {
+		c.client.Close()
+	}
 }

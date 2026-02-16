@@ -110,3 +110,58 @@ func TestSmartContractRepository_CRUDAndFilters(t *testing.T) {
 	require.ErrorIs(t, repo.Update(ctx, &entities.SmartContract{ID: uuid.New()}), domainerrors.ErrNotFound)
 	require.ErrorIs(t, repo.SoftDelete(ctx, uuid.New()), domainerrors.ErrNotFound)
 }
+
+func TestSmartContractRepository_NotFoundAndDecodeBranches(t *testing.T) {
+	db := newTestDB(t)
+	createSmartContractTable(t, db)
+	ctx := context.Background()
+
+	chainID := uuid.New()
+	repo := NewSmartContractRepository(db, &stubChainRepo{
+		chains: map[uuid.UUID]*entities.Chain{
+			chainID: {ID: chainID, ChainID: "8453", Name: "Base"},
+		},
+	})
+
+	// Not found branches
+	byAddr, err := repo.GetByChainAndAddress(ctx, chainID, "0xdoesnotexist")
+	require.NoError(t, err)
+	require.Nil(t, byAddr)
+
+	active, err := repo.GetActiveContract(ctx, chainID, entities.ContractTypeRouter)
+	require.NoError(t, err)
+	require.Nil(t, active)
+
+	// Insert inactive and malformed ABI row directly to cover decode-safe path.
+	rawID := uuid.New()
+	mustExec(t, db, `INSERT INTO smart_contracts (
+		id,name,type,version,chain_id,address,deployer_address,is_active,abi,metadata,start_block,created_at,updated_at
+	) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		rawID.String(),
+		"Broken ABI Contract",
+		string(entities.ContractTypeGateway),
+		"1.0.0",
+		chainID.String(),
+		"0x3333333333333333333333333333333333333333",
+		"",
+		false,
+		`{invalid-json`,
+		`{"test":true}`,
+		0,
+		time.Now(),
+		time.Now(),
+	)
+
+	// Should not fail even with malformed ABI; ABI should be nil-ish and entity returned.
+	got, err := repo.GetByID(ctx, rawID)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	require.Equal(t, "Broken ABI Contract", got.Name)
+	require.Equal(t, "8453", got.BlockchainID)
+	require.Nil(t, got.ABI)
+
+	// Inactive row should not be returned by GetActiveContract
+	active, err = repo.GetActiveContract(ctx, chainID, entities.ContractTypeGateway)
+	require.NoError(t, err)
+	require.Nil(t, active)
+}

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"flag"
 	"os"
 	"strings"
@@ -49,6 +50,10 @@ func TestBuildCredentials(t *testing.T) {
 	if !strings.HasPrefix(secretKey, "sk_test_") {
 		t.Fatalf("unexpected secret key format: %s", secretKey)
 	}
+
+	if _, _, err := buildCredentials("invalid", 32); err == nil {
+		t.Fatal("expected error for invalid mode")
+	}
 }
 
 func TestMain_Success(t *testing.T) {
@@ -77,5 +82,18 @@ func TestMain_Success(t *testing.T) {
 	_, _ = out.ReadFrom(r)
 	if !strings.Contains(out.String(), "Generated API credentials") {
 		t.Fatalf("unexpected output: %s", out.String())
+	}
+}
+
+func TestGenerateRandomHex_ReadError(t *testing.T) {
+	orig := randRead
+	defer func() { randRead = orig }()
+
+	randRead = func([]byte) (int, error) {
+		return 0, errors.New("rng error")
+	}
+	_, err := generateRandomHex(32)
+	if err == nil {
+		t.Fatal("expected rng error")
 	}
 }

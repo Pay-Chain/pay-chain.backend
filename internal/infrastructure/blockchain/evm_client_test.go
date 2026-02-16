@@ -3,6 +3,7 @@ package blockchain
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/stretchr/testify/require"
 )
 
@@ -155,6 +157,60 @@ func TestClientFactory_GetEVMClient_CachePath(t *testing.T) {
 	require.NoError(t, err)
 	require.Same(t, c1, c2)
 	c1.Close()
+}
+
+func TestNewEVMClient_ErrorBranches(t *testing.T) {
+	t.Run("dial failure", func(t *testing.T) {
+		origDial := dialEVMClient
+		origChainID := getClientChainID
+		t.Cleanup(func() {
+			dialEVMClient = origDial
+			getClientChainID = origChainID
+		})
+		dialEVMClient = func(string) (*ethclient.Client, error) {
+			return nil, errors.New("dial failed")
+		}
+		_, err := NewEVMClient("mock://rpc")
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "dial failed")
+	})
+
+	t.Run("chain id failure", func(t *testing.T) {
+		origDial := dialEVMClient
+		origChainID := getClientChainID
+		t.Cleanup(func() {
+			dialEVMClient = origDial
+			getClientChainID = origChainID
+		})
+		dialEVMClient = func(string) (*ethclient.Client, error) {
+			return &ethclient.Client{}, nil
+		}
+		getClientChainID = func(*ethclient.Client, context.Context) (*big.Int, error) {
+			return nil, errors.New("chain id failed")
+		}
+		_, err := NewEVMClient("mock://rpc")
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "chain id failed")
+	})
+
+	t.Run("success via hooks", func(t *testing.T) {
+		origDial := dialEVMClient
+		origChainID := getClientChainID
+		t.Cleanup(func() {
+			dialEVMClient = origDial
+			getClientChainID = origChainID
+		})
+		dialEVMClient = func(string) (*ethclient.Client, error) {
+			return &ethclient.Client{}, nil
+		}
+		getClientChainID = func(*ethclient.Client, context.Context) (*big.Int, error) {
+			return big.NewInt(8453), nil
+		}
+		c, err := NewEVMClient("mock://rpc")
+		require.NoError(t, err)
+		require.Equal(t, "mock://rpc", c.rpcURL)
+		require.Equal(t, int64(8453), c.chainID.Int64())
+	})
 }
 
 func ptrAddr(a common.Address) *common.Address { return &a }

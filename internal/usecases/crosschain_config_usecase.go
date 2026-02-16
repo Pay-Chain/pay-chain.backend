@@ -85,7 +85,18 @@ type CrosschainConfigUsecase struct {
 	contractRepo   repositories.SmartContractRepository
 	clientFactory  *blockchain.ClientFactory
 	chainResolver  *ChainResolver
-	adapterUsecase *OnchainAdapterUsecase
+	adapterUsecase CrosschainAdapterUsecase
+}
+
+type CrosschainAdapterUsecase interface {
+	GetStatus(ctx context.Context, sourceChainInput, destChainInput string) (*OnchainAdapterStatus, error)
+	RegisterAdapter(ctx context.Context, sourceChainInput, destChainInput string, bridgeType uint8, adapterAddress string) (string, error)
+	SetDefaultBridgeType(ctx context.Context, sourceChainInput, destChainInput string, bridgeType uint8) (string, error)
+	SetHyperbridgeConfig(
+		ctx context.Context,
+		sourceChainInput, destChainInput string,
+		stateMachineIDHex, destinationContractHex string,
+	) (string, []string, error)
 }
 
 func NewCrosschainConfigUsecase(
@@ -93,7 +104,7 @@ func NewCrosschainConfigUsecase(
 	tokenRepo repositories.TokenRepository,
 	contractRepo repositories.SmartContractRepository,
 	clientFactory *blockchain.ClientFactory,
-	adapterUsecase *OnchainAdapterUsecase,
+	adapterUsecase CrosschainAdapterUsecase,
 ) *CrosschainConfigUsecase {
 	return &CrosschainConfigUsecase{
 		chainRepo:      chainRepo,

@@ -230,3 +230,206 @@ func TestPaymentRequestUsecase_ListAndMarkCompleted(t *testing.T) {
 	err = uc.MarkPaymentCompleted(context.Background(), requestID, "0xhash")
 	assert.NoError(t, err)
 }
+
+func TestPaymentRequestUsecase_CreatePaymentRequest_ErrorBranches(t *testing.T) {
+	t.Run("wallet repository error", func(t *testing.T) {
+		pr := new(MockPaymentRequestRepository)
+		mr := new(MockMerchantRepository)
+		wr := new(MockWalletRepository)
+		cr := new(MockChainRepository)
+		sr := new(MockSmartContractRepository)
+		tr := new(MockTokenRepository)
+		uc := newPaymentRequestUC(pr, mr, wr, cr, sr, tr)
+
+		userID := uuid.New()
+		mr.On("GetByUserID", context.Background(), userID).Return(&entities.Merchant{
+			ID:     uuid.New(),
+			UserID: userID,
+			Status: entities.MerchantStatusActive,
+		}, nil).Once()
+		wr.On("GetByUserID", context.Background(), userID).Return([]*entities.Wallet{}, assert.AnError).Once()
+
+		_, err := uc.CreatePaymentRequest(context.Background(), usecases.CreatePaymentRequestInput{
+			UserID:       userID,
+			ChainID:      "eip155:8453",
+			TokenAddress: "0x1",
+			Amount:       "1",
+			Decimals:     6,
+		})
+		assert.Error(t, err)
+	})
+
+	t.Run("no wallet found", func(t *testing.T) {
+		pr := new(MockPaymentRequestRepository)
+		mr := new(MockMerchantRepository)
+		wr := new(MockWalletRepository)
+		cr := new(MockChainRepository)
+		sr := new(MockSmartContractRepository)
+		tr := new(MockTokenRepository)
+		uc := newPaymentRequestUC(pr, mr, wr, cr, sr, tr)
+
+		userID := uuid.New()
+		mr.On("GetByUserID", context.Background(), userID).Return(&entities.Merchant{
+			ID:     uuid.New(),
+			UserID: userID,
+			Status: entities.MerchantStatusActive,
+		}, nil).Once()
+		wr.On("GetByUserID", context.Background(), userID).Return([]*entities.Wallet{}, nil).Once()
+
+		_, err := uc.CreatePaymentRequest(context.Background(), usecases.CreatePaymentRequestInput{
+			UserID:       userID,
+			ChainID:      "eip155:8453",
+			TokenAddress: "0x1",
+			Amount:       "1",
+			Decimals:     6,
+		})
+		assert.Error(t, err)
+	})
+
+	t.Run("invalid chain id", func(t *testing.T) {
+		pr := new(MockPaymentRequestRepository)
+		mr := new(MockMerchantRepository)
+		wr := new(MockWalletRepository)
+		cr := new(MockChainRepository)
+		sr := new(MockSmartContractRepository)
+		tr := new(MockTokenRepository)
+		uc := newPaymentRequestUC(pr, mr, wr, cr, sr, tr)
+
+		userID := uuid.New()
+		mr.On("GetByUserID", context.Background(), userID).Return(&entities.Merchant{
+			ID:     uuid.New(),
+			UserID: userID,
+			Status: entities.MerchantStatusActive,
+		}, nil).Once()
+		wr.On("GetByUserID", context.Background(), userID).Return([]*entities.Wallet{{Address: "0xM", IsPrimary: true}}, nil).Once()
+		cr.On("GetByCAIP2", context.Background(), "bad").Return(nil, assert.AnError).Twice()
+		cr.On("GetByChainID", context.Background(), "bad").Return(nil, assert.AnError).Twice()
+
+		_, err := uc.CreatePaymentRequest(context.Background(), usecases.CreatePaymentRequestInput{
+			UserID:       userID,
+			ChainID:      "bad",
+			TokenAddress: "0x1",
+			Amount:       "1",
+			Decimals:     6,
+		})
+		assert.Error(t, err)
+	})
+
+	t.Run("token fallback to native failed", func(t *testing.T) {
+		pr := new(MockPaymentRequestRepository)
+		mr := new(MockMerchantRepository)
+		wr := new(MockWalletRepository)
+		cr := new(MockChainRepository)
+		sr := new(MockSmartContractRepository)
+		tr := new(MockTokenRepository)
+		uc := newPaymentRequestUC(pr, mr, wr, cr, sr, tr)
+
+		userID := uuid.New()
+		chainID := uuid.New()
+		mr.On("GetByUserID", context.Background(), userID).Return(&entities.Merchant{
+			ID:     uuid.New(),
+			UserID: userID,
+			Status: entities.MerchantStatusActive,
+		}, nil).Once()
+		wr.On("GetByUserID", context.Background(), userID).Return([]*entities.Wallet{{Address: "0xM", IsPrimary: true}}, nil).Once()
+		cr.On("GetByCAIP2", context.Background(), "eip155:8453").Return(&entities.Chain{ID: chainID, ChainID: "8453", Type: entities.ChainTypeEVM}, nil).Once()
+		tr.On("GetByAddress", context.Background(), "native", chainID).Return(nil, assert.AnError).Once()
+		tr.On("GetNative", context.Background(), chainID).Return(nil, assert.AnError).Once()
+
+		_, err := uc.CreatePaymentRequest(context.Background(), usecases.CreatePaymentRequestInput{
+			UserID:       userID,
+			ChainID:      "eip155:8453",
+			TokenAddress: "native",
+			Amount:       "1",
+			Decimals:     6,
+		})
+		assert.Error(t, err)
+	})
+
+	t.Run("amount conversion invalid", func(t *testing.T) {
+		pr := new(MockPaymentRequestRepository)
+		mr := new(MockMerchantRepository)
+		wr := new(MockWalletRepository)
+		cr := new(MockChainRepository)
+		sr := new(MockSmartContractRepository)
+		tr := new(MockTokenRepository)
+		uc := newPaymentRequestUC(pr, mr, wr, cr, sr, tr)
+
+		userID := uuid.New()
+		chainID := uuid.New()
+		mr.On("GetByUserID", context.Background(), userID).Return(&entities.Merchant{
+			ID:     uuid.New(),
+			UserID: userID,
+			Status: entities.MerchantStatusActive,
+		}, nil).Once()
+		wr.On("GetByUserID", context.Background(), userID).Return([]*entities.Wallet{{Address: "0xM", IsPrimary: true}}, nil).Once()
+		cr.On("GetByCAIP2", context.Background(), "eip155:8453").Return(&entities.Chain{ID: chainID, ChainID: "8453", Type: entities.ChainTypeEVM}, nil).Once()
+		tr.On("GetByAddress", context.Background(), "0xToken", chainID).Return(&entities.Token{ID: uuid.New(), Decimals: 6}, nil).Once()
+		sr.On("GetActiveContract", context.Background(), chainID, entities.ContractTypeGateway).Return(nil, nil).Once()
+
+		_, err := uc.CreatePaymentRequest(context.Background(), usecases.CreatePaymentRequestInput{
+			UserID:       userID,
+			ChainID:      "eip155:8453",
+			TokenAddress: "0xToken",
+			Amount:       "abc",
+			Decimals:     6,
+		})
+		assert.Error(t, err)
+	})
+
+	t.Run("create payment request repository error", func(t *testing.T) {
+		pr := new(MockPaymentRequestRepository)
+		mr := new(MockMerchantRepository)
+		wr := new(MockWalletRepository)
+		cr := new(MockChainRepository)
+		sr := new(MockSmartContractRepository)
+		tr := new(MockTokenRepository)
+		uc := newPaymentRequestUC(pr, mr, wr, cr, sr, tr)
+
+		userID := uuid.New()
+		chainID := uuid.New()
+		tokenID := uuid.New()
+		mr.On("GetByUserID", context.Background(), userID).Return(&entities.Merchant{
+			ID:     uuid.New(),
+			UserID: userID,
+			Status: entities.MerchantStatusActive,
+		}, nil).Once()
+		wr.On("GetByUserID", context.Background(), userID).Return([]*entities.Wallet{{Address: "0xM", IsPrimary: true}}, nil).Once()
+		cr.On("GetByCAIP2", context.Background(), "eip155:8453").Return(&entities.Chain{ID: chainID, ChainID: "8453", Type: entities.ChainTypeEVM}, nil).Once()
+		tr.On("GetByAddress", context.Background(), "0xToken", chainID).Return(&entities.Token{ID: tokenID, Decimals: 6}, nil).Once()
+		sr.On("GetActiveContract", context.Background(), chainID, entities.ContractTypeGateway).Return(nil, nil).Once()
+		pr.On("Create", context.Background(), mock.AnythingOfType("*entities.PaymentRequest")).Return(assert.AnError).Once()
+
+		_, err := uc.CreatePaymentRequest(context.Background(), usecases.CreatePaymentRequestInput{
+			UserID:       userID,
+			ChainID:      "eip155:8453",
+			TokenAddress: "0xToken",
+			Amount:       "1",
+			Decimals:     6,
+		})
+		assert.Error(t, err)
+	})
+}
+
+func TestPaymentRequestUsecase_GetAndList_ErrorBranches(t *testing.T) {
+	t.Run("get payment request not found", func(t *testing.T) {
+		pr := new(MockPaymentRequestRepository)
+		uc := newPaymentRequestUC(pr, new(MockMerchantRepository), new(MockWalletRepository), new(MockChainRepository), new(MockSmartContractRepository), new(MockTokenRepository))
+		requestID := uuid.New()
+		pr.On("GetByID", context.Background(), requestID).Return(nil, assert.AnError).Once()
+
+		_, _, err := uc.GetPaymentRequest(context.Background(), requestID)
+		assert.Error(t, err)
+	})
+
+	t.Run("list payment requests merchant not found", func(t *testing.T) {
+		pr := new(MockPaymentRequestRepository)
+		mr := new(MockMerchantRepository)
+		uc := newPaymentRequestUC(pr, mr, new(MockWalletRepository), new(MockChainRepository), new(MockSmartContractRepository), new(MockTokenRepository))
+		userID := uuid.New()
+		mr.On("GetByUserID", context.Background(), userID).Return(nil, assert.AnError).Once()
+
+		_, _, err := uc.ListPaymentRequests(context.Background(), userID, 10, 0)
+		assert.Error(t, err)
+	})
+}

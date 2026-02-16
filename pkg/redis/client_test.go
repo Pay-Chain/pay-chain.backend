@@ -2,6 +2,7 @@ package redis
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -13,6 +14,24 @@ import (
 func TestInitInvalidURL(t *testing.T) {
 	err := Init("://invalid-url", "")
 	assert.Error(t, err)
+}
+
+func TestInitValidURLWithPingHook(t *testing.T) {
+	originalPing := pingClient
+	t.Cleanup(func() { pingClient = originalPing })
+
+	pingClient = func(_ context.Context, _ *goredis.Client) error {
+		return errors.New("forced ping failure")
+	}
+	err := Init("redis://127.0.0.1:1", "secret")
+	assert.Error(t, err)
+
+	pingClient = func(_ context.Context, _ *goredis.Client) error {
+		return nil
+	}
+	err = Init("redis://127.0.0.1:1", "secret")
+	assert.NoError(t, err)
+	assert.NotNil(t, GetClient())
 }
 
 func TestSetClientAndBasicOpsWithUnreachableRedis(t *testing.T) {

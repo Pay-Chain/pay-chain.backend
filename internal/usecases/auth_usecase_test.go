@@ -281,3 +281,100 @@ func TestAuthUsecase_Login_UseSessionRedisError(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to store session in redis")
 }
+
+func TestAuthUsecase_Register_ErrorBranches(t *testing.T) {
+	t.Run("user repo email lookup error", func(t *testing.T) {
+		userRepo := new(MockUserRepository)
+		uc := newAuthUsecaseForTest(userRepo, new(MockEmailVerificationRepository), new(MockWalletRepository), new(MockChainRepository))
+
+		userRepo.On("GetByEmail", context.Background(), "err@mail.com").Return(nil, errors.New("db down")).Once()
+		_, _, err := uc.Register(context.Background(), &entities.CreateUserInput{
+			Email:           "err@mail.com",
+			Name:            "Err",
+			Password:        "Password123!",
+			WalletAddress:   "0xabc",
+			WalletChainID:   "eip155:8453",
+			WalletSignature: "sig",
+		})
+		assert.EqualError(t, err, "db down")
+	})
+
+	t.Run("invalid chain input", func(t *testing.T) {
+		userRepo := new(MockUserRepository)
+		chainRepo := new(MockChainRepository)
+		uc := newAuthUsecaseForTest(userRepo, new(MockEmailVerificationRepository), new(MockWalletRepository), chainRepo)
+
+		userRepo.On("GetByEmail", context.Background(), "new@mail.com").Return(nil, domainerrors.ErrNotFound).Once()
+		chainRepo.On("GetByCAIP2", context.Background(), "bad-chain").Return(nil, domainerrors.ErrNotFound).Once()
+		chainRepo.On("GetByChainID", context.Background(), "bad-chain").Return(nil, domainerrors.ErrNotFound).Maybe()
+
+		_, _, err := uc.Register(context.Background(), &entities.CreateUserInput{
+			Email:           "new@mail.com",
+			Name:            "New",
+			Password:        "Password123!",
+			WalletAddress:   "0xabc",
+			WalletChainID:   "bad-chain",
+			WalletSignature: "sig",
+		})
+		assert.ErrorIs(t, err, domainerrors.ErrInvalidInput)
+	})
+
+	t.Run("wallet lookup unexpected error", func(t *testing.T) {
+		userRepo := new(MockUserRepository)
+		walletRepo := new(MockWalletRepository)
+		chainRepo := new(MockChainRepository)
+		uc := newAuthUsecaseForTest(userRepo, new(MockEmailVerificationRepository), walletRepo, chainRepo)
+
+		chainUUID := uuid.New()
+		userRepo.On("GetByEmail", context.Background(), "new2@mail.com").Return(nil, domainerrors.ErrNotFound).Once()
+		chainRepo.On("GetByCAIP2", context.Background(), "eip155:8453").Return(&entities.Chain{
+			ID:      chainUUID,
+			Type:    entities.ChainTypeEVM,
+			ChainID: "8453",
+		}, nil).Once()
+		walletRepo.On("GetByAddress", context.Background(), chainUUID, "0xabc").Return(nil, errors.New("wallet repo down")).Once()
+
+		_, _, err := uc.Register(context.Background(), &entities.CreateUserInput{
+			Email:           "new2@mail.com",
+			Name:            "New2",
+			Password:        "Password123!",
+			WalletAddress:   "0xabc",
+			WalletChainID:   "eip155:8453",
+			WalletSignature: "sig",
+		})
+		assert.EqualError(t, err, "wallet repo down")
+	})
+
+	t.Run("wallet already linked to another user", func(t *testing.T) {
+		userRepo := new(MockUserRepository)
+		walletRepo := new(MockWalletRepository)
+		chainRepo := new(MockChainRepository)
+		uc := newAuthUsecaseForTest(userRepo, new(MockEmailVerificationRepository), walletRepo, chainRepo)
+
+		chainUUID := uuid.New()
+		existingUserID := uuid.New()
+		userRepo.On("GetByEmail", context.Background(), "new3@mail.com").Return(nil, domainerrors.ErrNotFound).Once()
+		chainRepo.On("GetByCAIP2", context.Background(), "eip155:8453").Return(&entities.Chain{
+			ID:      chainUUID,
+			Type:    entities.ChainTypeEVM,
+			ChainID: "8453",
+		}, nil).Once()
+		walletRepo.On("GetByAddress", context.Background(), chainUUID, "0xabc").Return(&entities.Wallet{
+			ID:      uuid.New(),
+			UserID:  &existingUserID,
+			ChainID: chainUUID,
+			Address: "0xabc",
+		}, nil).Once()
+
+		_, _, err := uc.Register(context.Background(), &entities.CreateUserInput{
+			Email:           "new3@mail.com",
+			Name:            "New3",
+			Password:        "Password123!",
+			WalletAddress:   "0xabc",
+			WalletChainID:   "eip155:8453",
+			WalletSignature: "sig",
+		})
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), domainerrors.ErrAlreadyExists.Error())
+	})
+}

@@ -150,4 +150,33 @@ func TestPaymentUsecase_BuildTransactionData_Branches(t *testing.T) {
 		require.True(t, ok)
 		require.Equal(t, "0x0", m["value"])
 	})
+
+	t.Run("evm same-chain with source/dest resolved from repo", func(t *testing.T) {
+		srcID := uuid.New()
+		dstID := uuid.New()
+		src := &entities.Chain{ID: srcID, ChainID: "8453", Type: entities.ChainTypeEVM}
+		dst := &entities.Chain{ID: dstID, ChainID: "8453", Type: entities.ChainTypeEVM}
+
+		chainRepo := &quoteChainRepoStub{
+			byID: map[uuid.UUID]*entities.Chain{
+				srcID: src,
+				dstID: dst,
+			},
+		}
+		u := &PaymentUsecase{chainRepo: chainRepo}
+		payment := &entities.Payment{
+			ID:                 uuid.New(),
+			SourceChainID:      srcID,
+			DestChainID:        dstID,
+			SourceTokenAddress: "native",
+			DestTokenAddress:   "0x1111111111111111111111111111111111111111",
+			ReceiverAddress:    "0x2222222222222222222222222222222222222222",
+			SourceAmount:       "1000",
+		}
+		out, err := u.buildTransactionData(payment, contract)
+		require.NoError(t, err)
+		m, ok := out.(map[string]interface{})
+		require.True(t, ok)
+		require.Equal(t, "0x0", m["value"])
+	})
 }

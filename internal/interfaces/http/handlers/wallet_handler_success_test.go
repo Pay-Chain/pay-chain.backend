@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -103,18 +104,20 @@ type walletUserRepoStub struct {
 	user *entities.User
 }
 
-func (s walletUserRepoStub) Create(context.Context, *entities.User) error                        { return nil }
+func (s walletUserRepoStub) Create(context.Context, *entities.User) error { return nil }
 func (s walletUserRepoStub) GetByID(_ context.Context, id uuid.UUID) (*entities.User, error) {
 	if s.user != nil && s.user.ID == id {
 		return s.user, nil
 	}
 	return nil, domainerrors.ErrNotFound
 }
-func (s walletUserRepoStub) GetByEmail(context.Context, string) (*entities.User, error)           { return nil, domainerrors.ErrNotFound }
-func (s walletUserRepoStub) Update(context.Context, *entities.User) error                         { return nil }
-func (s walletUserRepoStub) UpdatePassword(context.Context, uuid.UUID, string) error              { return nil }
-func (s walletUserRepoStub) SoftDelete(context.Context, uuid.UUID) error                          { return nil }
-func (s walletUserRepoStub) List(context.Context, string) ([]*entities.User, error)               { return nil, nil }
+func (s walletUserRepoStub) GetByEmail(context.Context, string) (*entities.User, error) {
+	return nil, domainerrors.ErrNotFound
+}
+func (s walletUserRepoStub) Update(context.Context, *entities.User) error            { return nil }
+func (s walletUserRepoStub) UpdatePassword(context.Context, uuid.UUID, string) error { return nil }
+func (s walletUserRepoStub) SoftDelete(context.Context, uuid.UUID) error             { return nil }
+func (s walletUserRepoStub) List(context.Context, string) ([]*entities.User, error)  { return nil, nil }
 
 type walletChainRepoStub struct {
 	chain *entities.Chain
@@ -307,5 +310,105 @@ func TestWalletHandler_ConnectWallet_ErrorPaths(t *testing.T) {
 	r.ServeHTTP(w, req)
 	if w.Code != http.StatusConflict {
 		t.Fatalf("expected 409 for wallet already exists, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+type walletRepoErrorPathStub struct {
+	*walletRepoStub
+	getByIDFn     func(context.Context, uuid.UUID) (*entities.Wallet, error)
+	getByUserIDFn func(context.Context, uuid.UUID) ([]*entities.Wallet, error)
+	softDeleteFn  func(context.Context, uuid.UUID) error
+}
+
+func (s *walletRepoErrorPathStub) GetByID(ctx context.Context, id uuid.UUID) (*entities.Wallet, error) {
+	if s.getByIDFn != nil {
+		return s.getByIDFn(ctx, id)
+	}
+	return s.walletRepoStub.GetByID(ctx, id)
+}
+
+func (s *walletRepoErrorPathStub) GetByUserID(ctx context.Context, userID uuid.UUID) ([]*entities.Wallet, error) {
+	if s.getByUserIDFn != nil {
+		return s.getByUserIDFn(ctx, userID)
+	}
+	return s.walletRepoStub.GetByUserID(ctx, userID)
+}
+
+func (s *walletRepoErrorPathStub) SoftDelete(ctx context.Context, id uuid.UUID) error {
+	if s.softDeleteFn != nil {
+		return s.softDeleteFn(ctx, id)
+	}
+	return s.walletRepoStub.SoftDelete(ctx, id)
+}
+
+func TestWalletHandler_ListAndDisconnect_ErrorBranches(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	userID := uuid.New()
+	chainID := uuid.New()
+	walletID := utils.GenerateUUIDv7()
+
+	baseRepo := newWalletRepoStub()
+	baseRepo.items[walletID] = &entities.Wallet{ID: walletID, UserID: &userID, ChainID: chainID, Address: "0xabc"}
+
+	repo := &walletRepoErrorPathStub{walletRepoStub: baseRepo}
+	uc := usecases.NewWalletUsecase(
+		repo,
+		walletUserRepoStub{user: &entities.User{ID: userID, Role: entities.UserRoleUser, KYCStatus: entities.KYCFullyVerified}},
+		walletChainRepoStub{chain: &entities.Chain{ID: chainID, ChainID: "8453", Type: entities.ChainTypeEVM}},
+	)
+	h := NewWalletHandler(uc)
+
+	withUser := func(c *gin.Context) {
+		c.Set(middleware.UserIDKey, userID)
+		c.Next()
+	}
+	r := gin.New()
+	r.GET("/wallets", withUser, h.ListWallets)
+	r.DELETE("/wallets/:id", withUser, h.DisconnectWallet)
+
+	repo.getByUserIDFn = func(context.Context, uuid.UUID) ([]*entities.Wallet, error) {
+		return nil, errors.New("list fail")
+	}
+	req := httptest.NewRequest(http.MethodGet, "/wallets", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 for list error, got %d body=%s", w.Code, w.Body.String())
+	}
+
+	repo.getByUserIDFn = func(context.Context, uuid.UUID) ([]*entities.Wallet, error) {
+		return nil, nil
+	}
+	req = httptest.NewRequest(http.MethodGet, "/wallets", nil)
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 for nil wallet list, got %d body=%s", w.Code, w.Body.String())
+	}
+
+	repo.getByIDFn = func(context.Context, uuid.UUID) (*entities.Wallet, error) { return nil, domainerrors.ErrNotFound }
+	req = httptest.NewRequest(http.MethodDelete, "/wallets/"+walletID.String(), nil)
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for wallet not found, got %d body=%s", w.Code, w.Body.String())
+	}
+
+	repo.getByIDFn = nil
+	repo.softDeleteFn = func(context.Context, uuid.UUID) error { return errors.New("delete fail") }
+	req = httptest.NewRequest(http.MethodDelete, "/wallets/"+walletID.String(), nil)
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 for wallet delete error, got %d body=%s", w.Code, w.Body.String())
+	}
+
+	noAuth := gin.New()
+	noAuth.DELETE("/wallets/:id", h.DisconnectWallet)
+	req = httptest.NewRequest(http.MethodDelete, "/wallets/"+walletID.String(), nil)
+	w = httptest.NewRecorder()
+	noAuth.ServeHTTP(w, req)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for missing user on disconnect, got %d body=%s", w.Code, w.Body.String())
 	}
 }

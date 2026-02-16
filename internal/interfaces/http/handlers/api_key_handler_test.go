@@ -29,7 +29,9 @@ func (s *apiKeyRepoStub) Create(ctx context.Context, apiKey *entities.ApiKey) er
 	}
 	return nil
 }
-func (s *apiKeyRepoStub) FindByKeyHash(context.Context, string) (*entities.ApiKey, error) { return nil, errors.New("unused") }
+func (s *apiKeyRepoStub) FindByKeyHash(context.Context, string) (*entities.ApiKey, error) {
+	return nil, errors.New("unused")
+}
 func (s *apiKeyRepoStub) FindByUserID(ctx context.Context, userID uuid.UUID) ([]*entities.ApiKey, error) {
 	if s.findByUserFn != nil {
 		return s.findByUserFn(ctx, userID)
@@ -52,13 +54,17 @@ func (s *apiKeyRepoStub) Delete(ctx context.Context, id uuid.UUID) error {
 
 type apiKeyUserRepoStub struct{}
 
-func (apiKeyUserRepoStub) Create(context.Context, *entities.User) error                         { return nil }
-func (apiKeyUserRepoStub) GetByID(context.Context, uuid.UUID) (*entities.User, error)          { return nil, errors.New("unused") }
-func (apiKeyUserRepoStub) GetByEmail(context.Context, string) (*entities.User, error)           { return nil, errors.New("unused") }
-func (apiKeyUserRepoStub) Update(context.Context, *entities.User) error                         { return nil }
-func (apiKeyUserRepoStub) UpdatePassword(context.Context, uuid.UUID, string) error              { return nil }
-func (apiKeyUserRepoStub) SoftDelete(context.Context, uuid.UUID) error                          { return nil }
-func (apiKeyUserRepoStub) List(context.Context, string) ([]*entities.User, error)               { return nil, nil }
+func (apiKeyUserRepoStub) Create(context.Context, *entities.User) error { return nil }
+func (apiKeyUserRepoStub) GetByID(context.Context, uuid.UUID) (*entities.User, error) {
+	return nil, errors.New("unused")
+}
+func (apiKeyUserRepoStub) GetByEmail(context.Context, string) (*entities.User, error) {
+	return nil, errors.New("unused")
+}
+func (apiKeyUserRepoStub) Update(context.Context, *entities.User) error            { return nil }
+func (apiKeyUserRepoStub) UpdatePassword(context.Context, uuid.UUID, string) error { return nil }
+func (apiKeyUserRepoStub) SoftDelete(context.Context, uuid.UUID) error             { return nil }
+func (apiKeyUserRepoStub) List(context.Context, string) ([]*entities.User, error)  { return nil, nil }
 
 func TestApiKeyHandler_CreateListRevoke(t *testing.T) {
 	gin.SetMode(gin.TestMode)
@@ -148,4 +154,67 @@ func TestApiKeyHandler_ValidationPaths(t *testing.T) {
 	w = httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	require.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestApiKeyHandler_ErrorPaths(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	userID := uuid.New()
+	apiKeyID := uuid.New()
+
+	repo := &apiKeyRepoStub{
+		createFn: func(context.Context, *entities.ApiKey) error { return errors.New("create fail") },
+		findByUserFn: func(context.Context, uuid.UUID) ([]*entities.ApiKey, error) {
+			return nil, errors.New("list fail")
+		},
+		findByIDFn: func(context.Context, uuid.UUID) (*entities.ApiKey, error) {
+			return &entities.ApiKey{ID: apiKeyID, UserID: userID}, nil
+		},
+		deleteFn: func(context.Context, uuid.UUID) error { return errors.New("revoke fail") },
+	}
+	uc := usecases.NewApiKeyUsecase(
+		repo,
+		apiKeyUserRepoStub{},
+		"00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
+	)
+	h := NewApiKeyHandler(uc)
+
+	withUser := func(c *gin.Context) {
+		c.Set(middleware.UserIDKey, userID)
+		c.Next()
+	}
+	r := gin.New()
+	r.POST("/api-keys", withUser, h.CreateApiKey)
+	r.GET("/api-keys", withUser, h.ListApiKeys)
+	r.DELETE("/api-keys/:id", withUser, h.RevokeApiKey)
+
+	req := httptest.NewRequest(http.MethodPost, "/api-keys", strings.NewReader(`{"name":"Main","permissions":["read"]}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusInternalServerError, w.Code)
+
+	req = httptest.NewRequest(http.MethodGet, "/api-keys", nil)
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusInternalServerError, w.Code)
+
+	req = httptest.NewRequest(http.MethodDelete, "/api-keys/"+apiKeyID.String(), nil)
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusInternalServerError, w.Code)
+
+	noAuth := gin.New()
+	noAuth.POST("/api-keys", h.CreateApiKey)
+	noAuth.DELETE("/api-keys/:id", h.RevokeApiKey)
+
+	req = httptest.NewRequest(http.MethodPost, "/api-keys", strings.NewReader(`{"name":"Main","permissions":["read"]}`))
+	req.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	noAuth.ServeHTTP(w, req)
+	require.Equal(t, http.StatusUnauthorized, w.Code)
+
+	req = httptest.NewRequest(http.MethodDelete, "/api-keys/"+apiKeyID.String(), nil)
+	w = httptest.NewRecorder()
+	noAuth.ServeHTTP(w, req)
+	require.Equal(t, http.StatusUnauthorized, w.Code)
 }

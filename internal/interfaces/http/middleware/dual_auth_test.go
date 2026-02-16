@@ -8,10 +8,12 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 
@@ -24,6 +26,11 @@ import (
 	"pay-chain.backend/internal/usecases"
 	"pay-chain.backend/pkg/jwt"
 )
+
+type errorReadCloser struct{}
+
+func (errorReadCloser) Read([]byte) (int, error) { return 0, io.ErrUnexpectedEOF }
+func (errorReadCloser) Close() error             { return nil }
 
 // Mock objects already defined in usecases_test can be used if they were exported,
 // but they are in different packages. I'll define minimal ones here or use the ones from usecases package if I can.
@@ -213,6 +220,96 @@ func TestDualAuthMiddleware_JWTWithSignature(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Contains(t, w.Body.String(), userID.String())
+}
+
+func TestDualAuthMiddleware_RequestBodyReadError(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	jwtService := jwt.NewJWTService("secret", time.Hour, time.Hour*24)
+
+	r := gin.New()
+	r.Use(middleware.DualAuthMiddleware(jwtService, nil, nil))
+	r.POST("/test", func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+
+	req, _ := http.NewRequest("POST", "/test", nil)
+	req.Body = errorReadCloser{}
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "Failed to read request body")
+}
+
+func TestDualAuthMiddleware_ApiKeyInvalid(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	mockApiKeyRepo := new(MockApiKeyRepository)
+	mockUserRepo := new(MockUserRepository)
+	encryptionKey := "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+	apiKeyUsecase := usecases.NewApiKeyUsecase(mockApiKeyRepo, mockUserRepo, encryptionKey)
+	jwtService := jwt.NewJWTService("secret", time.Hour, time.Hour*24)
+
+	r := gin.New()
+	r.Use(middleware.DualAuthMiddleware(jwtService, apiKeyUsecase, nil))
+	r.GET("/test", func(c *gin.Context) { c.Status(http.StatusOK) })
+
+	apiKey := "pk_bad"
+	keyHash := sha256Hex([]byte(apiKey))
+	mockApiKeyRepo.On("FindByKeyHash", mock.Anything, keyHash).Return(nil, errors.New("not found")).Once()
+
+	req, _ := http.NewRequest("GET", "/test", nil)
+	req.Header.Set("X-Api-Key", apiKey)
+	req.Header.Set("X-Signature", "bad")
+	req.Header.Set("X-Timestamp", fmt.Sprintf("%d", time.Now().Unix()))
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+	assert.Contains(t, w.Body.String(), "Invalid API Key or Signature")
+}
+
+func TestDualAuthMiddleware_JWTInvalidToken_AndNoAuth(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	jwtService := jwt.NewJWTService("secret", time.Hour, time.Hour*24)
+
+	r := gin.New()
+	r.Use(middleware.DualAuthMiddleware(jwtService, nil, nil))
+	r.GET("/test", func(c *gin.Context) { c.Status(http.StatusOK) })
+
+	req, _ := http.NewRequest("GET", "/test", nil)
+	req.Header.Set("Authorization", "Bearer invalid-token")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+	assert.Contains(t, w.Body.String(), "Invalid token")
+
+	req, _ = http.NewRequest("GET", "/test", nil)
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+	assert.Contains(t, w.Body.String(), "Authentication required")
+}
+
+func TestDualAuthMiddleware_StrictSessionModeWithoutTrustedSession(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	_ = os.Setenv("INTERNAL_PROXY_SECRET", "secret")
+	defer os.Unsetenv("INTERNAL_PROXY_SECRET")
+
+	jwtService := jwt.NewJWTService("secret", time.Hour, time.Hour*24)
+	r := gin.New()
+	r.Use(middleware.DualAuthMiddleware(jwtService, nil, nil))
+	r.GET("/test", func(c *gin.Context) { c.Status(http.StatusOK) })
+
+	userID := uuid.New()
+	tokens, _ := jwtService.GenerateTokenPair(userID, "strict@test.com", "USER")
+
+	req, _ := http.NewRequest("GET", "/test", nil)
+	req.Header.Set("Authorization", "Bearer "+tokens.AccessToken)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+	assert.Contains(t, w.Body.String(), "Authentication required")
 }
 
 // Helpers

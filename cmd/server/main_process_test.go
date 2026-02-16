@@ -59,3 +59,70 @@ func TestMainProcess_ExitsOnInvalidServerPortAfterSetup(t *testing.T) {
 		t.Fatalf("expected helper process to exit with error on invalid port")
 	}
 }
+
+func TestMainProcess_ExitsOnInvalidSessionEncryptionKey(t *testing.T) {
+	if os.Getenv("GO_WANT_HELPER_PROCESS") == "3" {
+		main()
+		return
+	}
+
+	redisSrv, err := miniredis.Run()
+	if err != nil {
+		t.Skipf("skip: miniredis not available in this environment: %v", err)
+	}
+	defer redisSrv.Close()
+
+	cmd := exec.Command(os.Args[0], "-test.run=TestMainProcess_ExitsOnInvalidSessionEncryptionKey")
+	cmd.Env = append(os.Environ(),
+		"GO_WANT_HELPER_PROCESS=3",
+		"SERVER_ENV=development",
+		"SERVER_PORT=8080",
+		"REDIS_URL=redis://"+redisSrv.Addr(),
+		"SESSION_ENCRYPTION_KEY=invalid-key",
+		// let DB ping fail fast but continue until session store init
+		"DB_HOST=127.0.0.1",
+		"DB_PORT=1",
+		"DB_USER=postgres",
+		"DB_PASSWORD=postgres",
+		"DB_NAME=paychain",
+		"DB_SSLMODE=disable",
+	)
+
+	err = cmd.Run()
+	if err == nil {
+		t.Fatalf("expected helper process to exit with error on invalid session encryption key")
+	}
+}
+
+func TestMainProcess_ExitsOnDBOpenFailure(t *testing.T) {
+	if os.Getenv("GO_WANT_HELPER_PROCESS") == "4" {
+		main()
+		return
+	}
+
+	redisSrv, err := miniredis.Run()
+	if err != nil {
+		t.Skipf("skip: miniredis not available in this environment: %v", err)
+	}
+	defer redisSrv.Close()
+
+	cmd := exec.Command(os.Args[0], "-test.run=TestMainProcess_ExitsOnDBOpenFailure")
+	cmd.Env = append(os.Environ(),
+		"GO_WANT_HELPER_PROCESS=4",
+		"SERVER_ENV=development",
+		"SERVER_PORT=8080",
+		"REDIS_URL=redis://"+redisSrv.Addr(),
+		// Force malformed postgres DSN port for gorm.Open failure.
+		"DB_HOST=localhost",
+		"DB_PORT=-1",
+		"DB_USER=postgres",
+		"DB_PASSWORD=postgres",
+		"DB_NAME=paychain",
+		"DB_SSLMODE=disable",
+	)
+
+	err = cmd.Run()
+	if err == nil {
+		t.Fatalf("expected helper process to exit with error on DB open failure")
+	}
+}

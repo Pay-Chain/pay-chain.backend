@@ -18,6 +18,13 @@ const (
 	RetentionDuration = 24 * time.Hour
 )
 
+var (
+	redisGet   = redis.Get
+	redisSet   = redis.Set
+	redisSetNX = redis.SetNX
+	redisDel   = redis.Del
+)
+
 type responseWriter struct {
 	gin.ResponseWriter
 	body *bytes.Buffer
@@ -54,7 +61,7 @@ func IdempotencyMiddleware() gin.HandlerFunc {
 
 		// Simple approach:
 		// Check Get.
-		val, err := redis.Get(ctx, storageKey)
+		val, err := redisGet(ctx, storageKey)
 		if err == nil {
 			// Key exists
 			if val == "processing" {
@@ -95,7 +102,7 @@ func IdempotencyMiddleware() gin.HandlerFunc {
 		}
 
 		// 4. Set "processing" state
-		success, err := redis.SetNX(ctx, storageKey, "processing", LockDuration)
+		success, err := redisSetNX(ctx, storageKey, "processing", LockDuration)
 		if err != nil || !success {
 			// Race condition or locked
 			c.AbortWithStatusJSON(http.StatusConflict, gin.H{
@@ -114,10 +121,10 @@ func IdempotencyMiddleware() gin.HandlerFunc {
 		// 7. Store Result if Successful (2xx)
 		if c.Writer.Status() >= 200 && c.Writer.Status() < 300 {
 			// Store the body
-			redis.Set(ctx, storageKey, w.body.String(), RetentionDuration)
+			_ = redisSet(ctx, storageKey, w.body.String(), RetentionDuration)
 		} else {
 			// Remove key so retry is possible
-			redis.Del(ctx, storageKey)
+			_ = redisDel(ctx, storageKey)
 		}
 	}
 }

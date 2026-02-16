@@ -18,6 +18,7 @@ import (
 	"pay-chain.backend/internal/domain/entities"
 	"pay-chain.backend/internal/infrastructure/blockchain"
 	uc "pay-chain.backend/internal/usecases"
+	"pay-chain.backend/pkg/utils"
 )
 
 type rpcReqPreflight struct {
@@ -271,6 +272,7 @@ func TestCrosschainConfigUsecase_AutoFix_LayerZero_AllSkipped(t *testing.T) {
 	chainRepo.On("GetByCAIP2", mock.Anything, "eip155:42161").Return(dest, nil)
 	chainRepo.On("GetByID", mock.Anything, sourceID).Return(source, nil)
 	chainRepo.On("GetByID", mock.Anything, destID).Return(dest, nil)
+	tokenRepo.On("GetTokensByChain", mock.Anything, mock.Anything, mock.Anything).Return([]*entities.Token{}, int64(0), nil)
 	contractRepo.On("GetActiveContract", mock.Anything, sourceID, entities.ContractTypeGateway).Return(gateway, nil)
 	contractRepo.On("GetActiveContract", mock.Anything, sourceID, entities.ContractTypeRouter).Return(router, nil)
 
@@ -316,6 +318,7 @@ func TestCrosschainConfigUsecase_AutoFix_Hyperbridge_DestinationMissing(t *testi
 	chainRepo.On("GetByCAIP2", mock.Anything, "eip155:42161").Return(dest, nil)
 	chainRepo.On("GetByID", mock.Anything, sourceID).Return(source, nil)
 	chainRepo.On("GetByID", mock.Anything, destID).Return(dest, nil)
+	tokenRepo.On("GetTokensByChain", mock.Anything, mock.Anything, mock.Anything).Return([]*entities.Token{}, int64(0), nil)
 	contractRepo.On("GetActiveContract", mock.Anything, sourceID, entities.ContractTypeGateway).Return(gateway, nil)
 	contractRepo.On("GetActiveContract", mock.Anything, sourceID, entities.ContractTypeRouter).Return(router, nil)
 	contractRepo.On("GetActiveContract", mock.Anything, destID, entities.ContractTypeAdapterHyperbridge).
@@ -337,4 +340,206 @@ func TestCrosschainConfigUsecase_AutoFix_Hyperbridge_DestinationMissing(t *testi
 	require.Equal(t, "SKIPPED", result.Steps[1].Status)
 	require.Equal(t, "setHyperbridgeDestination", result.Steps[2].Step)
 	require.Equal(t, "FAILED", result.Steps[2].Status)
+}
+
+func TestCrosschainConfigUsecase_Preflight_CcipNotConfigured(t *testing.T) {
+	srv := buildStatusRPCServer(t, rpcStatusConfig{
+		DefaultBridgeType: 1,
+		AdaptersByType: map[uint8]string{
+			1: "0x6666666666666666666666666666666666666666",
+		},
+	})
+	t.Cleanup(srv.Close)
+
+	sourceID := uuid.New()
+	destID := uuid.New()
+	source := &entities.Chain{ID: sourceID, ChainID: "8453", Name: "Base", Type: entities.ChainTypeEVM, IsActive: true, RPCURL: srv.URL}
+	dest := &entities.Chain{ID: destID, ChainID: "42161", Name: "Arbitrum", Type: entities.ChainTypeEVM, IsActive: true}
+	gateway := &entities.SmartContract{ID: uuid.New(), ChainUUID: sourceID, Type: entities.ContractTypeGateway, ContractAddress: "0x00000000000000000000000000000000000000a1", IsActive: true}
+	router := &entities.SmartContract{ID: uuid.New(), ChainUUID: sourceID, Type: entities.ContractTypeRouter, ContractAddress: "0x00000000000000000000000000000000000000b2", IsActive: true}
+
+	chainRepo := new(MockChainRepository)
+	tokenRepo := new(MockTokenRepository)
+	contractRepo := new(MockSmartContractRepository)
+	chainRepo.On("GetByCAIP2", mock.Anything, "eip155:8453").Return(source, nil)
+	chainRepo.On("GetByCAIP2", mock.Anything, "eip155:42161").Return(dest, nil)
+	chainRepo.On("GetByID", mock.Anything, sourceID).Return(source, nil)
+	chainRepo.On("GetByID", mock.Anything, destID).Return(dest, nil)
+	tokenRepo.On("GetTokensByChain", mock.Anything, mock.Anything, mock.Anything).Return([]*entities.Token{}, int64(0), nil)
+	contractRepo.On("GetActiveContract", mock.Anything, sourceID, entities.ContractTypeGateway).Return(gateway, nil)
+	contractRepo.On("GetActiveContract", mock.Anything, sourceID, entities.ContractTypeRouter).Return(router, nil)
+
+	factory := blockchain.NewClientFactory()
+	adapterUsecase := uc.NewOnchainAdapterUsecase(chainRepo, contractRepo, factory, "")
+	u := uc.NewCrosschainConfigUsecase(chainRepo, tokenRepo, contractRepo, factory, adapterUsecase)
+
+	result, err := u.Preflight(context.Background(), "eip155:8453", "eip155:42161")
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.Equal(t, uint8(1), result.DefaultBridgeType)
+
+	var ccipRow *uc.CrosschainBridgePreflight
+	for i := range result.Bridges {
+		if result.Bridges[i].BridgeType == 1 {
+			ccipRow = &result.Bridges[i]
+			break
+		}
+	}
+	require.NotNil(t, ccipRow)
+	require.False(t, ccipRow.Ready)
+	require.True(t, ccipRow.Checks["adapterRegistered"])
+	require.False(t, ccipRow.Checks["routeConfigured"])
+	require.Equal(t, "CCIP_NOT_CONFIGURED", ccipRow.ErrorCode)
+}
+
+func TestCrosschainConfigUsecase_Overview_RecheckFailurePath(t *testing.T) {
+	source := &entities.Chain{ID: uuid.New(), ChainID: "8453", Name: "Base", Type: entities.ChainTypeEVM, IsActive: true}
+	dest := &entities.Chain{ID: uuid.New(), ChainID: "42161", Name: "Arbitrum", Type: entities.ChainTypeEVM, IsActive: true}
+
+	chainRepo := new(MockChainRepository)
+	tokenRepo := new(MockTokenRepository)
+	contractRepo := new(MockSmartContractRepository)
+	chainRepo.On("GetAll", mock.Anything).Return([]*entities.Chain{source, dest}, nil)
+	chainRepo.On("GetByCAIP2", mock.Anything, "eip155:8453").Return(source, nil)
+	chainRepo.On("GetByCAIP2", mock.Anything, "eip155:42161").Return(dest, nil)
+	chainRepo.On("GetByID", mock.Anything, source.ID).Return(source, nil)
+	chainRepo.On("GetByID", mock.Anything, dest.ID).Return(dest, nil)
+	contractRepo.On("GetActiveContract", mock.Anything, mock.Anything, entities.ContractTypeGateway).
+		Return((*entities.SmartContract)(nil), errors.New("gateway missing"))
+
+	adapterUsecase := uc.NewOnchainAdapterUsecase(chainRepo, contractRepo, blockchain.NewClientFactory(), "")
+	u := uc.NewCrosschainConfigUsecase(chainRepo, tokenRepo, contractRepo, blockchain.NewClientFactory(), adapterUsecase)
+
+	overview, err := u.Overview(context.Background(), "", "", utils.PaginationParams{Page: 1, Limit: 10})
+	require.NoError(t, err)
+	require.Len(t, overview.Items, 2)
+	for _, item := range overview.Items {
+		require.Equal(t, "ERROR", item.OverallStatus)
+		require.Equal(t, "RECHECK_FAILED", item.Issues[0].Code)
+	}
+}
+
+func TestCrosschainConfigUsecase_AutoFix_RegisterAdapterFailed(t *testing.T) {
+	u, contractRepo, sourceID, _ := setupCrosschainConfigUsecaseNoAdapter(t)
+
+	contractRepo.On("GetActiveContract", mock.Anything, sourceID, entities.ContractTypeAdapterHyperbridge).
+		Return(&entities.SmartContract{
+			ID:              uuid.New(),
+			ChainUUID:       sourceID,
+			Type:            entities.ContractTypeAdapterHyperbridge,
+			ContractAddress: "0x4444444444444444444444444444444444444444",
+			IsActive:        true,
+		}, nil)
+
+	bridgeType := uint8(0)
+	result, err := u.AutoFix(context.Background(), &uc.AutoFixRequest{
+		SourceChainID: "eip155:8453",
+		DestChainID:   "eip155:42161",
+		BridgeType:    &bridgeType,
+	})
+	require.NoError(t, err)
+	require.Len(t, result.Steps, 1)
+	require.Equal(t, "registerAdapter", result.Steps[0].Step)
+	require.Equal(t, "FAILED", result.Steps[0].Status)
+	require.Contains(t, strings.ToLower(result.Steps[0].Message), "invalid input")
+}
+
+func TestCrosschainConfigUsecase_AutoFix_SetDefaultBridgeFailed(t *testing.T) {
+	srv := buildStatusRPCServer(t, rpcStatusConfig{
+		DefaultBridgeType: 2,
+		AdaptersByType: map[uint8]string{
+			0: "0x4444444444444444444444444444444444444444",
+		},
+	})
+	defer srv.Close()
+
+	sourceID := uuid.New()
+	destID := uuid.New()
+	source := &entities.Chain{ID: sourceID, ChainID: "8453", Name: "Base", Type: entities.ChainTypeEVM, IsActive: true, RPCURL: srv.URL}
+	dest := &entities.Chain{ID: destID, ChainID: "42161", Name: "Arbitrum", Type: entities.ChainTypeEVM, IsActive: true}
+	gateway := &entities.SmartContract{ID: uuid.New(), ChainUUID: sourceID, Type: entities.ContractTypeGateway, ContractAddress: "0x00000000000000000000000000000000000000a1", IsActive: true}
+	router := &entities.SmartContract{ID: uuid.New(), ChainUUID: sourceID, Type: entities.ContractTypeRouter, ContractAddress: "0x00000000000000000000000000000000000000b2", IsActive: true}
+
+	chainRepo := new(MockChainRepository)
+	tokenRepo := new(MockTokenRepository)
+	contractRepo := new(MockSmartContractRepository)
+	chainRepo.On("GetByCAIP2", mock.Anything, "eip155:8453").Return(source, nil)
+	chainRepo.On("GetByCAIP2", mock.Anything, "eip155:42161").Return(dest, nil)
+	chainRepo.On("GetByID", mock.Anything, sourceID).Return(source, nil)
+	chainRepo.On("GetByID", mock.Anything, destID).Return(dest, nil)
+	contractRepo.On("GetActiveContract", mock.Anything, sourceID, entities.ContractTypeGateway).Return(gateway, nil)
+	contractRepo.On("GetActiveContract", mock.Anything, sourceID, entities.ContractTypeRouter).Return(router, nil)
+
+	factory := blockchain.NewClientFactory()
+	adapterUsecase := uc.NewOnchainAdapterUsecase(chainRepo, contractRepo, factory, "")
+	u := uc.NewCrosschainConfigUsecase(chainRepo, tokenRepo, contractRepo, factory, adapterUsecase)
+
+	bridgeType := uint8(0)
+	result, err := u.AutoFix(context.Background(), &uc.AutoFixRequest{
+		SourceChainID: "eip155:8453",
+		DestChainID:   "eip155:42161",
+		BridgeType:    &bridgeType,
+	})
+	require.NoError(t, err)
+	require.Len(t, result.Steps, 2)
+	require.Equal(t, "registerAdapter", result.Steps[0].Step)
+	require.Equal(t, "SKIPPED", result.Steps[0].Status)
+	require.Equal(t, "setDefaultBridge", result.Steps[1].Step)
+	require.Equal(t, "FAILED", result.Steps[1].Status)
+	require.Contains(t, strings.ToLower(result.Steps[1].Message), "invalid input")
+}
+
+func TestCrosschainConfigUsecase_AutoFix_SetHyperbridgeConfigFailed(t *testing.T) {
+	srv := buildStatusRPCServer(t, rpcStatusConfig{
+		DefaultBridgeType: 0,
+		AdaptersByType: map[uint8]string{
+			0: "0x4444444444444444444444444444444444444444",
+		},
+	})
+	defer srv.Close()
+
+	sourceID := uuid.New()
+	destID := uuid.New()
+	source := &entities.Chain{ID: sourceID, ChainID: "8453", Name: "Base", Type: entities.ChainTypeEVM, IsActive: true, RPCURL: srv.URL}
+	dest := &entities.Chain{ID: destID, ChainID: "42161", Name: "Arbitrum", Type: entities.ChainTypeEVM, IsActive: true}
+	gateway := &entities.SmartContract{ID: uuid.New(), ChainUUID: sourceID, Type: entities.ContractTypeGateway, ContractAddress: "0x00000000000000000000000000000000000000a1", IsActive: true}
+	router := &entities.SmartContract{ID: uuid.New(), ChainUUID: sourceID, Type: entities.ContractTypeRouter, ContractAddress: "0x00000000000000000000000000000000000000b2", IsActive: true}
+
+	chainRepo := new(MockChainRepository)
+	tokenRepo := new(MockTokenRepository)
+	contractRepo := new(MockSmartContractRepository)
+	chainRepo.On("GetByCAIP2", mock.Anything, "eip155:8453").Return(source, nil)
+	chainRepo.On("GetByCAIP2", mock.Anything, "eip155:42161").Return(dest, nil)
+	chainRepo.On("GetByID", mock.Anything, sourceID).Return(source, nil)
+	chainRepo.On("GetByID", mock.Anything, destID).Return(dest, nil)
+	contractRepo.On("GetActiveContract", mock.Anything, sourceID, entities.ContractTypeGateway).Return(gateway, nil)
+	contractRepo.On("GetActiveContract", mock.Anything, sourceID, entities.ContractTypeRouter).Return(router, nil)
+	contractRepo.On("GetActiveContract", mock.Anything, destID, entities.ContractTypeAdapterHyperbridge).
+		Return(&entities.SmartContract{
+			ID:              uuid.New(),
+			ChainUUID:       destID,
+			Type:            entities.ContractTypeAdapterHyperbridge,
+			ContractAddress: "0x7777777777777777777777777777777777777777",
+			IsActive:        true,
+		}, nil)
+
+	factory := blockchain.NewClientFactory()
+	adapterUsecase := uc.NewOnchainAdapterUsecase(chainRepo, contractRepo, factory, "")
+	u := uc.NewCrosschainConfigUsecase(chainRepo, tokenRepo, contractRepo, factory, adapterUsecase)
+
+	bridgeType := uint8(0)
+	result, err := u.AutoFix(context.Background(), &uc.AutoFixRequest{
+		SourceChainID: "eip155:8453",
+		DestChainID:   "eip155:42161",
+		BridgeType:    &bridgeType,
+	})
+	require.NoError(t, err)
+	require.Len(t, result.Steps, 3)
+	require.Equal(t, "registerAdapter", result.Steps[0].Step)
+	require.Equal(t, "SKIPPED", result.Steps[0].Status)
+	require.Equal(t, "setDefaultBridge", result.Steps[1].Step)
+	require.Equal(t, "SKIPPED", result.Steps[1].Status)
+	require.Equal(t, "setHyperbridgeConfig", result.Steps[2].Step)
+	require.Equal(t, "FAILED", result.Steps[2].Status)
+	require.Contains(t, strings.ToLower(result.Steps[2].Message), "invalid input")
 }

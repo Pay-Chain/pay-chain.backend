@@ -8,6 +8,8 @@ import (
 	"log"
 )
 
+var randRead = rand.Read
+
 func validateInputs(mode string, hexLen int) error {
 	if mode != "live" && mode != "test" {
 		return fmt.Errorf("invalid mode: %s (allowed: live, test)", mode)
@@ -51,7 +53,7 @@ func main() {
 
 func generateRandomHex(n int) (string, error) {
 	b := make([]byte, n/2)
-	if _, err := rand.Read(b); err != nil {
+	if _, err := randRead(b); err != nil {
 		return "", err
 	}
 	return hex.EncodeToString(b), nil

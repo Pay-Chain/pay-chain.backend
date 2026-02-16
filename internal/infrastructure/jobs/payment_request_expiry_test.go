@@ -9,7 +9,15 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"pay-chain.backend/internal/domain/entities"
+	"pay-chain.backend/internal/infrastructure/repositories"
 )
+
+func TestNewPaymentRequestExpiryJob(t *testing.T) {
+	job := NewPaymentRequestExpiryJob((*repositories.PaymentRequestRepositoryImpl)(nil))
+	require.NotNil(t, job)
+	require.Equal(t, 30*time.Second, job.interval)
+	require.NotNil(t, job.stop)
+}
 
 type paymentRequestExpiryRepoStub struct {
 	expired    []*entities.PaymentRequest

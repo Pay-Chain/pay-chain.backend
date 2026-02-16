@@ -22,6 +22,9 @@ func TestCalculateOffset(t *testing.T) {
 
 	p = PaginationParams{Page: 3, Limit: 20}
 	assert.Equal(t, 40, p.CalculateOffset())
+
+	p = PaginationParams{Page: 0, Limit: 20}
+	assert.Equal(t, 0, p.CalculateOffset())
 }
 
 func TestCalculateMeta(t *testing.T) {
