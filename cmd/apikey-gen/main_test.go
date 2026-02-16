@@ -1,6 +1,9 @@
 package main
 
 import (
+	"bytes"
+	"flag"
+	"os"
 	"strings"
 	"testing"
 )
@@ -45,5 +48,34 @@ func TestBuildCredentials(t *testing.T) {
 	}
 	if !strings.HasPrefix(secretKey, "sk_test_") {
 		t.Fatalf("unexpected secret key format: %s", secretKey)
+	}
+}
+
+func TestMain_Success(t *testing.T) {
+	origArgs := os.Args
+	origStdout := os.Stdout
+	origCommandLine := flag.CommandLine
+	defer func() {
+		os.Args = origArgs
+		os.Stdout = origStdout
+		flag.CommandLine = origCommandLine
+	}()
+
+	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+	os.Args = []string{"apikey-gen", "-mode", "test", "-hex-len", "16"}
+
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe: %v", err)
+	}
+	os.Stdout = w
+
+	main()
+
+	_ = w.Close()
+	var out bytes.Buffer
+	_, _ = out.ReadFrom(r)
+	if !strings.Contains(out.String(), "Generated API credentials") {
+		t.Fatalf("unexpected output: %s", out.String())
 	}
 }

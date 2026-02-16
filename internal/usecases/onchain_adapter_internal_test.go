@@ -2,6 +2,8 @@ package usecases
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -62,4 +64,68 @@ func TestOnchainAdapterUsecase_SendTx_OwnerKeyMissing(t *testing.T) {
 	_, err := u.sendTx(context.Background(), uuid.New(), "0x0000000000000000000000000000000000000001", abi.ABI{}, "set", "arg")
 	require.Error(t, err)
 	require.Equal(t, "invalid input", err.Error())
+}
+
+func TestOnchainAdapterUsecase_New(t *testing.T) {
+	repo := &quoteChainRepoStub{}
+	u := NewOnchainAdapterUsecase(repo, &scRepoStub{}, nil, "0xabc")
+	require.NotNil(t, u)
+	require.NotNil(t, u.adminOps)
+	require.NotNil(t, u.chainResolver)
+}
+
+func TestOnchainAdapterUsecase_SendTx_Branches(t *testing.T) {
+	t.Run("source chain not found", func(t *testing.T) {
+		u := &OnchainAdapterUsecase{
+			ownerPrivateKey: "0xabc123",
+			chainRepo:       &quoteChainRepoStub{},
+		}
+		_, err := u.sendTx(context.Background(), uuid.New(), "0x0000000000000000000000000000000000000001", abi.ABI{}, "set", "arg")
+		require.Error(t, err)
+	})
+
+	t.Run("no active rpc", func(t *testing.T) {
+		chainID := uuid.New()
+		u := &OnchainAdapterUsecase{
+			ownerPrivateKey: "0xabc123",
+			chainRepo: &quoteChainRepoStub{
+				byID: map[uuid.UUID]*entities.Chain{
+					chainID: {ID: chainID, ChainID: "8453", Type: entities.ChainTypeEVM},
+				},
+			},
+		}
+		_, err := u.sendTx(context.Background(), chainID, "0x0000000000000000000000000000000000000001", abi.ABI{}, "set", "arg")
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "invalid input")
+	})
+
+	t.Run("invalid owner private key", func(t *testing.T) {
+		srv := newSafeHTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			defer r.Body.Close()
+			var req map[string]interface{}
+			_ = json.NewDecoder(r.Body).Decode(&req)
+			res := map[string]interface{}{"jsonrpc": "2.0", "id": req["id"]}
+			if req["method"] == "eth_chainId" {
+				res["result"] = "0x2105"
+			} else {
+				res["result"] = "0x0"
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(res)
+		}))
+		defer srv.Close()
+
+		chainID := uuid.New()
+		u := &OnchainAdapterUsecase{
+			ownerPrivateKey: "not-a-private-key",
+			chainRepo: &quoteChainRepoStub{
+				byID: map[uuid.UUID]*entities.Chain{
+					chainID: {ID: chainID, ChainID: "8453", Type: entities.ChainTypeEVM, RPCURL: srv.URL},
+				},
+			},
+		}
+		_, err := u.sendTx(context.Background(), chainID, "0x0000000000000000000000000000000000000001", abi.ABI{}, "set", "arg")
+		require.Error(t, err)
+		require.Equal(t, "invalid input", err.Error())
+	})
 }

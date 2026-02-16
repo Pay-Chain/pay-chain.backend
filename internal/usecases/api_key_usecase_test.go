@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"testing"
@@ -186,6 +187,176 @@ func TestApiKeyUsecase_RevokeApiKey(t *testing.T) {
 	assert.NoError(t, err)
 
 	mockApiKeyRepo.AssertExpectations(t)
+}
+
+func TestApiKeyUsecase_CreateApiKey_CreateError(t *testing.T) {
+	mockApiKeyRepo := new(MockApiKeyRepository)
+	mockUserRepo := new(MockUserRepository)
+	uc := usecases.NewApiKeyUsecase(mockApiKeyRepo, mockUserRepo, "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff")
+
+	ctx := context.Background()
+	userID := uuid.New()
+	input := &entities.CreateApiKeyInput{Name: "Err Key", Permissions: []string{"read"}}
+
+	mockApiKeyRepo.On("Create", ctx, mock.AnythingOfType("*entities.ApiKey")).Return(errors.New("db down"))
+
+	resp, err := uc.CreateApiKey(ctx, userID, input)
+	assert.Nil(t, resp)
+	assert.Error(t, err)
+	assert.Equal(t, "db down", err.Error())
+}
+
+func TestApiKeyUsecase_CreateApiKey_InvalidEncryptionKey(t *testing.T) {
+	mockApiKeyRepo := new(MockApiKeyRepository)
+	mockUserRepo := new(MockUserRepository)
+	uc := usecases.NewApiKeyUsecase(mockApiKeyRepo, mockUserRepo, "invalid-short-key")
+
+	ctx := context.Background()
+	userID := uuid.New()
+	input := &entities.CreateApiKeyInput{Name: "Invalid Encryption", Permissions: []string{"read"}}
+
+	resp, err := uc.CreateApiKey(ctx, userID, input)
+	assert.Nil(t, resp)
+	assert.Error(t, err)
+	assert.Equal(t, "failed to encrypt secret", err.Error())
+}
+
+func TestApiKeyUsecase_ValidateApiKey_InvalidTimestamp(t *testing.T) {
+	mockApiKeyRepo := new(MockApiKeyRepository)
+	mockUserRepo := new(MockUserRepository)
+	uc := usecases.NewApiKeyUsecase(mockApiKeyRepo, mockUserRepo, "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff")
+
+	_, err := uc.ValidateApiKey(context.Background(), "pk", "sig", "not-a-number", "GET", "/v1/test", "")
+	assert.Error(t, err)
+	assert.Equal(t, "unauthorized", err.Error())
+}
+
+func TestApiKeyUsecase_ValidateApiKey_ExpiredTimestamp(t *testing.T) {
+	mockApiKeyRepo := new(MockApiKeyRepository)
+	mockUserRepo := new(MockUserRepository)
+	uc := usecases.NewApiKeyUsecase(mockApiKeyRepo, mockUserRepo, "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff")
+
+	oldTS := fmt.Sprintf("%d", time.Now().Add(-10*time.Minute).Unix())
+	_, err := uc.ValidateApiKey(context.Background(), "pk", "sig", oldTS, "GET", "/v1/test", "")
+	assert.Error(t, err)
+	assert.Equal(t, "unauthorized", err.Error())
+}
+
+func TestApiKeyUsecase_ValidateApiKey_KeyInactive(t *testing.T) {
+	mockApiKeyRepo := new(MockApiKeyRepository)
+	mockUserRepo := new(MockUserRepository)
+	uc := usecases.NewApiKeyUsecase(mockApiKeyRepo, mockUserRepo, "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff")
+
+	ctx := context.Background()
+	apiKey := "pk_live_inactive"
+	keyHash := sha256Hex([]byte(apiKey))
+	ts := fmt.Sprintf("%d", time.Now().Unix())
+	mockApiKeyRepo.On("FindByKeyHash", ctx, keyHash).Return(&entities.ApiKey{
+		ID:       uuid.New(),
+		UserID:   uuid.New(),
+		KeyHash:  keyHash,
+		IsActive: false,
+	}, nil)
+
+	_, err := uc.ValidateApiKey(ctx, apiKey, "sig", ts, "GET", "/v1/test", "")
+	assert.Error(t, err)
+	assert.Equal(t, "unauthorized", err.Error())
+}
+
+func TestApiKeyUsecase_ValidateApiKey_UserFallbackError(t *testing.T) {
+	mockApiKeyRepo := new(MockApiKeyRepository)
+	mockUserRepo := new(MockUserRepository)
+	encryptionKey := "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+	uc := usecases.NewApiKeyUsecase(mockApiKeyRepo, mockUserRepo, encryptionKey)
+
+	ctx := context.Background()
+	userID := uuid.New()
+	apiKey := "pk_live_fallback"
+	secretKey := "sk_live_fallback"
+	keyHash := sha256Hex([]byte(apiKey))
+	encryptedSecret, _ := encryptSecret(secretKey, encryptionKey)
+	ts := fmt.Sprintf("%d", time.Now().Unix())
+	method := "POST"
+	path := "/v1/payments"
+	bodyHash := sha256Hex([]byte("{}"))
+	stringToSign := fmt.Sprintf("%s%s%s%s", ts, method, path, bodyHash)
+	signature := hmacSha256Hex(secretKey, stringToSign)
+
+	mockApiKeyRepo.On("FindByKeyHash", ctx, keyHash).Return(&entities.ApiKey{
+		ID:              uuid.New(),
+		UserID:          userID,
+		KeyHash:         keyHash,
+		SecretEncrypted: encryptedSecret,
+		IsActive:        true,
+		User:            nil,
+	}, nil)
+	mockApiKeyRepo.On("Update", ctx, mock.AnythingOfType("*entities.ApiKey")).Return(nil)
+	mockUserRepo.On("GetByID", ctx, userID).Return(nil, errors.New("user not found"))
+
+	_, err := uc.ValidateApiKey(ctx, apiKey, signature, ts, method, path, bodyHash)
+	assert.Error(t, err)
+	assert.Equal(t, "api key owner not found", err.Error())
+}
+
+func TestApiKeyUsecase_ValidateSignatureForJWT_NoKeys(t *testing.T) {
+	mockApiKeyRepo := new(MockApiKeyRepository)
+	mockUserRepo := new(MockUserRepository)
+	uc := usecases.NewApiKeyUsecase(mockApiKeyRepo, mockUserRepo, "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff")
+
+	ctx := context.Background()
+	userID := uuid.New()
+	ts := fmt.Sprintf("%d", time.Now().Unix())
+	mockApiKeyRepo.On("FindByUserID", ctx, userID).Return([]*entities.ApiKey{}, nil)
+
+	err := uc.ValidateSignatureForJWT(ctx, userID, "sig", ts, "POST", "/v1", "")
+	assert.Error(t, err)
+	assert.Equal(t, "unauthorized", err.Error())
+}
+
+func TestApiKeyUsecase_ValidateSignatureForJWT_RepoError(t *testing.T) {
+	mockApiKeyRepo := new(MockApiKeyRepository)
+	mockUserRepo := new(MockUserRepository)
+	uc := usecases.NewApiKeyUsecase(mockApiKeyRepo, mockUserRepo, "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff")
+
+	ctx := context.Background()
+	userID := uuid.New()
+	ts := fmt.Sprintf("%d", time.Now().Unix())
+	mockApiKeyRepo.On("FindByUserID", ctx, userID).Return(([]*entities.ApiKey)(nil), errors.New("db timeout"))
+
+	err := uc.ValidateSignatureForJWT(ctx, userID, "sig", ts, "POST", "/v1", "")
+	assert.Error(t, err)
+	assert.Equal(t, "db timeout", err.Error())
+}
+
+func TestApiKeyUsecase_RevokeApiKey_NotOwner(t *testing.T) {
+	mockApiKeyRepo := new(MockApiKeyRepository)
+	mockUserRepo := new(MockUserRepository)
+	uc := usecases.NewApiKeyUsecase(mockApiKeyRepo, mockUserRepo, "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff")
+
+	ctx := context.Background()
+	caller := uuid.New()
+	owner := uuid.New()
+	keyID := uuid.New()
+	mockApiKeyRepo.On("FindByID", ctx, keyID).Return(&entities.ApiKey{ID: keyID, UserID: owner}, nil)
+
+	err := uc.RevokeApiKey(ctx, caller, keyID)
+	assert.Error(t, err)
+	assert.Equal(t, "forbidden", err.Error())
+}
+
+func TestApiKeyUsecase_RevokeApiKey_FindError(t *testing.T) {
+	mockApiKeyRepo := new(MockApiKeyRepository)
+	mockUserRepo := new(MockUserRepository)
+	uc := usecases.NewApiKeyUsecase(mockApiKeyRepo, mockUserRepo, "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff")
+
+	ctx := context.Background()
+	userID := uuid.New()
+	keyID := uuid.New()
+	mockApiKeyRepo.On("FindByID", ctx, keyID).Return((*entities.ApiKey)(nil), errors.New("not found"))
+
+	err := uc.RevokeApiKey(ctx, userID, keyID)
+	assert.Error(t, err)
+	assert.Equal(t, "not found", err.Error())
 }
 
 // Helpers copied/adapted from usecase to facilitate testing

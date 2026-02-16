@@ -81,6 +81,7 @@ type OnchainAdapterUsecase struct {
 	clientFactory   *blockchain.ClientFactory
 	chainResolver   *ChainResolver
 	ownerPrivateKey string
+	adminOps        *evmAdminOpsService
 }
 
 func NewOnchainAdapterUsecase(
@@ -89,13 +90,52 @@ func NewOnchainAdapterUsecase(
 	clientFactory *blockchain.ClientFactory,
 	ownerPrivateKey string,
 ) *OnchainAdapterUsecase {
-	return &OnchainAdapterUsecase{
+	u := &OnchainAdapterUsecase{
 		chainRepo:       chainRepo,
 		contractRepo:    contractRepo,
 		clientFactory:   clientFactory,
 		chainResolver:   NewChainResolver(chainRepo),
 		ownerPrivateKey: strings.TrimSpace(ownerPrivateKey),
 	}
+
+	u.adminOps = newEVMAdminOpsService(
+		func(ctx context.Context, sourceChainInput, destChainInput string) (*evmAdminContext, error) {
+			_, sourceChainID, destCAIP2, gateway, router, err := u.resolveEVMContextCore(ctx, sourceChainInput, destChainInput)
+			if err != nil {
+				return nil, err
+			}
+			return &evmAdminContext{
+				sourceChainID:  sourceChainID,
+				destCAIP2:      destCAIP2,
+				routerAddress:  router.ContractAddress,
+				gatewayAddress: gateway.ContractAddress,
+			}, nil
+		},
+		func(ctx context.Context, sourceChainID uuid.UUID, routerAddress, destCAIP2 string, bridgeType uint8) (string, error) {
+			if u.clientFactory == nil {
+				return "", domainerrors.BadRequest("evm client factory is not configured")
+			}
+			chain, err := u.chainRepo.GetByID(ctx, sourceChainID)
+			if err != nil {
+				return "", err
+			}
+			rpcURL := resolveRPCURL(chain)
+			if rpcURL == "" {
+				return "", domainerrors.BadRequest("no active rpc url for source chain")
+			}
+			evmClient, err := u.clientFactory.GetEVMClient(rpcURL)
+			if err != nil {
+				return "", err
+			}
+			defer evmClient.Close()
+			return u.callGetAdapter(ctx, evmClient, routerAddress, destCAIP2, bridgeType)
+		},
+		func(ctx context.Context, sourceChainID uuid.UUID, contractAddress string, parsedABI abi.ABI, method string, args ...interface{}) (string, error) {
+			return u.sendTx(ctx, sourceChainID, contractAddress, parsedABI, method, args...)
+		},
+	)
+
+	return u
 }
 
 func (u *OnchainAdapterUsecase) GetStatus(ctx context.Context, sourceChainInput, destChainInput string) (*OnchainAdapterStatus, error) {
@@ -188,50 +228,11 @@ func (u *OnchainAdapterUsecase) GetStatus(ctx context.Context, sourceChainInput,
 }
 
 func (u *OnchainAdapterUsecase) RegisterAdapter(ctx context.Context, sourceChainInput, destChainInput string, bridgeType uint8, adapterAddress string) (string, error) {
-	if !common.IsHexAddress(adapterAddress) || common.HexToAddress(adapterAddress) == (common.Address{}) {
-		return "", domainerrors.BadRequest("invalid adapterAddress")
-	}
-
-	_, sourceChainID, destCAIP2, _, router, _, err := u.resolveEVMContext(ctx, sourceChainInput, destChainInput)
-	if err != nil {
-		return "", err
-	}
-
-	txHash, err := u.sendTx(
-		ctx,
-		sourceChainID,
-		router.ContractAddress,
-		payChainRouterAdminABI,
-		"registerAdapter",
-		destCAIP2,
-		bridgeType,
-		common.HexToAddress(adapterAddress),
-	)
-	if err != nil {
-		return "", err
-	}
-	return txHash, nil
+	return u.adminOps.RegisterAdapter(ctx, sourceChainInput, destChainInput, bridgeType, adapterAddress)
 }
 
 func (u *OnchainAdapterUsecase) SetDefaultBridgeType(ctx context.Context, sourceChainInput, destChainInput string, bridgeType uint8) (string, error) {
-	_, sourceChainID, destCAIP2, gateway, _, _, err := u.resolveEVMContext(ctx, sourceChainInput, destChainInput)
-	if err != nil {
-		return "", err
-	}
-
-	txHash, err := u.sendTx(
-		ctx,
-		sourceChainID,
-		gateway.ContractAddress,
-		payChainGatewayAdminABI,
-		"setDefaultBridgeType",
-		destCAIP2,
-		bridgeType,
-	)
-	if err != nil {
-		return "", err
-	}
-	return txHash, nil
+	return u.adminOps.SetDefaultBridgeType(ctx, sourceChainInput, destChainInput, bridgeType)
 }
 
 func (u *OnchainAdapterUsecase) SetHyperbridgeConfig(
@@ -239,43 +240,7 @@ func (u *OnchainAdapterUsecase) SetHyperbridgeConfig(
 	sourceChainInput, destChainInput string,
 	stateMachineIDHex, destinationContractHex string,
 ) (string, []string, error) {
-	_, sourceChainID, destCAIP2, _, router, evmClient, err := u.resolveEVMContext(ctx, sourceChainInput, destChainInput)
-	if err != nil {
-		return "", nil, err
-	}
-	defer evmClient.Close()
-
-	adapter, err := u.callGetAdapter(ctx, evmClient, router.ContractAddress, destCAIP2, 0)
-	if err != nil {
-		return "", nil, err
-	}
-	if adapter == "" || adapter == "0x0000000000000000000000000000000000000000" {
-		return "", nil, domainerrors.BadRequest("hyperbridge adapter (type 0) is not registered")
-	}
-
-	var txHashes []string
-	target := strings.TrimPrefix(strings.TrimSpace(stateMachineIDHex), "0x")
-	if target != "" {
-		txHash, txErr := u.sendTx(ctx, sourceChainID, adapter, hyperbridgeSenderAdminABI, "setStateMachineId", destCAIP2, common.FromHex("0x"+target))
-		if txErr != nil {
-			return "", txHashes, txErr
-		}
-		txHashes = append(txHashes, txHash)
-	}
-
-	dest := strings.TrimPrefix(strings.TrimSpace(destinationContractHex), "0x")
-	if dest != "" {
-		txHash, txErr := u.sendTx(ctx, sourceChainID, adapter, hyperbridgeSenderAdminABI, "setDestinationContract", destCAIP2, common.FromHex("0x"+dest))
-		if txErr != nil {
-			return "", txHashes, txErr
-		}
-		txHashes = append(txHashes, txHash)
-	}
-	if len(txHashes) == 0 {
-		return "", nil, domainerrors.BadRequest("stateMachineId or destinationContract is required")
-	}
-
-	return adapter, txHashes, nil
+	return u.adminOps.SetHyperbridgeConfig(ctx, sourceChainInput, destChainInput, stateMachineIDHex, destinationContractHex)
 }
 
 func (u *OnchainAdapterUsecase) SetCCIPConfig(
@@ -283,40 +248,7 @@ func (u *OnchainAdapterUsecase) SetCCIPConfig(
 	sourceChainInput, destChainInput string,
 	chainSelector *uint64, destinationAdapterHex string,
 ) (string, []string, error) {
-	_, sourceChainID, destCAIP2, _, router, evmClient, err := u.resolveEVMContext(ctx, sourceChainInput, destChainInput)
-	if err != nil {
-		return "", nil, err
-	}
-	defer evmClient.Close()
-
-	adapter, err := u.callGetAdapter(ctx, evmClient, router.ContractAddress, destCAIP2, 1)
-	if err != nil {
-		return "", nil, err
-	}
-	if adapter == "" || adapter == "0x0000000000000000000000000000000000000000" {
-		return "", nil, domainerrors.BadRequest("ccip adapter (type 1) is not registered")
-	}
-
-	var txHashes []string
-	if chainSelector != nil {
-		txHash, txErr := u.sendTx(ctx, sourceChainID, adapter, ccipSenderAdminABI, "setChainSelector", destCAIP2, *chainSelector)
-		if txErr != nil {
-			return "", txHashes, txErr
-		}
-		txHashes = append(txHashes, txHash)
-	}
-	dest := strings.TrimPrefix(strings.TrimSpace(destinationAdapterHex), "0x")
-	if dest != "" {
-		txHash, txErr := u.sendTx(ctx, sourceChainID, adapter, ccipSenderAdminABI, "setDestinationAdapter", destCAIP2, common.FromHex("0x"+dest))
-		if txErr != nil {
-			return "", txHashes, txErr
-		}
-		txHashes = append(txHashes, txHash)
-	}
-	if len(txHashes) == 0 {
-		return "", nil, domainerrors.BadRequest("chainSelector or destinationAdapter is required")
-	}
-	return adapter, txHashes, nil
+	return u.adminOps.SetCCIPConfig(ctx, sourceChainInput, destChainInput, chainSelector, destinationAdapterHex)
 }
 
 func (u *OnchainAdapterUsecase) SetLayerZeroConfig(
@@ -324,83 +256,16 @@ func (u *OnchainAdapterUsecase) SetLayerZeroConfig(
 	sourceChainInput, destChainInput string,
 	dstEid *uint32, peerHex, optionsHex string,
 ) (string, []string, error) {
-	_, sourceChainID, destCAIP2, _, router, evmClient, err := u.resolveEVMContext(ctx, sourceChainInput, destChainInput)
-	if err != nil {
-		return "", nil, err
-	}
-	defer evmClient.Close()
-
-	adapter, err := u.callGetAdapter(ctx, evmClient, router.ContractAddress, destCAIP2, 2)
-	if err != nil {
-		return "", nil, err
-	}
-	if adapter == "" || adapter == "0x0000000000000000000000000000000000000000" {
-		return "", nil, domainerrors.BadRequest("layerzero adapter (type 2) is not registered")
-	}
-
-	var txHashes []string
-	trimmedPeer := strings.TrimSpace(peerHex)
-	if dstEid != nil || trimmedPeer != "" {
-		if dstEid == nil || trimmedPeer == "" {
-			return "", nil, domainerrors.BadRequest("dstEid and peerHex are required to set route")
-		}
-		peer32, parseErr := parseHexToBytes32(trimmedPeer)
-		if parseErr != nil {
-			return "", nil, domainerrors.BadRequest("invalid peerHex")
-		}
-		txHash, txErr := u.sendTx(ctx, sourceChainID, adapter, layerZeroSenderAdminABI, "setRoute", destCAIP2, *dstEid, peer32)
-		if txErr != nil {
-			return "", txHashes, txErr
-		}
-		txHashes = append(txHashes, txHash)
-	}
-
-	trimmedOptions := strings.TrimSpace(optionsHex)
-	if trimmedOptions != "" {
-		if !strings.HasPrefix(trimmedOptions, "0x") {
-			trimmedOptions = "0x" + trimmedOptions
-		}
-		txHash, txErr := u.sendTx(ctx, sourceChainID, adapter, layerZeroSenderAdminABI, "setEnforcedOptions", destCAIP2, common.FromHex(trimmedOptions))
-		if txErr != nil {
-			return "", txHashes, txErr
-		}
-		txHashes = append(txHashes, txHash)
-	}
-
-	if len(txHashes) == 0 {
-		return "", nil, domainerrors.BadRequest("dstEid+peerHex or optionsHex is required")
-	}
-	return adapter, txHashes, nil
+	return u.adminOps.SetLayerZeroConfig(ctx, sourceChainInput, destChainInput, dstEid, peerHex, optionsHex)
 }
 
 func (u *OnchainAdapterUsecase) resolveEVMContext(
 	ctx context.Context,
 	sourceChainInput, destChainInput string,
 ) (*entities.Chain, uuid.UUID, string, *entities.SmartContract, *entities.SmartContract, *blockchain.EVMClient, error) {
-	sourceChainID, _, err := u.chainResolver.ResolveFromAny(ctx, sourceChainInput)
-	if err != nil {
-		return nil, uuid.Nil, "", nil, nil, nil, domainerrors.BadRequest("invalid sourceChainId")
-	}
-	_, destCAIP2, err := u.chainResolver.ResolveFromAny(ctx, destChainInput)
-	if err != nil {
-		return nil, uuid.Nil, "", nil, nil, nil, domainerrors.BadRequest("invalid destChainId")
-	}
-
-	sourceChain, err := u.chainRepo.GetByID(ctx, sourceChainID)
+	sourceChain, sourceChainID, destCAIP2, gateway, router, err := u.resolveEVMContextCore(ctx, sourceChainInput, destChainInput)
 	if err != nil {
 		return nil, uuid.Nil, "", nil, nil, nil, err
-	}
-	if sourceChain.Type != entities.ChainTypeEVM {
-		return nil, uuid.Nil, "", nil, nil, nil, domainerrors.BadRequest("only EVM source chain is supported")
-	}
-
-	gateway, err := u.contractRepo.GetActiveContract(ctx, sourceChain.ID, entities.ContractTypeGateway)
-	if err != nil {
-		return nil, uuid.Nil, "", nil, nil, nil, domainerrors.BadRequest("active gateway contract not found on source chain")
-	}
-	router, err := u.contractRepo.GetActiveContract(ctx, sourceChain.ID, entities.ContractTypeRouter)
-	if err != nil {
-		return nil, uuid.Nil, "", nil, nil, nil, domainerrors.BadRequest("active router contract not found on source chain")
 	}
 
 	rpcURL := resolveRPCURL(sourceChain)
@@ -411,7 +276,39 @@ func (u *OnchainAdapterUsecase) resolveEVMContext(
 	if err != nil {
 		return nil, uuid.Nil, "", nil, nil, nil, err
 	}
-	return sourceChain, sourceChain.ID, destCAIP2, gateway, router, evmClient, nil
+	return sourceChain, sourceChainID, destCAIP2, gateway, router, evmClient, nil
+}
+
+func (u *OnchainAdapterUsecase) resolveEVMContextCore(
+	ctx context.Context,
+	sourceChainInput, destChainInput string,
+) (*entities.Chain, uuid.UUID, string, *entities.SmartContract, *entities.SmartContract, error) {
+	sourceChainID, _, err := u.chainResolver.ResolveFromAny(ctx, sourceChainInput)
+	if err != nil {
+		return nil, uuid.Nil, "", nil, nil, domainerrors.BadRequest("invalid sourceChainId")
+	}
+	_, destCAIP2, err := u.chainResolver.ResolveFromAny(ctx, destChainInput)
+	if err != nil {
+		return nil, uuid.Nil, "", nil, nil, domainerrors.BadRequest("invalid destChainId")
+	}
+
+	sourceChain, err := u.chainRepo.GetByID(ctx, sourceChainID)
+	if err != nil {
+		return nil, uuid.Nil, "", nil, nil, err
+	}
+	if sourceChain.Type != entities.ChainTypeEVM {
+		return nil, uuid.Nil, "", nil, nil, domainerrors.BadRequest("only EVM source chain is supported")
+	}
+
+	gateway, err := u.contractRepo.GetActiveContract(ctx, sourceChain.ID, entities.ContractTypeGateway)
+	if err != nil {
+		return nil, uuid.Nil, "", nil, nil, domainerrors.BadRequest("active gateway contract not found on source chain")
+	}
+	router, err := u.contractRepo.GetActiveContract(ctx, sourceChain.ID, entities.ContractTypeRouter)
+	if err != nil {
+		return nil, uuid.Nil, "", nil, nil, domainerrors.BadRequest("active router contract not found on source chain")
+	}
+	return sourceChain, sourceChain.ID, destCAIP2, gateway, router, nil
 }
 
 func (u *OnchainAdapterUsecase) sendTx(

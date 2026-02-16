@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"strconv"
 
 	"net/http"
@@ -8,15 +9,22 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	domainerrors "pay-chain.backend/internal/domain/errors"
+	"pay-chain.backend/internal/domain/entities"
 	"pay-chain.backend/internal/interfaces/http/response"
 	"pay-chain.backend/internal/usecases"
 )
 
 type PaymentRequestHandler struct {
-	usecase *usecases.PaymentRequestUsecase
+	usecase PaymentRequestService
 }
 
-func NewPaymentRequestHandler(usecase *usecases.PaymentRequestUsecase) *PaymentRequestHandler {
+type PaymentRequestService interface {
+	CreatePaymentRequest(ctx context.Context, input usecases.CreatePaymentRequestInput) (*usecases.CreatePaymentRequestOutput, error)
+	GetPaymentRequest(ctx context.Context, requestID uuid.UUID) (*entities.PaymentRequest, *entities.PaymentRequestTxData, error)
+	ListPaymentRequests(ctx context.Context, userID uuid.UUID, limit, offset int) ([]*entities.PaymentRequest, int, error)
+}
+
+func NewPaymentRequestHandler(usecase PaymentRequestService) *PaymentRequestHandler {
 	return &PaymentRequestHandler{usecase: usecase}
 }
 

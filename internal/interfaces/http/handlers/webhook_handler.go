@@ -1,22 +1,26 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	domainerrors "pay-chain.backend/internal/domain/errors"
 	"pay-chain.backend/internal/interfaces/http/response"
-	"pay-chain.backend/internal/usecases"
 )
+
+type WebhookService interface {
+	ProcessIndexerWebhook(ctx context.Context, eventType string, data json.RawMessage) error
+}
 
 // WebhookHandler handles webhook endpoints
 type WebhookHandler struct {
-	webhookUsecase *usecases.WebhookUsecase
+	webhookUsecase WebhookService
 }
 
 // NewWebhookHandler creates a new webhook handler
-func NewWebhookHandler(webhookUsecase *usecases.WebhookUsecase) *WebhookHandler {
+func NewWebhookHandler(webhookUsecase WebhookService) *WebhookHandler {
 	return &WebhookHandler{webhookUsecase: webhookUsecase}
 }
 

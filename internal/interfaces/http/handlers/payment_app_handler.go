@@ -1,18 +1,22 @@
 package handlers
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"pay-chain.backend/internal/domain/entities"
-	"pay-chain.backend/internal/usecases"
 )
 
-type PaymentAppHandler struct {
-	paymentAppUsecase *usecases.PaymentAppUsecase
+type PaymentAppService interface {
+	CreatePaymentApp(ctx context.Context, input *entities.CreatePaymentAppInput) (*entities.CreatePaymentResponse, error)
 }
 
-func NewPaymentAppHandler(paymentAppUsecase *usecases.PaymentAppUsecase) *PaymentAppHandler {
+type PaymentAppHandler struct {
+	paymentAppUsecase PaymentAppService
+}
+
+func NewPaymentAppHandler(paymentAppUsecase PaymentAppService) *PaymentAppHandler {
 	return &PaymentAppHandler{
 		paymentAppUsecase: paymentAppUsecase,
 	}

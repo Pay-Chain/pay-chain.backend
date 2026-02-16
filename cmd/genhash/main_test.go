@@ -1,6 +1,9 @@
 package main
 
 import (
+	"bytes"
+	"os"
+	"strings"
 	"testing"
 
 	"golang.org/x/crypto/bcrypt"
@@ -16,5 +19,25 @@ func TestGeneratePasswordHash(t *testing.T) {
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(hash), []byte("AdminPayChain2026!")); err != nil {
 		t.Fatalf("hash mismatch: %v", err)
+	}
+}
+
+func TestMain_PrintsHash(t *testing.T) {
+	origStdout := os.Stdout
+	defer func() { os.Stdout = origStdout }()
+
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe: %v", err)
+	}
+	os.Stdout = w
+
+	main()
+
+	_ = w.Close()
+	var out bytes.Buffer
+	_, _ = out.ReadFrom(r)
+	if !strings.Contains(out.String(), "$2") {
+		t.Fatalf("expected bcrypt hash output, got: %s", out.String())
 	}
 }

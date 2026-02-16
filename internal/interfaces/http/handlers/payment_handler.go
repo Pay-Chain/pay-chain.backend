@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 
@@ -10,16 +11,22 @@ import (
 	domainerrors "pay-chain.backend/internal/domain/errors"
 	"pay-chain.backend/internal/interfaces/http/middleware"
 	"pay-chain.backend/internal/interfaces/http/response"
-	"pay-chain.backend/internal/usecases"
 )
+
+type PaymentService interface {
+	CreatePayment(ctx context.Context, userID uuid.UUID, input *entities.CreatePaymentInput) (*entities.CreatePaymentResponse, error)
+	GetPayment(ctx context.Context, id uuid.UUID) (*entities.Payment, error)
+	GetPaymentsByUser(ctx context.Context, userID uuid.UUID, page, limit int) ([]*entities.Payment, int, error)
+	GetPaymentEvents(ctx context.Context, paymentID uuid.UUID) ([]*entities.PaymentEvent, error)
+}
 
 // PaymentHandler handles payment endpoints
 type PaymentHandler struct {
-	paymentUsecase *usecases.PaymentUsecase
+	paymentUsecase PaymentService
 }
 
 // NewPaymentHandler creates a new payment handler
-func NewPaymentHandler(paymentUsecase *usecases.PaymentUsecase) *PaymentHandler {
+func NewPaymentHandler(paymentUsecase PaymentService) *PaymentHandler {
 	return &PaymentHandler{paymentUsecase: paymentUsecase}
 }
 

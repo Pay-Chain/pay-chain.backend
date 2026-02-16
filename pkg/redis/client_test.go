@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/alicebob/miniredis/v2"
 	goredis "github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 )
@@ -32,5 +33,35 @@ func TestSetClientAndBasicOpsWithUnreachableRedis(t *testing.T) {
 	assert.Error(t, err)
 	assert.Error(t, Del(ctx, "k"))
 	_, err = SetNX(ctx, "k", "v", time.Second)
+	assert.Error(t, err)
+}
+
+func TestInitAndBasicOpsSuccessWithMiniRedis(t *testing.T) {
+	srv, err := miniredis.Run()
+	if err != nil {
+		t.Skipf("skip: miniredis unavailable in this environment: %v", err)
+	}
+	defer srv.Close()
+
+	err = Init("redis://"+srv.Addr(), "")
+	assert.NoError(t, err)
+	assert.NotNil(t, GetClient())
+
+	ctx := context.Background()
+	assert.NoError(t, Set(ctx, "k1", "v1", time.Minute))
+	got, err := Get(ctx, "k1")
+	assert.NoError(t, err)
+	assert.Equal(t, "v1", got)
+
+	ok, err := SetNX(ctx, "k1", "v2", time.Minute)
+	assert.NoError(t, err)
+	assert.False(t, ok)
+
+	ok, err = SetNX(ctx, "k2", "v2", time.Minute)
+	assert.NoError(t, err)
+	assert.True(t, ok)
+
+	assert.NoError(t, Del(ctx, "k1"))
+	_, err = Get(ctx, "k1")
 	assert.Error(t, err)
 }

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
@@ -12,19 +13,35 @@ import (
 	domainerrors "pay-chain.backend/internal/domain/errors"
 	"pay-chain.backend/internal/interfaces/http/middleware"
 	"pay-chain.backend/internal/interfaces/http/response"
-	"pay-chain.backend/internal/usecases"
+	"pay-chain.backend/pkg/jwt"
 	"pay-chain.backend/pkg/redis"
 	"pay-chain.backend/pkg/utils"
 )
 
+type AuthService interface {
+	Register(ctx context.Context, input *entities.CreateUserInput) (*entities.User, string, error)
+	Login(ctx context.Context, input *entities.LoginInput) (*entities.AuthResponse, error)
+	VerifyEmail(ctx context.Context, token string) error
+	RefreshToken(ctx context.Context, refreshToken string) (*jwt.TokenPair, error)
+	GetUserByID(ctx context.Context, id uuid.UUID) (*entities.User, error)
+	GetTokenExpiry(token string) (int64, error)
+	ChangePassword(ctx context.Context, userID uuid.UUID, input *entities.ChangePasswordInput) error
+}
+
+type SessionStore interface {
+	CreateSession(ctx context.Context, sessionID string, data *redis.SessionData, expiration time.Duration) error
+	GetSession(ctx context.Context, sessionID string) (*redis.SessionData, error)
+	DeleteSession(ctx context.Context, sessionID string) error
+}
+
 // AuthHandler handles authentication endpoints
 type AuthHandler struct {
-	authUsecase  *usecases.AuthUsecase
-	sessionStore *redis.SessionStore
+	authUsecase  AuthService
+	sessionStore SessionStore
 }
 
 // NewAuthHandler creates a new auth handler
-func NewAuthHandler(authUsecase *usecases.AuthUsecase, sessionStore *redis.SessionStore) *AuthHandler {
+func NewAuthHandler(authUsecase AuthService, sessionStore SessionStore) *AuthHandler {
 	return &AuthHandler{
 		authUsecase:  authUsecase,
 		sessionStore: sessionStore,

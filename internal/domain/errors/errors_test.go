@@ -29,4 +29,20 @@ func TestAppError_Constructors(t *testing.T) {
 
 	custom := NewError("custom", ErrForbidden)
 	assert.Equal(t, ErrForbidden.Error(), custom.Error())
+
+	badReq := BadRequest("bad request")
+	assert.Equal(t, http.StatusBadRequest, badReq.Status)
+	assert.Equal(t, CodeInvalidInput, badReq.Code)
+
+	unauth := Unauthorized("unauthorized")
+	assert.Equal(t, http.StatusUnauthorized, unauth.Status)
+	assert.Equal(t, CodeUnauthorized, unauth.Code)
+
+	forbidden := Forbidden("forbidden")
+	assert.Equal(t, http.StatusForbidden, forbidden.Status)
+	assert.Equal(t, CodeForbidden, forbidden.Code)
+
+	internalMsg := InternalServerError("boom")
+	assert.Equal(t, http.StatusInternalServerError, internalMsg.Status)
+	assert.Equal(t, "boom", internalMsg.Message)
 }

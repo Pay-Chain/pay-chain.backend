@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	redisv9 "github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"pay-chain.backend/internal/domain/entities"
@@ -14,6 +15,7 @@ import (
 	"pay-chain.backend/internal/usecases"
 	"pay-chain.backend/pkg/crypto"
 	"pay-chain.backend/pkg/jwt"
+	redispkg "pay-chain.backend/pkg/redis"
 )
 
 func newAuthUsecaseForTest(
@@ -237,4 +239,45 @@ func TestAuthUsecase_GetUserByID(t *testing.T) {
 	got, err := uc.GetUserByID(context.Background(), id)
 	assert.NoError(t, err)
 	assert.Equal(t, id, got.ID)
+}
+
+func TestAuthUsecase_Login_UserRepoError(t *testing.T) {
+	userRepo := new(MockUserRepository)
+	uc := newAuthUsecaseForTest(userRepo, new(MockEmailVerificationRepository), new(MockWalletRepository), new(MockChainRepository))
+
+	userRepo.On("GetByEmail", context.Background(), "err@mail.com").Return(nil, errors.New("db down")).Once()
+	_, err := uc.Login(context.Background(), &entities.LoginInput{
+		Email:    "err@mail.com",
+		Password: "whatever",
+	})
+	assert.EqualError(t, err, "db down")
+}
+
+func TestAuthUsecase_Login_UseSessionRedisError(t *testing.T) {
+	userRepo := new(MockUserRepository)
+	uc := newAuthUsecaseForTest(userRepo, new(MockEmailVerificationRepository), new(MockWalletRepository), new(MockChainRepository))
+
+	redispkg.SetClient(redisv9.NewClient(&redisv9.Options{
+		Addr:         "127.0.0.1:0",
+		DialTimeout:  50 * time.Millisecond,
+		ReadTimeout:  50 * time.Millisecond,
+		WriteTimeout: 50 * time.Millisecond,
+	}))
+
+	hashed, _ := crypto.HashPassword("correct-password")
+	user := &entities.User{
+		ID:           uuid.New(),
+		Email:        "session@mail.com",
+		PasswordHash: hashed,
+		Role:         entities.UserRoleUser,
+	}
+	userRepo.On("GetByEmail", context.Background(), user.Email).Return(user, nil).Once()
+
+	_, err := uc.Login(context.Background(), &entities.LoginInput{
+		Email:      user.Email,
+		Password:   "correct-password",
+		UseSession: true,
+	})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to store session in redis")
 }

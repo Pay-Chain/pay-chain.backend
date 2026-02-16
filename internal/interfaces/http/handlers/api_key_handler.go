@@ -75,7 +75,7 @@ func (h *ApiKeyHandler) RevokeApiKey(c *gin.Context) {
 		return
 	}
 
-	if err := h.apiKeyUsecase.RevokeApiKey(c.Request.Context(), apiKeyID, userID); err != nil {
+	if err := h.apiKeyUsecase.RevokeApiKey(c.Request.Context(), userID, apiKeyID); err != nil {
 		// Basic error mapping - ideally map domain errors to 404/403/500
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

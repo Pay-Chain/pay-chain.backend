@@ -2,7 +2,9 @@ package usecases
 
 import (
 	"context"
-		"testing"
+	"encoding/json"
+	"net/http"
+	"testing"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
@@ -15,6 +17,27 @@ import (
 func TestRequiredFunctions(t *testing.T) {
 	t.Run("gateway", func(t *testing.T) {
 		require.Contains(t, requiredFunctions(entities.ContractTypeGateway), "createPayment")
+	})
+	t.Run("router", func(t *testing.T) {
+		require.Contains(t, requiredFunctions(entities.ContractTypeRouter), "quotePaymentFee")
+	})
+	t.Run("vault", func(t *testing.T) {
+		require.Contains(t, requiredFunctions(entities.ContractTypeVault), "pushTokens")
+	})
+	t.Run("token registry", func(t *testing.T) {
+		require.Contains(t, requiredFunctions(entities.ContractTypeTokenRegistry), "isSupportedToken")
+	})
+	t.Run("token swapper", func(t *testing.T) {
+		require.Contains(t, requiredFunctions(entities.ContractTypeTokenSwapper), "swap")
+	})
+	t.Run("ccip adapter", func(t *testing.T) {
+		require.Contains(t, requiredFunctions(entities.ContractTypeAdapterCCIP), "setChainSelector")
+	})
+	t.Run("hyperbridge adapter", func(t *testing.T) {
+		require.Contains(t, requiredFunctions(entities.ContractTypeAdapterHyperbridge), "setStateMachineId")
+	})
+	t.Run("layerzero adapter", func(t *testing.T) {
+		require.Contains(t, requiredFunctions(entities.ContractTypeAdapterLayerZero), "setRoute")
 	})
 	t.Run("unknown", func(t *testing.T) {
 		require.Empty(t, requiredFunctions(entities.SmartContractType("UNKNOWN")))
@@ -116,13 +139,82 @@ func TestRunEVMOnchainChecks_RPCConnectFailed(t *testing.T) {
 		clientFactory: blockchain.NewClientFactory(),
 	}
 	source := &entities.Chain{
-		ID:     uuid.New(),
+		ID:      uuid.New(),
 		ChainID: "8453",
-		Type:   entities.ChainTypeEVM,
-		RPCURL: "http://127.0.0.1:0",
+		Type:    entities.ChainTypeEVM,
+		RPCURL:  "http://127.0.0.1:0",
 	}
 
 	checks := u.runEVMOnchainChecks(context.Background(), source, nil, "eip155:42161")
 	require.NotEmpty(t, checks)
 	require.Equal(t, "RPC_CONNECT_FAILED", checks[0].Code)
+}
+
+func TestRunEVMOnchainChecks_GatewayRouterMissing(t *testing.T) {
+	srv := newSafeHTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+		var req map[string]interface{}
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		res := map[string]interface{}{"jsonrpc": "2.0", "id": req["id"]}
+		if req["method"] == "eth_chainId" {
+			res["result"] = "0x2105"
+		} else {
+			res["result"] = "0x"
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(res)
+	}))
+	defer srv.Close()
+
+	u := &ContractConfigAuditUsecase{
+		clientFactory: blockchain.NewClientFactory(),
+	}
+	source := &entities.Chain{
+		ID:      uuid.New(),
+		ChainID: "8453",
+		Type:    entities.ChainTypeEVM,
+		RPCURL:  srv.URL,
+	}
+
+	checks := u.runEVMOnchainChecks(context.Background(), source, []*entities.SmartContract{}, "eip155:42161")
+	require.Len(t, checks, 2)
+	require.Equal(t, "GATEWAY_MISSING", checks[0].Code)
+	require.Equal(t, "ROUTER_MISSING", checks[1].Code)
+}
+
+func TestRunEVMOnchainChecks_DefaultBridgeReadFailed(t *testing.T) {
+	srv := newSafeHTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+		var req map[string]interface{}
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		res := map[string]interface{}{"jsonrpc": "2.0", "id": req["id"]}
+		if req["method"] == "eth_chainId" {
+			res["result"] = "0x2105"
+		} else {
+			// return empty output to trigger decode error in defaultBridgeTypes
+			res["result"] = "0x"
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(res)
+	}))
+	defer srv.Close()
+
+	sourceID := uuid.New()
+	u := &ContractConfigAuditUsecase{
+		clientFactory: blockchain.NewClientFactory(),
+	}
+	source := &entities.Chain{
+		ID:      sourceID,
+		ChainID: "8453",
+		Type:    entities.ChainTypeEVM,
+		RPCURL:  srv.URL,
+	}
+	contracts := []*entities.SmartContract{
+		{ID: uuid.New(), ChainUUID: sourceID, Type: entities.ContractTypeGateway, ContractAddress: "0x00000000000000000000000000000000000000a1", IsActive: true},
+		{ID: uuid.New(), ChainUUID: sourceID, Type: entities.ContractTypeRouter, ContractAddress: "0x00000000000000000000000000000000000000b2", IsActive: true},
+	}
+
+	checks := u.runEVMOnchainChecks(context.Background(), source, contracts, "eip155:42161")
+	require.NotEmpty(t, checks)
+	require.Equal(t, "DEFAULT_BRIDGE_READ_FAILED", checks[len(checks)-1].Code)
 }

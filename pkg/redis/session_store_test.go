@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/alicebob/miniredis/v2"
+	goredis "github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -47,5 +49,35 @@ func TestSessionStoreCreateGetDeleteWithUnreachableRedis(t *testing.T) {
 	assert.Error(t, err)
 
 	err = store.DeleteSession(ctx, "sid-1")
+	assert.Error(t, err)
+}
+
+func TestSessionStoreCreateGetDeleteSuccess(t *testing.T) {
+	srv, err := miniredis.Run()
+	if err != nil {
+		t.Skipf("skip: miniredis unavailable in this environment: %v", err)
+	}
+	defer srv.Close()
+
+	cli := goredis.NewClient(&goredis.Options{Addr: srv.Addr()})
+	SetClient(cli)
+	defer cli.Close()
+
+	store, err := NewSessionStore("0000000000000000000000000000000000000000000000000000000000000000")
+	assert.NoError(t, err)
+
+	ctx := context.Background()
+	err = store.CreateSession(ctx, "sid-ok", &SessionData{AccessToken: "a-ok", RefreshToken: "r-ok"}, time.Minute)
+	assert.NoError(t, err)
+
+	data, err := store.GetSession(ctx, "sid-ok")
+	assert.NoError(t, err)
+	assert.Equal(t, "a-ok", data.AccessToken)
+	assert.Equal(t, "r-ok", data.RefreshToken)
+
+	err = store.DeleteSession(ctx, "sid-ok")
+	assert.NoError(t, err)
+
+	_, err = store.GetSession(ctx, "sid-ok")
 	assert.Error(t, err)
 }
