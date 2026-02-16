@@ -34,6 +34,10 @@ type JWTService struct {
 	refreshExpiry time.Duration
 }
 
+var signJWTToken = func(token *jwt.Token, secret []byte) (string, error) {
+	return token.SignedString(secret)
+}
+
 // NewJWTService creates a new JWT service
 func NewJWTService(secret string, accessExpiry, refreshExpiry time.Duration) *JWTService {
 	return &JWTService{
@@ -99,5 +103,5 @@ func (s *JWTService) generateToken(userID uuid.UUID, email, role string, expiry 
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString(s.secret)
+	return signJWTToken(token, s.secret)
 }

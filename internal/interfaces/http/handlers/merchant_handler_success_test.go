@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -220,3 +221,47 @@ func ptrNow() *time.Time {
 }
 
 var _ = null.String{}
+
+type merchantRepoStatusErrorStub struct{ newErr error }
+
+func (s merchantRepoStatusErrorStub) Create(context.Context, *entities.Merchant) error { return nil }
+func (s merchantRepoStatusErrorStub) GetByID(context.Context, uuid.UUID) (*entities.Merchant, error) {
+	return nil, domainerrors.ErrNotFound
+}
+func (s merchantRepoStatusErrorStub) GetByUserID(context.Context, uuid.UUID) (*entities.Merchant, error) {
+	return nil, s.newErr
+}
+func (s merchantRepoStatusErrorStub) Update(context.Context, *entities.Merchant) error { return nil }
+func (s merchantRepoStatusErrorStub) UpdateStatus(context.Context, uuid.UUID, entities.MerchantStatus) error {
+	return nil
+}
+func (s merchantRepoStatusErrorStub) SoftDelete(context.Context, uuid.UUID) error { return nil }
+func (s merchantRepoStatusErrorStub) List(context.Context) ([]*entities.Merchant, error) {
+	return nil, nil
+}
+
+func TestMerchantHandler_GetStatus_InternalErrorBranch(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	userID := uuid.New()
+
+	uc := usecases.NewMerchantUsecase(
+		merchantRepoStatusErrorStub{newErr: errors.New("repo failure")},
+		merchantUserRepoStub{users: map[uuid.UUID]*entities.User{
+			userID: {ID: userID, Email: "m@paychain.io", Role: entities.UserRoleUser},
+		}},
+	)
+	h := NewMerchantHandler(uc)
+
+	r := gin.New()
+	r.GET("/merchants/status", func(c *gin.Context) {
+		c.Set(middleware.UserIDKey, userID)
+		h.GetMerchantStatus(c)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/merchants/status", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d body=%s", w.Code, w.Body.String())
+	}
+}

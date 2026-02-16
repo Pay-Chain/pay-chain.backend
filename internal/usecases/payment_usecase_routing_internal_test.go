@@ -227,3 +227,27 @@ func TestPaymentUsecase_ResolveToken_Branches(t *testing.T) {
 		require.Contains(t, err.Error(), "token not found for address")
 	})
 }
+
+func TestPaymentUsecase_SelectBridge_Branches(t *testing.T) {
+	u := &PaymentUsecase{}
+
+	t.Run("evm to evm selects ccip", func(t *testing.T) {
+		got := u.SelectBridge("eip155:8453", "eip155:42161")
+		require.Equal(t, "CCIP", got)
+	})
+
+	t.Run("solana to evm selects hyperlane", func(t *testing.T) {
+		got := u.SelectBridge("solana:mainnet", "eip155:8453")
+		require.Equal(t, "Hyperlane", got)
+	})
+
+	t.Run("evm to solana selects hyperlane", func(t *testing.T) {
+		got := u.SelectBridge("eip155:8453", "solana:mainnet")
+		require.Equal(t, "Hyperlane", got)
+	})
+
+	t.Run("non-evm non-solana falls back to hyperbridge", func(t *testing.T) {
+		got := u.SelectBridge("cosmos:osmosis-1", "cosmos:cosmoshub-4")
+		require.Equal(t, "Hyperbridge", got)
+	})
+}

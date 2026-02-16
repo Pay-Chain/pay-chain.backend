@@ -31,3 +31,11 @@ func TestWithContextNil(t *testing.T) {
 		t.Fatal("expected base logger for nil context")
 	}
 }
+
+func TestWithContextTypedRequestID(t *testing.T) {
+	Init("development")
+	ctx := context.WithValue(context.Background(), RequestIDKey, "typed-req-id")
+	if WithContext(ctx) == nil {
+		t.Fatal("expected logger with typed request id context")
+	}
+}

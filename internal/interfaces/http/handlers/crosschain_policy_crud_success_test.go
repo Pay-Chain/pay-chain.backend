@@ -118,3 +118,37 @@ func TestCrosschainPolicyHandler_CRUDSuccessPaths(t *testing.T) {
 	require.Equal(t, uint32(30111), lzRepo.item.DstEID)
 	require.False(t, lzRepo.item.IsActive)
 }
+
+func TestCrosschainPolicyHandler_CreateRoutePolicy_DefaultFallbackValues(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	routeRepo := &routePolicyRepoMemory{}
+	sourceID := utils.GenerateUUIDv7()
+	destID := utils.GenerateUUIDv7()
+
+	chainRepo := &crosschainChainRepoStub{
+		getByChainID: func(_ context.Context, chainID string) (*entities.Chain, error) {
+			switch chainID {
+			case "8453":
+				return &entities.Chain{ID: sourceID}, nil
+			case "42161":
+				return &entities.Chain{ID: destID}, nil
+			default:
+				return nil, nil
+			}
+		},
+	}
+
+	h := NewCrosschainPolicyHandler(routeRepo, &layerZeroRepoMemory{}, chainRepo)
+	r := gin.New()
+	r.POST("/route", h.CreateRoutePolicy)
+
+	body := `{"sourceChainId":"8453","destChainId":"42161","defaultBridgeType":2}`
+	req := httptest.NewRequest(http.MethodPost, "/route", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusCreated, w.Code)
+	require.NotNil(t, routeRepo.item)
+	require.Equal(t, entities.BridgeFallbackModeStrict, routeRepo.item.FallbackMode)
+	require.Equal(t, []uint8{2}, routeRepo.item.FallbackOrder)
+}

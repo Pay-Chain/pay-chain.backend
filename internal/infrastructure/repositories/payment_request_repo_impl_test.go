@@ -72,6 +72,15 @@ func TestPaymentRequestRepository_ExpiredAndBulkExpire(t *testing.T) {
 	require.NoError(t, repo.ExpireRequests(ctx, nil))
 }
 
+func TestPaymentRequestRepository_GetByID_NotFound(t *testing.T) {
+	db := newTestDB(t)
+	createPaymentRequestTables(t, db)
+	repo := NewPaymentRequestRepository(db)
+
+	_, err := repo.GetByID(context.Background(), uuid.New())
+	require.Error(t, err)
+}
+
 func TestBackgroundJobRepository_FullFlow(t *testing.T) {
 	db := newTestDB(t)
 	createPaymentRequestTables(t, db)
@@ -96,4 +105,26 @@ func TestBackgroundJobRepository_FullFlow(t *testing.T) {
 	require.NoError(t, repo.MarkProcessing(ctx, id))
 	require.NoError(t, repo.MarkFailed(ctx, id, "boom"))
 	require.NoError(t, repo.MarkCompleted(ctx, id))
+}
+
+func TestPaymentRequestRepository_Create_DBError(t *testing.T) {
+	db := newTestDB(t)
+	// Intentionally do not create table to trigger DB error.
+	repo := NewPaymentRequestRepository(db)
+	ctx := context.Background()
+
+	err := repo.Create(ctx, &entities.PaymentRequest{
+		ID:            uuid.New(),
+		MerchantID:    uuid.New(),
+		ChainID:       uuid.New(),
+		TokenID:       uuid.New(),
+		WalletAddress: "0xwallet",
+		TokenAddress:  "0xtoken",
+		Amount:        "10",
+		Decimals:      6,
+		Description:   "test",
+		Status:        entities.PaymentRequestStatusPending,
+		ExpiresAt:     time.Now().Add(time.Hour),
+	})
+	require.Error(t, err)
 }

@@ -173,3 +173,18 @@ func TestSessionStore_OperationHooks(t *testing.T) {
 	err = store.DeleteSession(context.Background(), "sid-hook")
 	assert.NoError(t, err)
 }
+
+func TestSessionStore_CreateSession_MarshalErrorBranch(t *testing.T) {
+	store, err := NewSessionStore("0000000000000000000000000000000000000000000000000000000000000000")
+	assert.NoError(t, err)
+
+	origMarshal := marshalSessionJSON
+	t.Cleanup(func() { marshalSessionJSON = origMarshal })
+
+	marshalSessionJSON = func(v interface{}) ([]byte, error) {
+		return nil, errors.New("marshal failed")
+	}
+
+	err = store.CreateSession(context.Background(), "sid-marshal", &SessionData{AccessToken: "a", RefreshToken: "r"}, time.Minute)
+	assert.Error(t, err)
+}

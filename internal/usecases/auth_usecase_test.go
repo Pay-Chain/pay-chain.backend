@@ -228,6 +228,34 @@ func TestAuthUsecase_ChangePassword(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestAuthUsecase_ChangePassword_ErrorBranches(t *testing.T) {
+	userRepo := new(MockUserRepository)
+	uc := newAuthUsecaseForTest(userRepo, new(MockEmailVerificationRepository), new(MockWalletRepository), new(MockChainRepository))
+	userID := uuid.New()
+
+	userRepo.On("GetByID", context.Background(), userID).Return(nil, errors.New("db down")).Once()
+	err := uc.ChangePassword(context.Background(), userID, &entities.ChangePasswordInput{
+		CurrentPassword: "any-pass",
+		NewPassword:     "new-pass-123",
+	})
+	assert.EqualError(t, err, "db down")
+
+	currentHash, _ := crypto.HashPassword("current-pass")
+	userRepo.On("GetByID", context.Background(), userID).Return(&entities.User{
+		ID:           userID,
+		Email:        "cp2@mail.com",
+		PasswordHash: currentHash,
+		Role:         entities.UserRoleUser,
+	}, nil).Once()
+	userRepo.On("UpdatePassword", context.Background(), userID, mock.AnythingOfType("string")).Return(errors.New("update fail")).Once()
+
+	err = uc.ChangePassword(context.Background(), userID, &entities.ChangePasswordInput{
+		CurrentPassword: "current-pass",
+		NewPassword:     "another-pass-123",
+	})
+	assert.EqualError(t, err, "update fail")
+}
+
 func TestAuthUsecase_GetUserByID(t *testing.T) {
 	userRepo := new(MockUserRepository)
 	uc := newAuthUsecaseForTest(userRepo, new(MockEmailVerificationRepository), new(MockWalletRepository), new(MockChainRepository))

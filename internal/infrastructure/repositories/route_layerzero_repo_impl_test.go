@@ -58,6 +58,31 @@ func TestRoutePolicyRepository_CRUDAndNotFound(t *testing.T) {
 	require.ErrorIs(t, repo.Delete(ctx, uuid.New()), domainerrors.ErrNotFound)
 }
 
+func TestRoutePolicyRepository_Create_DefaultsAndGeneratedID(t *testing.T) {
+	db := newTestDB(t)
+	createRoutePolicyTables(t, db)
+	ctx := context.Background()
+	repo := NewRoutePolicyRepository(db)
+
+	sourceID := uuid.New()
+	destID := uuid.New()
+	policy := &entities.RoutePolicy{
+		SourceChainID:     sourceID,
+		DestChainID:       destID,
+		DefaultBridgeType: 1,
+		// FallbackMode intentionally empty to hit default strict mode branch.
+		FallbackOrder: nil, // exercise marshal fallback default ordering branch.
+	}
+
+	require.NoError(t, repo.Create(ctx, policy))
+	require.NotEqual(t, uuid.Nil, policy.ID)
+
+	got, err := repo.GetByID(ctx, policy.ID)
+	require.NoError(t, err)
+	require.Equal(t, entities.BridgeFallbackModeStrict, got.FallbackMode)
+	require.Equal(t, []uint8{0}, got.FallbackOrder)
+}
+
 func TestLayerZeroConfigRepository_CRUDAndNotFound(t *testing.T) {
 	db := newTestDB(t)
 	createRoutePolicyTables(t, db)

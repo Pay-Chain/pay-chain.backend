@@ -28,11 +28,12 @@ func padRight(s string, length int) string {
 }
 
 func getChainTypeFromCAIP2(caip2 string) string {
-	parts := strings.Split(caip2, ":")
-	if len(parts) >= 1 {
-		return parts[0]
+	trimmed := strings.TrimSpace(caip2)
+	if trimmed == "" {
+		return ""
 	}
-	return ""
+	parts := strings.SplitN(trimmed, ":", 2)
+	return parts[0]
 }
 
 func isEVMChain(chainID string) bool {

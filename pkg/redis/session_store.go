@@ -27,6 +27,7 @@ var (
 	setSessionValue = Set
 	getSessionValue = Get
 	delSessionValue = Del
+	marshalSessionJSON = json.Marshal
 )
 
 // NewSessionStore creates a new session store
@@ -43,7 +44,7 @@ func NewSessionStore(encryptionKeyHex string) (*SessionStore, error) {
 
 // CreateSession stores encrypted session data in Redis
 func (s *SessionStore) CreateSession(ctx context.Context, sessionID string, data *SessionData, expiration time.Duration) error {
-	jsonData, err := json.Marshal(data)
+	jsonData, err := marshalSessionJSON(data)
 	if err != nil {
 		return err
 	}

@@ -3,6 +3,7 @@ package usecases
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -175,5 +176,77 @@ func TestEVMAdminOpsService_SetCCIPAndLayerZeroConfig(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, "0x5555555555555555555555555555555555555555", adapter)
 		require.Len(t, txs, 2)
+	})
+
+	t.Run("ccip adapter missing and payload required", func(t *testing.T) {
+		svcMissing := newEVMAdminOpsService(
+			func(context.Context, string, string) (*evmAdminContext, error) { return resolved, nil },
+			func(context.Context, uuid.UUID, string, string, uint8) (string, error) {
+				return "0x0000000000000000000000000000000000000000", nil
+			},
+			func(context.Context, uuid.UUID, string, abi.ABI, string, ...interface{}) (string, error) {
+				return "unused", nil
+			},
+		)
+		_, _, err := svcMissing.SetCCIPConfig(ctx, "eip155:8453", "eip155:42161", &ccipSelector, "")
+		require.Error(t, err)
+
+		svcRequired := newEVMAdminOpsService(
+			func(context.Context, string, string) (*evmAdminContext, error) { return resolved, nil },
+			func(context.Context, uuid.UUID, string, string, uint8) (string, error) {
+				return "0x4444444444444444444444444444444444444444", nil
+			},
+			func(context.Context, uuid.UUID, string, abi.ABI, string, ...interface{}) (string, error) {
+				return "unused", nil
+			},
+		)
+		_, _, err = svcRequired.SetCCIPConfig(ctx, "eip155:8453", "eip155:42161", nil, "")
+		require.Error(t, err)
+	})
+
+	t.Run("layerzero adapter lookup error and partial payload error", func(t *testing.T) {
+		svcLookupErr := newEVMAdminOpsService(
+			func(context.Context, string, string) (*evmAdminContext, error) { return resolved, nil },
+			func(context.Context, uuid.UUID, string, string, uint8) (string, error) {
+				return "", errors.New("adapter lookup failed")
+			},
+			func(context.Context, uuid.UUID, string, abi.ABI, string, ...interface{}) (string, error) {
+				return "unused", nil
+			},
+		)
+		_, _, err := svcLookupErr.SetLayerZeroConfig(ctx, "eip155:8453", "eip155:42161", &lzEid, "0x"+strings.Repeat("1", 64), "")
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "adapter lookup failed")
+
+		svcPartial := newEVMAdminOpsService(
+			func(context.Context, string, string) (*evmAdminContext, error) { return resolved, nil },
+			func(context.Context, uuid.UUID, string, string, uint8) (string, error) {
+				return "0x5555555555555555555555555555555555555555", nil
+			},
+			func(context.Context, uuid.UUID, string, abi.ABI, string, ...interface{}) (string, error) {
+				return "unused", nil
+			},
+		)
+		_, _, err = svcPartial.SetLayerZeroConfig(ctx, "eip155:8453", "eip155:42161", &lzEid, "", "")
+		require.Error(t, err)
+		_, _, err = svcPartial.SetLayerZeroConfig(ctx, "eip155:8453", "eip155:42161", nil, "0x"+strings.Repeat("1", 64), "")
+		require.Error(t, err)
+	})
+
+	t.Run("layerzero options only success", func(t *testing.T) {
+		svc := newEVMAdminOpsService(
+			func(context.Context, string, string) (*evmAdminContext, error) { return resolved, nil },
+			func(context.Context, uuid.UUID, string, string, uint8) (string, error) {
+				return "0x5555555555555555555555555555555555555555", nil
+			},
+			func(_ context.Context, _ uuid.UUID, _ string, _ abi.ABI, method string, _ ...interface{}) (string, error) {
+				require.Equal(t, "setEnforcedOptions", method)
+				return "0xtx-options", nil
+			},
+		)
+		adapter, txs, err := svc.SetLayerZeroConfig(ctx, "eip155:8453", "eip155:42161", nil, "", "0102")
+		require.NoError(t, err)
+		require.Equal(t, "0x5555555555555555555555555555555555555555", adapter)
+		require.Equal(t, []string{"0xtx-options"}, txs)
 	})
 }

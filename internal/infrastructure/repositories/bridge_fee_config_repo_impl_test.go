@@ -66,6 +66,32 @@ func TestBridgeConfigRepository_CRUDAndNotFound(t *testing.T) {
 	require.ErrorIs(t, repo.Delete(ctx, uuid.New()), domainerrors.ErrNotFound)
 }
 
+func TestBridgeConfigRepository_Create_AssignsIDWhenNil(t *testing.T) {
+	db := newTestDB(t)
+	createPaymentBridgeTable(t, db)
+	createBridgeAndFeeTables(t, db)
+	ctx := context.Background()
+	repo := NewBridgeConfigRepository(db)
+
+	bridgeID := uuid.New()
+	sourceID := uuid.New()
+	destID := uuid.New()
+	mustExec(t, db, `INSERT INTO payment_bridge(id,name,created_at,updated_at) VALUES (?,?,?,?)`,
+		bridgeID.String(), "CCIP", time.Now(), time.Now())
+
+	item := &entities.BridgeConfig{
+		BridgeID:      bridgeID,
+		SourceChainID: sourceID,
+		DestChainID:   destID,
+		RouterAddress: "0xrouter",
+		FeePercentage: "0.2",
+		Config:        "{}",
+		IsActive:      true,
+	}
+	require.NoError(t, repo.Create(ctx, item))
+	require.NotEqual(t, uuid.Nil, item.ID)
+}
+
 func TestFeeConfigRepository_CRUDAndNotFound(t *testing.T) {
 	db := newTestDB(t)
 	createBridgeAndFeeTables(t, db)
@@ -112,4 +138,21 @@ func TestFeeConfigRepository_CRUDAndNotFound(t *testing.T) {
 
 	require.ErrorIs(t, repo.Update(ctx, &entities.FeeConfig{ID: uuid.New()}), domainerrors.ErrNotFound)
 	require.ErrorIs(t, repo.Delete(ctx, uuid.New()), domainerrors.ErrNotFound)
+}
+
+func TestFeeConfigRepository_Create_AssignsIDWhenNil(t *testing.T) {
+	db := newTestDB(t)
+	createBridgeAndFeeTables(t, db)
+	ctx := context.Background()
+	repo := NewFeeConfigRepository(db)
+
+	item := &entities.FeeConfig{
+		ChainID:            uuid.New(),
+		TokenID:            uuid.New(),
+		PlatformFeePercent: "0.1",
+		FixedBaseFee:       "1",
+		MinFee:             "0",
+	}
+	require.NoError(t, repo.Create(ctx, item))
+	require.NotEqual(t, uuid.Nil, item.ID)
 }

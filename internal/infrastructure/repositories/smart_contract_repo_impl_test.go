@@ -165,3 +165,31 @@ func TestSmartContractRepository_NotFoundAndDecodeBranches(t *testing.T) {
 	require.NoError(t, err)
 	require.Nil(t, active)
 }
+
+func TestSmartContractRepository_CreateMarshalError(t *testing.T) {
+	db := newTestDB(t)
+	createSmartContractTable(t, db)
+	ctx := context.Background()
+
+	chainID := uuid.New()
+	repo := NewSmartContractRepository(db, &stubChainRepo{
+		chains: map[uuid.UUID]*entities.Chain{
+			chainID: {ID: chainID, ChainID: "eip155:8453"},
+		},
+	})
+
+	err := repo.Create(ctx, &entities.SmartContract{
+		ID:              uuid.New(),
+		Name:            "Bad ABI",
+		Type:            entities.ContractTypeRouter,
+		Version:         "1.0.0",
+		ChainUUID:       chainID,
+		ContractAddress: "0xabc",
+		ABI:             []map[string]interface{}{{"bad": func() {}}},
+		IsActive:        true,
+		CreatedAt:       time.Now(),
+		UpdatedAt:       time.Now(),
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "failed to marshal ABI")
+}

@@ -66,3 +66,13 @@ func TestWalletRepository_NotFoundBranches(t *testing.T) {
 	err = repo.SoftDelete(ctx, id)
 	require.ErrorIs(t, err, domainerrors.ErrNotFound)
 }
+
+func TestWalletRepository_SetPrimary_DBErrorBranch(t *testing.T) {
+	db := newTestDB(t)
+	// intentionally do not create wallets table
+	repo := NewWalletRepository(db)
+	ctx := context.Background()
+
+	err := repo.SetPrimary(ctx, uuid.New(), uuid.New())
+	require.Error(t, err)
+}

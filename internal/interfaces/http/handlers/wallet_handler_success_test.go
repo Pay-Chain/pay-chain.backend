@@ -311,6 +311,22 @@ func TestWalletHandler_ConnectWallet_ErrorPaths(t *testing.T) {
 	if w.Code != http.StatusConflict {
 		t.Fatalf("expected 409 for wallet already exists, got %d body=%s", w.Code, w.Body.String())
 	}
+
+	// Generic error branch: user lookup fails (not mapped by special handler cases).
+	req = httptest.NewRequest(http.MethodPost, "/wallets/connect", bytes.NewReader(connectBody))
+	req.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	genericErrRouter := gin.New()
+	ucGeneric := usecases.NewWalletUsecase(
+		repo,
+		walletUserRepoStub{user: nil},
+		walletChainRepoStub{chain: &entities.Chain{ID: chainID, ChainID: "8453", Type: entities.ChainTypeEVM}},
+	)
+	genericErrRouter.POST("/wallets/connect", withUser, NewWalletHandler(ucGeneric).ConnectWallet)
+	genericErrRouter.ServeHTTP(w, req)
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 for generic connect error branch, got %d body=%s", w.Code, w.Body.String())
+	}
 }
 
 type walletRepoErrorPathStub struct {

@@ -1,6 +1,7 @@
 package jwt
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -64,4 +65,33 @@ func TestJWTService_ValidateWrongSigningMethod(t *testing.T) {
 	_, err = svc.ValidateToken(tokenStr)
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, ErrInvalidToken)
+}
+
+func TestJWTService_GenerateTokenPair_ErrorBranches(t *testing.T) {
+	origSign := signJWTToken
+	t.Cleanup(func() { signJWTToken = origSign })
+
+	svc := NewJWTService("secret", time.Minute, 2*time.Minute)
+	userID := uuid.New()
+
+	t.Run("access token generation failed", func(t *testing.T) {
+		signJWTToken = func(*gjwt.Token, []byte) (string, error) {
+			return "", errors.New("sign failed")
+		}
+		_, err := svc.GenerateTokenPair(userID, "test@mail.com", "USER")
+		assert.Error(t, err)
+	})
+
+	t.Run("refresh token generation failed", func(t *testing.T) {
+		callCount := 0
+		signJWTToken = func(*gjwt.Token, []byte) (string, error) {
+			callCount++
+			if callCount == 2 {
+				return "", errors.New("sign refresh failed")
+			}
+			return "ok-token", nil
+		}
+		_, err := svc.GenerateTokenPair(userID, "test@mail.com", "USER")
+		assert.Error(t, err)
+	})
 }

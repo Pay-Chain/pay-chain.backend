@@ -240,7 +240,7 @@ func TestAuthHandler_RefreshChangePasswordLogoutAndSessionExpiry(t *testing.T) {
 				return 1710000000, nil
 			},
 			changePassFn: func(_ context.Context, userID uuid.UUID, input *entities.ChangePasswordInput) error {
-				if input.CurrentPassword == "wrong" {
+				if input.CurrentPassword == "wrong-pass-123" {
 					return domainerrors.NewAppError(http.StatusUnauthorized, domainerrors.CodeInvalidCredentials, "Current password is incorrect", domainerrors.ErrInvalidCredentials)
 				}
 				return nil
@@ -308,6 +308,15 @@ func TestAuthHandler_RefreshChangePasswordLogoutAndSessionExpiry(t *testing.T) {
 	r.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+
+	// Change password invalid credentials branch from usecase
+	req = httptest.NewRequest(http.MethodPost, "/auth/change-password", bytes.NewReader([]byte(`{"currentPassword":"wrong-pass-123","newPassword":"newpass123"}`)))
+	req.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d body=%s", w.Code, w.Body.String())
 	}
 
 	// Change password same password validation

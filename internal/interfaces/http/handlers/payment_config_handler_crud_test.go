@@ -239,6 +239,87 @@ func TestPaymentConfigHandler_BridgeConfigCRUD(t *testing.T) {
 	}
 }
 
+func TestPaymentConfigHandler_CreateBridgeConfig_DefaultFieldsAndValidation(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	sourceChain := uuid.New()
+	destChain := uuid.New()
+	bridgeID := uuid.New()
+	repo := newBridgeConfigRepoStub()
+
+	h := NewPaymentConfigHandler(
+		nil,
+		repo,
+		nil,
+		&crosschainChainRepoStub{
+			getByChainID: func(_ context.Context, chainID string) (*entities.Chain, error) {
+				switch chainID {
+				case "eip155:8453":
+					return &entities.Chain{ID: sourceChain}, nil
+				case "eip155:42161":
+					return &entities.Chain{ID: destChain}, nil
+				default:
+					return nil, domainerrors.ErrNotFound
+				}
+			},
+			getByCAIP2: func(context.Context, string) (*entities.Chain, error) { return nil, domainerrors.ErrNotFound },
+		},
+		nil,
+	)
+
+	r := gin.New()
+	r.POST("/bridge-configs", h.CreateBridgeConfig)
+
+	// Defaults branch: feePercentage/config empty and isActive omitted.
+	body := []byte(`{"bridgeId":"` + bridgeID.String() + `","sourceChainId":"eip155:8453","destChainId":"eip155:42161"}`)
+	req := httptest.NewRequest(http.MethodPost, "/bridge-configs", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	var created struct {
+		Config entities.BridgeConfig `json:"config"`
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &created)
+	if created.Config.FeePercentage != "0" {
+		t.Fatalf("expected default feePercentage=0 got %s", created.Config.FeePercentage)
+	}
+	if created.Config.Config != "{}" {
+		t.Fatalf("expected default config={} got %s", created.Config.Config)
+	}
+	if !created.Config.IsActive {
+		t.Fatalf("expected default isActive=true")
+	}
+
+	// invalid bridge id
+	req = httptest.NewRequest(http.MethodPost, "/bridge-configs", bytes.NewBufferString(`{"bridgeId":"bad","sourceChainId":"eip155:8453","destChainId":"eip155:42161"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for invalid bridgeId, got %d body=%s", rec.Code, rec.Body.String())
+	}
+
+	// invalid source chain
+	req = httptest.NewRequest(http.MethodPost, "/bridge-configs", bytes.NewBufferString(`{"bridgeId":"`+bridgeID.String()+`","sourceChainId":"bad-src","destChainId":"eip155:42161"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for invalid sourceChainId, got %d body=%s", rec.Code, rec.Body.String())
+	}
+
+	// invalid dest chain
+	req = httptest.NewRequest(http.MethodPost, "/bridge-configs", bytes.NewBufferString(`{"bridgeId":"`+bridgeID.String()+`","sourceChainId":"eip155:8453","destChainId":"bad-dest"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for invalid destChainId, got %d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestPaymentConfigHandler_FeeConfigCRUDAndTokenNotFound(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	chainID := uuid.New()

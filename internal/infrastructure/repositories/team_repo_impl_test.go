@@ -7,9 +7,10 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
 	"pay-chain.backend/internal/domain/entities"
 	domainerrors "pay-chain.backend/internal/domain/errors"
-	"gorm.io/gorm"
+	"pay-chain.backend/internal/infrastructure/models"
 )
 
 func createTeamTable(t *testing.T, db *gorm.DB) {
@@ -118,4 +119,27 @@ func TestTeamRepository_NotFoundBranches(t *testing.T) {
 
 	err = repo.SoftDelete(ctx, uuid.New())
 	require.ErrorIs(t, err, domainerrors.ErrNotFound)
+}
+
+func TestTeamRepository_ToEntity_DeletedAtBranch(t *testing.T) {
+	repo := NewTeamRepository(newTestDB(t))
+	now := time.Now()
+	deletedAt := now.Add(time.Minute)
+
+	m := &models.Team{
+		ID:           uuid.New(),
+		Name:         "Deleted Member",
+		Role:         "Engineer",
+		Bio:          "bio",
+		ImageURL:     "https://img",
+		DisplayOrder: 1,
+		IsActive:     false,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+		DeletedAt:    gorm.DeletedAt{Time: deletedAt, Valid: true},
+	}
+
+	e := repo.toEntity(m)
+	require.NotNil(t, e.DeletedAt)
+	require.Equal(t, deletedAt.Unix(), e.DeletedAt.Unix())
 }

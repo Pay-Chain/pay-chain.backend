@@ -53,3 +53,19 @@ func TestUnitOfWork_WithLockAndGetDB(t *testing.T) {
 	require.Equal(t, tx, u.GetDB(txCtx))
 	tx.Rollback()
 }
+
+func TestUnitOfWork_DoBeginFailure(t *testing.T) {
+	db := newTestDB(t)
+	u := &UnitOfWorkImpl{db: db}
+
+	sqlDB, err := db.DB()
+	require.NoError(t, err)
+	require.NoError(t, sqlDB.Close())
+
+	err = u.Do(context.Background(), func(ctx context.Context) error {
+		_ = ctx
+		return nil
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "failed to begin transaction")
+}

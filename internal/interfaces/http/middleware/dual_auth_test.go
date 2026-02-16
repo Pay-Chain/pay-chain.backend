@@ -312,6 +312,51 @@ func TestDualAuthMiddleware_StrictSessionModeWithoutTrustedSession(t *testing.T)
 	assert.Contains(t, w.Body.String(), "Authentication required")
 }
 
+func TestDualAuthMiddleware_JWTExpired(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	jwtService := jwt.NewJWTService("secret", -1*time.Second, time.Hour)
+
+	r := gin.New()
+	r.Use(middleware.DualAuthMiddleware(jwtService, nil, nil))
+	r.GET("/test", func(c *gin.Context) { c.Status(http.StatusOK) })
+
+	userID := uuid.New()
+	tokens, _ := jwtService.GenerateTokenPair(userID, "expired@test.com", "USER")
+	req, _ := http.NewRequest("GET", "/test", nil)
+	req.Header.Set("Authorization", "Bearer "+tokens.AccessToken)
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+	assert.Contains(t, w.Body.String(), "Token has expired")
+}
+
+func TestDualAuthMiddleware_JWTInvalidSignature(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	mockApiKeyRepo := new(MockApiKeyRepository)
+	mockUserRepo := new(MockUserRepository)
+	apiKeyUsecase := usecases.NewApiKeyUsecase(mockApiKeyRepo, mockUserRepo, "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff")
+	jwtService := jwt.NewJWTService("secret", time.Hour, time.Hour*24)
+
+	r := gin.New()
+	r.Use(middleware.DualAuthMiddleware(jwtService, apiKeyUsecase, nil))
+	r.GET("/test", func(c *gin.Context) { c.Status(http.StatusOK) })
+
+	userID := uuid.New()
+	tokens, _ := jwtService.GenerateTokenPair(userID, "sig@test.com", "USER")
+	mockApiKeyRepo.On("FindByUserID", mock.Anything, userID).Return([]*entities.ApiKey{}, nil).Once()
+
+	req, _ := http.NewRequest("GET", "/test", nil)
+	req.Header.Set("Authorization", "Bearer "+tokens.AccessToken)
+	req.Header.Set("X-Signature", "bad-signature")
+	req.Header.Set("X-Timestamp", fmt.Sprintf("%d", time.Now().Unix()))
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+	assert.Contains(t, w.Body.String(), "Invalid Signature for JWT user")
+}
+
 // Helpers
 func sha256Hex(data []byte) string {
 	hash := sha256.Sum256(data)

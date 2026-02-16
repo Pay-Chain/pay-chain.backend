@@ -21,6 +21,11 @@ import (
 	"pay-chain.backend/internal/domain/repositories"
 )
 
+var (
+	apiKeyRandRead  = rand.Read
+	apiKeyRandReader io.Reader = rand.Reader
+)
+
 type ApiKeyUsecase struct {
 	apiKeyRepo    repositories.ApiKeyRepository
 	userRepo      repositories.UserRepository
@@ -241,7 +246,7 @@ func (u *ApiKeyUsecase) RevokeApiKey(ctx context.Context, userID uuid.UUID, id u
 
 func generateRandomHex(n int) (string, error) {
 	bytes := make([]byte, n/2) // n is hex chars, so bytes is n/2
-	if _, err := rand.Read(bytes); err != nil {
+	if _, err := apiKeyRandRead(bytes); err != nil {
 		return "", err
 	}
 	return hex.EncodeToString(bytes), nil
@@ -270,7 +275,7 @@ func (u *ApiKeyUsecase) encrypt(plaintext string) (string, error) {
 	}
 
 	nonce := make([]byte, gcm.NonceSize())
-	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+	if _, err := io.ReadFull(apiKeyRandReader, nonce); err != nil {
 		return "", err
 	}
 

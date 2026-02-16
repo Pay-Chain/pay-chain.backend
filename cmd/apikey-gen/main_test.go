@@ -56,6 +56,37 @@ func TestBuildCredentials(t *testing.T) {
 	}
 }
 
+func TestBuildCredentials_RngFailureBranches(t *testing.T) {
+	orig := randRead
+	defer func() { randRead = orig }()
+
+	// first random read fails
+	randRead = func([]byte) (int, error) {
+		return 0, errors.New("rng fail first")
+	}
+	_, _, err := buildCredentials("live", 32)
+	if err == nil || !strings.Contains(err.Error(), "rng fail first") {
+		t.Fatalf("expected first rng error, got: %v", err)
+	}
+
+	// second random read fails
+	count := 0
+	randRead = func(b []byte) (int, error) {
+		count++
+		if count == 2 {
+			return 0, errors.New("rng fail second")
+		}
+		for i := range b {
+			b[i] = byte(i + 1)
+		}
+		return len(b), nil
+	}
+	_, _, err = buildCredentials("test", 32)
+	if err == nil || !strings.Contains(err.Error(), "rng fail second") {
+		t.Fatalf("expected second rng error, got: %v", err)
+	}
+}
+
 func TestMain_Success(t *testing.T) {
 	origArgs := os.Args
 	origStdout := os.Stdout

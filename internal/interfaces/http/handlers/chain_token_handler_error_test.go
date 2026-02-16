@@ -182,6 +182,15 @@ func TestChainHandler_ErrorPaths(t *testing.T) {
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d body=%s", rec.Code, rec.Body.String())
 	}
+
+	// create invalid JSON validation branch
+	req = httptest.NewRequest(http.MethodPost, "/admin/chains", bytes.NewBufferString("{"))
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for invalid create payload, got %d body=%s", rec.Code, rec.Body.String())
+	}
 }
 
 func TestTokenHandler_ErrorPaths(t *testing.T) {
@@ -263,6 +272,15 @@ func TestTokenHandler_ErrorPaths(t *testing.T) {
 	}
 	tokenRepo.getByIDErr = nil
 
+	// malformed update payload should fail bind
+	req = httptest.NewRequest(http.MethodPut, "/admin/tokens/"+tokenID.String(), bytes.NewBufferString("{"))
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for invalid update payload, got %d body=%s", rec.Code, rec.Body.String())
+	}
+
 	tokenRepo.updateErr = errors.New("update fail")
 	req = httptest.NewRequest(http.MethodPut, "/admin/tokens/"+tokenID.String(), bytes.NewReader([]byte(`{"name":"X"}`)))
 	req.Header.Set("Content-Type", "application/json")
@@ -281,4 +299,3 @@ func TestTokenHandler_ErrorPaths(t *testing.T) {
 		t.Fatalf("expected 500, got %d body=%s", rec.Code, rec.Body.String())
 	}
 }
-

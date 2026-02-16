@@ -47,6 +47,10 @@ func TestUserRepository_CRUDAndList(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, items, 1)
 
+	// SQLite does not support ILIKE, this covers search-query error propagation branch.
+	_, err = repo.List(ctx, "Ali")
+	require.Error(t, err)
+
 	require.NoError(t, repo.SoftDelete(ctx, u.ID))
 	_, err = repo.GetByID(ctx, u.ID)
 	require.ErrorIs(t, err, domainerrors.ErrNotFound)
@@ -73,4 +77,39 @@ func TestUserRepository_NotFoundBranches(t *testing.T) {
 
 	err = repo.SoftDelete(ctx, id)
 	require.ErrorIs(t, err, domainerrors.ErrNotFound)
+}
+
+func TestUserRepository_Update_WithKYCVerifiedAt_AndDBErrorBranch(t *testing.T) {
+	db := newTestDB(t)
+	createUserTable(t, db)
+	repo := NewUserRepository(db)
+	ctx := context.Background()
+
+	now := time.Now()
+	u := &entities.User{
+		ID:           uuid.New(),
+		Email:        "b@paychain.io",
+		Name:         "Bob",
+		PasswordHash: "hash",
+		Role:         entities.UserRoleUser,
+		KYCStatus:    entities.KYCIDCardVerified,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}
+	require.NoError(t, repo.Create(ctx, u))
+
+	verifiedAt := time.Now()
+	u.KYCStatus = entities.KYCFullyVerified
+	u.KYCVerifiedAt = &verifiedAt
+	require.NoError(t, repo.Update(ctx, u))
+
+	got, err := repo.GetByID(ctx, u.ID)
+	require.NoError(t, err)
+	require.Equal(t, entities.KYCFullyVerified, got.KYCStatus)
+
+	// DB error branch: call update on db without users table.
+	badDB := newTestDB(t)
+	badRepo := NewUserRepository(badDB)
+	err = badRepo.Update(ctx, &entities.User{ID: uuid.New(), Name: "x", Role: entities.UserRoleUser, KYCStatus: entities.KYCNotStarted})
+	require.Error(t, err)
 }

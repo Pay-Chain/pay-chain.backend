@@ -60,3 +60,14 @@ func TestPaymentBridgeRepository_NotFoundBranches(t *testing.T) {
 	err = repo.Delete(ctx, id)
 	require.ErrorIs(t, err, domainerrors.ErrNotFound)
 }
+
+func TestPaymentBridgeRepository_Create_AssignsIDWhenNil(t *testing.T) {
+	db := newTestDB(t)
+	createPaymentBridgeTable(t, db)
+	repo := NewPaymentBridgeRepository(db)
+	ctx := context.Background()
+
+	bridge := &entities.PaymentBridge{Name: "LayerZero"}
+	require.NoError(t, repo.Create(ctx, bridge))
+	require.NotEqual(t, uuid.Nil, bridge.ID)
+}

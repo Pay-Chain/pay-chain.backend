@@ -22,6 +22,14 @@ func TestGeneratePasswordHash(t *testing.T) {
 	}
 }
 
+func TestGeneratePasswordHash_InvalidCost(t *testing.T) {
+	// Bcrypt rejects cost outside allowed range.
+	_, err := generatePasswordHash("AdminPayChain2026!", 100)
+	if err == nil {
+		t.Fatal("expected error for invalid bcrypt cost")
+	}
+}
+
 func TestMain_PrintsHash(t *testing.T) {
 	origStdout := os.Stdout
 	defer func() { os.Stdout = origStdout }()

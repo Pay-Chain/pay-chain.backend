@@ -214,3 +214,10 @@ func TestNewEVMClient_ErrorBranches(t *testing.T) {
 }
 
 func ptrAddr(a common.Address) *common.Address { return &a }
+
+func TestEVMClient_Close_WithNilClient(t *testing.T) {
+	c := &EVMClient{}
+	require.NotPanics(t, func() {
+		c.Close()
+	})
+}

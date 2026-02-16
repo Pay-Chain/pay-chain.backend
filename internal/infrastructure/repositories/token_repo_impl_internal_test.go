@@ -42,6 +42,22 @@ func TestTokenRepository_ToEntityAndToModel_InternalBranches(t *testing.T) {
 	back := repo.toModel(entity)
 	require.NotNil(t, back.MaxAmount)
 	require.Equal(t, "100", *back.MaxAmount)
+
+	// Branch: chain preloaded => blockchain id and chain entity are populated.
+	model.Chain = models.Chain{
+		ID:        uuid.New(),
+		NetworkID: "8453",
+		Name:      "Base",
+		ChainType: "evm",
+		Symbol:    "ETH",
+		IsActive:  true,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	entityWithChain := repo.toEntity(model)
+	require.NotNil(t, entityWithChain.Chain)
+	require.Equal(t, "8453", entityWithChain.BlockchainID)
+	require.Equal(t, entities.ChainTypeEVM, entityWithChain.Chain.Type)
 }
 
 func TestTokenRepository_Create_ErrorBranch(t *testing.T) {

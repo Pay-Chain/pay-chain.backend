@@ -10,10 +10,12 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"pay-chain.backend/internal/domain/entities"
+	"pay-chain.backend/internal/infrastructure/blockchain"
 )
 
 func TestResolveRPCURL(t *testing.T) {
@@ -262,5 +264,84 @@ func TestOnchainAdapterUsecase_SendTx_Branches(t *testing.T) {
 		tx, err := u.sendTx(context.Background(), chainID, "0x0000000000000000000000000000000000000001", parsed, "setValue", 1)
 		require.NoError(t, err)
 		require.Equal(t, "0xabc", tx)
+	})
+}
+
+func TestOnchainAdapterUsecase_AdminGetAdapterClosureBranches(t *testing.T) {
+	ctx := context.Background()
+	destCAIP2 := "eip155:42161"
+	routerAddress := "0x00000000000000000000000000000000000000b2"
+	sourceID := uuid.New()
+	bridgeType := uint8(0)
+
+	t.Run("client factory missing", func(t *testing.T) {
+		u := NewOnchainAdapterUsecase(&quoteChainRepoStub{}, &scRepoStub{}, nil, "0xabc")
+		_, err := u.adminOps.getAdapter(ctx, sourceID, routerAddress, destCAIP2, bridgeType)
+		require.Error(t, err)
+		require.Contains(t, strings.ToLower(err.Error()), "invalid input")
+	})
+
+	t.Run("source chain not found", func(t *testing.T) {
+		u := NewOnchainAdapterUsecase(&quoteChainRepoStub{}, &scRepoStub{}, blockchain.NewClientFactory(), "0xabc")
+		_, err := u.adminOps.getAdapter(ctx, sourceID, routerAddress, destCAIP2, bridgeType)
+		require.Error(t, err)
+	})
+
+	t.Run("no active rpc", func(t *testing.T) {
+		repo := &quoteChainRepoStub{
+			byID: map[uuid.UUID]*entities.Chain{
+				sourceID: {ID: sourceID, ChainID: "8453", Type: entities.ChainTypeEVM},
+			},
+		}
+		u := NewOnchainAdapterUsecase(repo, &scRepoStub{}, blockchain.NewClientFactory(), "0xabc")
+		_, err := u.adminOps.getAdapter(ctx, sourceID, routerAddress, destCAIP2, bridgeType)
+		require.Error(t, err)
+		require.Contains(t, strings.ToLower(err.Error()), "invalid input")
+	})
+
+	t.Run("get evm client failed", func(t *testing.T) {
+		repo := &quoteChainRepoStub{
+			byID: map[uuid.UUID]*entities.Chain{
+				sourceID: {ID: sourceID, ChainID: "8453", Type: entities.ChainTypeEVM, RPCURL: "://bad-rpc"},
+			},
+		}
+		u := NewOnchainAdapterUsecase(repo, &scRepoStub{}, blockchain.NewClientFactory(), "0xabc")
+		_, err := u.adminOps.getAdapter(ctx, sourceID, routerAddress, destCAIP2, bridgeType)
+		require.Error(t, err)
+	})
+
+	t.Run("callGetAdapter decode failed", func(t *testing.T) {
+		rpcURL := "mock://decode-failed"
+		repo := &quoteChainRepoStub{
+			byID: map[uuid.UUID]*entities.Chain{
+				sourceID: {ID: sourceID, ChainID: "8453", Type: entities.ChainTypeEVM, RPCURL: rpcURL},
+			},
+		}
+		factory := blockchain.NewClientFactory()
+		factory.RegisterEVMClient(rpcURL, blockchain.NewEVMClientWithCallView(nil, func(context.Context, string, []byte) ([]byte, error) {
+			return []byte{0x01}, nil
+		}))
+		u := NewOnchainAdapterUsecase(repo, &scRepoStub{}, factory, "0xabc")
+		_, err := u.adminOps.getAdapter(ctx, sourceID, routerAddress, destCAIP2, bridgeType)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "failed to decode getAdapter")
+	})
+
+	t.Run("success", func(t *testing.T) {
+		rpcURL := "mock://get-adapter-ok"
+		want := common.HexToAddress("0x1111111111111111111111111111111111111111")
+		repo := &quoteChainRepoStub{
+			byID: map[uuid.UUID]*entities.Chain{
+				sourceID: {ID: sourceID, ChainID: "8453", Type: entities.ChainTypeEVM, RPCURL: rpcURL},
+			},
+		}
+		factory := blockchain.NewClientFactory()
+		factory.RegisterEVMClient(rpcURL, blockchain.NewEVMClientWithCallView(nil, func(context.Context, string, []byte) ([]byte, error) {
+			return payChainRouterAdminABI.Methods["getAdapter"].Outputs.Pack(want)
+		}))
+		u := NewOnchainAdapterUsecase(repo, &scRepoStub{}, factory, "0xabc")
+		got, err := u.adminOps.getAdapter(ctx, sourceID, routerAddress, destCAIP2, bridgeType)
+		require.NoError(t, err)
+		require.Equal(t, want.Hex(), got)
 	})
 }
