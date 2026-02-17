@@ -575,9 +575,6 @@ func generateFieldsFromFunctions(functionNames []string) []string {
 	for _, fn := range functionNames {
 		if strings.HasPrefix(fn, "set") && len(fn) > 3 {
 			field := strings.ToLower(fn[3:4]) + fn[4:]
-			if field == "" {
-				continue
-			}
 			if _, exists := seen[field]; exists {
 				continue
 			}

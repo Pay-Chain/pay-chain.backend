@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -29,9 +30,15 @@ func TestGenerateHash(t *testing.T) {
 func TestMain_PrintsHash(t *testing.T) {
 	origArgs := os.Args
 	origStdout := os.Stdout
+	origPrintf := printfFn
+	origGenerate := generateHashFn
+	origFatalf := fatalfFn
 	defer func() {
 		os.Args = origArgs
 		os.Stdout = origStdout
+		printfFn = origPrintf
+		generateHashFn = origGenerate
+		fatalfFn = origFatalf
 	}()
 
 	os.Args = []string{"hash-gen", "my-pass"}
@@ -52,5 +59,42 @@ func TestMain_PrintsHash(t *testing.T) {
 	}
 	if !strings.Contains(text, "Bcrypt Hash: ") {
 		t.Fatalf("hash output missing: %s", text)
+	}
+}
+
+func TestMain_DefaultPasswordAndFatalBranch(t *testing.T) {
+	origArgs := os.Args
+	origPrintf := printfFn
+	origGenerate := generateHashFn
+	origFatalf := fatalfFn
+	defer func() {
+		os.Args = origArgs
+		printfFn = origPrintf
+		generateHashFn = origGenerate
+		fatalfFn = origFatalf
+	}()
+
+	var printed []string
+	printfFn = func(format string, a ...interface{}) (int, error) {
+		printed = append(printed, format)
+		return 0, nil
+	}
+
+	type fatalSignal struct{}
+	fatalfFn = func(string, ...interface{}) { panic(fatalSignal{}) }
+	generateHashFn = func(string) (string, error) {
+		return "", errors.New("boom")
+	}
+
+	os.Args = []string{"hash-gen"}
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("expected fatal panic")
+		}
+	}()
+	main()
+
+	if len(printed) == 0 || !strings.Contains(printed[0], "Generating hash for password: %s") {
+		t.Fatalf("unexpected print sequence: %#v", printed)
 	}
 }

@@ -271,3 +271,58 @@ func TestWalletUsecase_GetWallets_And_SetPrimary(t *testing.T) {
 	err = uc.SetPrimaryWallet(context.Background(), userID, walletID)
 	assert.NoError(t, err)
 }
+
+func TestWalletUsecase_ConnectWallet_GetByAddressErrorAndSecondResolveFail(t *testing.T) {
+	t.Run("get by address returns unexpected error", func(t *testing.T) {
+		mockWalletRepo := new(MockWalletRepository)
+		mockUserRepo := new(MockUserRepository)
+		mockChainRepo := new(MockChainRepository)
+		uc := usecases.NewWalletUsecase(mockWalletRepo, mockUserRepo, mockChainRepo)
+
+		userID := uuid.New()
+		chainUUID := uuid.New()
+		input := &entities.ConnectWalletInput{ChainID: "eip155:8453", Address: "0xerr"}
+		user := &entities.User{ID: userID, Role: entities.UserRoleUser, KYCStatus: entities.KYCFullyVerified}
+
+		mockUserRepo.On("GetByID", context.Background(), userID).Return(user, nil).Once()
+		mockWalletRepo.On("GetByUserID", context.Background(), userID).Return([]*entities.Wallet{}, nil).Once()
+		mockChainRepo.On("GetByCAIP2", context.Background(), input.ChainID).Return(&entities.Chain{
+			ID:      chainUUID,
+			Type:    entities.ChainTypeEVM,
+			ChainID: "8453",
+		}, nil).Once()
+		mockWalletRepo.On("GetByAddress", context.Background(), chainUUID, input.Address).Return(nil, errors.New("lookup fail")).Once()
+
+		_, err := uc.ConnectWallet(context.Background(), userID, input)
+		assert.EqualError(t, err, "lookup fail")
+	})
+
+	t.Run("second resolver call fails after first success", func(t *testing.T) {
+		mockWalletRepo := new(MockWalletRepository)
+		mockUserRepo := new(MockUserRepository)
+		mockChainRepo := new(MockChainRepository)
+		uc := usecases.NewWalletUsecase(mockWalletRepo, mockUserRepo, mockChainRepo)
+
+		userID := uuid.New()
+		chainUUID := uuid.New()
+		input := &entities.ConnectWalletInput{ChainID: "eip155:8453", Address: "0xnewfail"}
+		user := &entities.User{ID: userID, Role: entities.UserRoleUser, KYCStatus: entities.KYCFullyVerified}
+
+		mockUserRepo.On("GetByID", context.Background(), userID).Return(user, nil).Once()
+		mockWalletRepo.On("GetByUserID", context.Background(), userID).Return([]*entities.Wallet{}, nil).Once()
+		// first ResolveFromAny -> success
+		mockChainRepo.On("GetByCAIP2", context.Background(), input.ChainID).Return(&entities.Chain{
+			ID:      chainUUID,
+			Type:    entities.ChainTypeEVM,
+			ChainID: "8453",
+		}, nil).Once()
+		mockWalletRepo.On("GetByAddress", context.Background(), chainUUID, input.Address).Return(nil, domainerrors.ErrNotFound).Once()
+		// second ResolveFromAny -> fail
+		mockChainRepo.On("GetByCAIP2", context.Background(), input.ChainID).Return(nil, domainerrors.ErrNotFound).Once()
+		mockChainRepo.On("GetByChainID", context.Background(), input.ChainID).Return(nil, domainerrors.ErrNotFound).Once()
+		mockChainRepo.On("GetByChainID", context.Background(), "8453").Return(nil, domainerrors.ErrNotFound).Once()
+
+		_, err := uc.ConnectWallet(context.Background(), userID, input)
+		assert.ErrorIs(t, err, domainerrors.ErrInvalidInput)
+	})
+}

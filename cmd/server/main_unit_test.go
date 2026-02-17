@@ -2,6 +2,8 @@ package main
 
 import (
 	"errors"
+	"os"
+	"syscall"
 	"testing"
 	"time"
 
@@ -146,6 +148,107 @@ func TestRunMainProcess_SuccessPath(t *testing.T) {
 	}
 	newSessionStore = redis.NewSessionStore
 	runServer = func(*gin.Engine, string) error { return nil }
+
+	if err := runMainProcess(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRunMainProcess_SuccessPath_WithDotenvLoadError(t *testing.T) {
+	withMainHooks(t)
+
+	loadDotenv = func(...string) error { return errors.New("dotenv missing") }
+	loadCfg = baseTestConfig
+	initLog = plog.Init
+	initRedis = func(string, string) error { return nil }
+	openDB = func(string) (*gorm.DB, error) {
+		return gorm.Open(sqlite.Open("file:main_success_dotenv_error?mode=memory&cache=shared"), &gorm.Config{})
+	}
+	newSessionStore = redis.NewSessionStore
+	runServer = func(*gin.Engine, string) error { return nil }
+
+	if err := runMainProcess(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+
+func TestDefaultOpenDBAndRunServerWrappers_ExecuteBodies(t *testing.T) {
+	withMainHooks(t)
+
+	// Cover default openDB wrapper body (main.go:35-42).
+	origOpen := openDB
+	defer func() { openDB = origOpen }()
+	openDB = func(dsn string) (*gorm.DB, error) {
+		return origOpen(dsn)
+	}
+	_, err := openDB("host=localhost port=-1 user=postgres password=postgres dbname=paychain sslmode=disable")
+	if err == nil {
+		t.Fatal("expected openDB wrapper to fail on invalid DSN")
+	}
+
+	// Cover default runServer wrapper body (main.go:44).
+	origRun := runServer
+	defer func() { runServer = origRun }()
+	runServer = func(r *gin.Engine, port string) error {
+		return origRun(r, port)
+	}
+	engine := gin.New()
+	err = runServer(engine, "invalid-port")
+	if err == nil {
+		t.Fatal("expected runServer wrapper to fail on invalid port")
+	}
+}
+
+func TestRunMainProcess_ProductionModeAndPingWarnPath(t *testing.T) {
+	withMainHooks(t)
+
+	loadDotenv = func(...string) error { return nil }
+	loadCfg = func() *config.Config {
+		cfg := baseTestConfig()
+		cfg.Server.Env = "production"
+		return cfg
+	}
+	initLog = plog.Init
+	initRedis = func(string, string) error { return nil }
+	openDB = func(string) (*gorm.DB, error) {
+		db, err := gorm.Open(sqlite.Open("file:main_prod_ping_warn?mode=memory&cache=shared"), &gorm.Config{})
+		if err != nil {
+			return nil, err
+		}
+		sqlDB, err := db.DB()
+		if err == nil {
+			_ = sqlDB.Close() // force Ping() error branch
+		}
+		return db, nil
+	}
+	newSessionStore = redis.NewSessionStore
+	runServer = func(*gin.Engine, string) error { return nil }
+
+	if err := runMainProcess(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gin.Mode() != gin.ReleaseMode {
+		t.Fatalf("expected release mode, got %s", gin.Mode())
+	}
+}
+
+func TestRunMainProcess_GracefulShutdownSignalBranch(t *testing.T) {
+	withMainHooks(t)
+
+	loadDotenv = func(...string) error { return nil }
+	loadCfg = baseTestConfig
+	initLog = plog.Init
+	initRedis = func(string, string) error { return nil }
+	openDB = func(string) (*gorm.DB, error) {
+		return gorm.Open(sqlite.Open("file:main_graceful_signal?mode=memory&cache=shared"), &gorm.Config{})
+	}
+	newSessionStore = redis.NewSessionStore
+	runServer = func(*gin.Engine, string) error {
+		_ = syscall.Kill(os.Getpid(), syscall.SIGINT)
+		time.Sleep(50 * time.Millisecond)
+		return nil
+	}
 
 	if err := runMainProcess(); err != nil {
 		t.Fatalf("unexpected error: %v", err)

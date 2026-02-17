@@ -75,4 +75,60 @@ func TestCallUint64View_DecodeErrorBranch(t *testing.T) {
 	require.Contains(t, err.Error(), "failed to decode uint64 result")
 }
 
+func TestCallViewHelpers_AddressAndBytesSuccess(t *testing.T) {
+	const addressABI = `[{"inputs":[],"name":"addr","outputs":[{"type":"address"}],"stateMutability":"view","type":"function"}]`
+	const bytesABI = `[{"inputs":[],"name":"payload","outputs":[{"type":"bytes"}],"stateMutability":"view","type":"function"}]`
+
+	addressParsed, err := parseABI(addressABI)
+	require.NoError(t, err)
+	bytesParsed, err := parseABI(bytesABI)
+	require.NoError(t, err)
+
+	expectedAddress := common.HexToAddress("0x0000000000000000000000000000000000000009")
+	clientAddress := blockchain.NewEVMClientWithCallView(big.NewInt(8453), func(_ context.Context, _ string, _ []byte) ([]byte, error) {
+		return addressParsed.Methods["addr"].Outputs.Pack(expectedAddress)
+	})
+	gotAddress, err := callAddressView(context.Background(), clientAddress, common.Address{}.Hex(), addressABI, "addr")
+	require.NoError(t, err)
+	require.Equal(t, expectedAddress, gotAddress)
+
+	expectedBytes := []byte{0x01, 0x02, 0x03}
+	clientBytes := blockchain.NewEVMClientWithCallView(big.NewInt(8453), func(_ context.Context, _ string, _ []byte) ([]byte, error) {
+		return bytesParsed.Methods["payload"].Outputs.Pack(expectedBytes)
+	})
+	gotBytes, err := callBytesView(context.Background(), clientBytes, common.Address{}.Hex(), bytesABI, "payload")
+	require.NoError(t, err)
+	require.Equal(t, expectedBytes, gotBytes)
+}
+
+func TestCallViewHelpers_AddressAndBytes_ErrorBranches(t *testing.T) {
+	const badABI = `not-json`
+	client := blockchain.NewEVMClientWithCallView(big.NewInt(8453), func(_ context.Context, _ string, _ []byte) ([]byte, error) {
+		return []byte{}, nil
+	})
+
+	_, err := callAddressView(context.Background(), client, common.Address{}.Hex(), badABI, "x")
+	require.Error(t, err)
+
+	_, err = callBytesView(context.Background(), client, common.Address{}.Hex(), badABI, "x")
+	require.Error(t, err)
+
+	const needArgAddressABI = `[{"inputs":[{"name":"x","type":"uint256"}],"name":"addr","outputs":[{"type":"address"}],"stateMutability":"view","type":"function"}]`
+	const needArgBytesABI = `[{"inputs":[{"name":"x","type":"uint256"}],"name":"payload","outputs":[{"type":"bytes"}],"stateMutability":"view","type":"function"}]`
+
+	// pack error branches
+	_, err = callAddressView(context.Background(), client, common.Address{}.Hex(), needArgAddressABI, "addr")
+	require.Error(t, err)
+	_, err = callBytesView(context.Background(), client, common.Address{}.Hex(), needArgBytesABI, "payload")
+	require.Error(t, err)
+
+	// decode error branches
+	_, err = callAddressView(context.Background(), client, common.Address{}.Hex(), `[{"inputs":[],"name":"addr","outputs":[{"type":"address"}],"stateMutability":"view","type":"function"}]`, "addr")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "failed to decode address result")
+	_, err = callBytesView(context.Background(), client, common.Address{}.Hex(), `[{"inputs":[],"name":"payload","outputs":[{"type":"bytes"}],"stateMutability":"view","type":"function"}]`, "payload")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "failed to decode bytes result")
+}
+
 var _ = abi.Arguments{}

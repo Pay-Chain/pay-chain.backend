@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -13,17 +14,13 @@ func newTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	dsn := fmt.Sprintf("file:%s_%d?mode=memory&cache=shared", t.Name(), time.Now().UnixNano())
 	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
+	require.NoError(t, err, "open sqlite")
 	return db
 }
 
 func mustExec(t *testing.T, db *gorm.DB, q string, args ...interface{}) {
 	t.Helper()
-	if err := db.Exec(q, args...).Error; err != nil {
-		t.Fatalf("exec failed: %v, query=%s", err, q)
-	}
+	require.NoError(t, db.Exec(q, args...).Error, "exec failed: query=%s", q)
 }
 
 func createPaymentBridgeTable(t *testing.T, db *gorm.DB) {

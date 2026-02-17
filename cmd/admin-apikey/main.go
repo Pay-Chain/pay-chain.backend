@@ -25,6 +25,10 @@ var openAdminAPIKeyDB = func(dsn string) (*gorm.DB, error) {
 	return gorm.Open(postgres.New(postgres.Config{DSN: dsn, PreferSimpleProtocol: true}), &gorm.Config{PrepareStmt: false})
 }
 
+var openAdminSQLDB = func(db *gorm.DB) (io.Closer, error) {
+	return db.DB()
+}
+
 type adminAPIKeyRuntime interface {
 	GetUserByID(ctx context.Context, userID uuid.UUID) (*entities.User, error)
 	CreateApiKey(ctx context.Context, userID uuid.UUID, input *entities.CreateApiKeyInput) (*entities.CreateApiKeyResponse, error)
@@ -66,7 +70,7 @@ func defaultAdminAPIKeyDeps() adminAPIKeyDeps {
 				return nil, nil, fmt.Errorf("failed to connect db: %w", err)
 			}
 
-			sqlDB, err := db.DB()
+			sqlDB, err := openAdminSQLDB(db)
 			if err != nil {
 				return nil, nil, fmt.Errorf("failed to init sql db: %w", err)
 			}

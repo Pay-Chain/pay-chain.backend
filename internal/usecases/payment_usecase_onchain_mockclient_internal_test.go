@@ -57,7 +57,7 @@ func TestPaymentUsecase_CalculateOnchainApprovalAmount_MockClientBranches(t *tes
 		u := &PaymentUsecase{
 			chainRepo: chainRepo,
 			clientFactory: mockApprovalFactory(rpcURL, []approvalCallStep{
-				{out: []byte{}, err: nil},                      // quote decode fail -> fallback
+				{out: []byte{}, err: nil},                       // quote decode fail -> fallback
 				{out: nil, err: errors.New("fixed fee failed")}, // FIXED_BASE_FEE call
 			}),
 		}
@@ -106,7 +106,86 @@ func TestPaymentUsecase_CalculateOnchainApprovalAmount_MockClientBranches(t *tes
 		// amount + max(fixed=10, percentage=100) => 1100, then max(totalCharged=1200)
 		require.Equal(t, "1200", val)
 	})
-}
+
+		t.Run("quote call error then fallback succeeds", func(t *testing.T) {
+		u := &PaymentUsecase{
+			chainRepo: chainRepo,
+			clientFactory: mockApprovalFactory(rpcURL, []approvalCallStep{
+				{out: nil, err: errors.New("quote call failed")},
+				{out: commonFromHex(t, mustPackOutputs(t, []string{"uint256"}, big.NewInt(20))), err: nil},
+				{out: commonFromHex(t, mustPackOutputs(t, []string{"uint256"}, big.NewInt(100))), err: nil}, // 1%
+			}),
+		}
+		val, err := u.calculateOnchainApprovalAmount(&entities.Payment{
+			SourceChainID: chainID,
+			SourceAmount:  "1000",
+			TotalCharged:  "1000",
+		}, "0x1111111111111111111111111111111111111111")
+		require.NoError(t, err)
+			require.Equal(t, "1020", val)
+		})
+
+		t.Run("totalCharged parse fallback and RPC list resolution", func(t *testing.T) {
+			rpcListURL := "mock://approval-rpcs"
+			chainRepoRPCList := &approvalChainRepoStub{chain: &entities.Chain{
+				ID:   chainID,
+				RPCs: []entities.ChainRPC{{URL: rpcListURL, IsActive: true}},
+			}}
+			factory := blockchain.NewClientFactory()
+			factory.RegisterEVMClient(rpcListURL, blockchain.NewEVMClientWithCallView(big.NewInt(8453), func(context.Context, string, []byte) ([]byte, error) {
+				return commonFromHex(t, mustPackOutputs(t, []string{"uint256", "uint256"}, big.NewInt(1100), big.NewInt(10))), nil
+			}))
+
+			u := &PaymentUsecase{
+				chainRepo:      chainRepoRPCList,
+				clientFactory:  factory,
+				contractRepo:   &scRepoStub{},
+				routePolicyRepo: nil,
+			}
+			val, err := u.calculateOnchainApprovalAmount(&entities.Payment{
+				SourceChainID: chainID,
+				SourceAmount:  "1000",
+				TotalCharged:  "not-a-number",
+			}, "0x1111111111111111111111111111111111111111")
+			require.NoError(t, err)
+			require.Equal(t, "1100", val)
+		})
+
+		t.Run("decode FIXED_BASE_FEE failed", func(t *testing.T) {
+			u := &PaymentUsecase{
+				chainRepo: chainRepo,
+				clientFactory: mockApprovalFactory(rpcURL, []approvalCallStep{
+					{out: []byte{}, err: nil}, // quote decode fail -> fallback
+					{out: []byte{0x01}, err: nil},
+				}),
+			}
+			_, err := u.calculateOnchainApprovalAmount(&entities.Payment{
+				SourceChainID: chainID,
+				SourceAmount:  "1000",
+				TotalCharged:  "1000",
+			}, "0x1111111111111111111111111111111111111111")
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "failed to decode FIXED_BASE_FEE")
+		})
+
+		t.Run("decode FEE_RATE_BPS failed", func(t *testing.T) {
+			u := &PaymentUsecase{
+				chainRepo: chainRepo,
+				clientFactory: mockApprovalFactory(rpcURL, []approvalCallStep{
+					{out: []byte{}, err: nil}, // quote decode fail
+					{out: commonFromHex(t, mustPackOutputs(t, []string{"uint256"}, big.NewInt(10))), err: nil},
+					{out: []byte{0x01}, err: nil},
+				}),
+			}
+			_, err := u.calculateOnchainApprovalAmount(&entities.Payment{
+				SourceChainID: chainID,
+				SourceAmount:  "1000",
+				TotalCharged:  "1000",
+			}, "0x1111111111111111111111111111111111111111")
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "failed to decode FEE_RATE_BPS")
+		})
+	}
 
 func commonFromHex(t *testing.T, hexString string) []byte {
 	t.Helper()

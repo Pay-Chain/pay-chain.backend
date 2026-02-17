@@ -95,3 +95,32 @@ func TestJWTService_GenerateTokenPair_ErrorBranches(t *testing.T) {
 		assert.Error(t, err)
 	})
 }
+
+func TestJWTService_ValidateToken_ClaimsTypeAndValidityBranches(t *testing.T) {
+	origParse := parseJWTWithClaims
+	t.Cleanup(func() { parseJWTWithClaims = origParse })
+
+	svc := NewJWTService("secret", time.Minute, 2*time.Minute)
+
+	t.Run("invalid claims type", func(t *testing.T) {
+		parseJWTWithClaims = func(_ string, _ gjwt.Claims, _ gjwt.Keyfunc) (*gjwt.Token, error) {
+			return &gjwt.Token{
+				Claims: gjwt.MapClaims{"foo": "bar"},
+				Valid:  true,
+			}, nil
+		}
+		_, err := svc.ValidateToken("token")
+		assert.ErrorIs(t, err, ErrInvalidToken)
+	})
+
+	t.Run("token invalid flag", func(t *testing.T) {
+		parseJWTWithClaims = func(_ string, _ gjwt.Claims, _ gjwt.Keyfunc) (*gjwt.Token, error) {
+			return &gjwt.Token{
+				Claims: &Claims{UserID: uuid.New()},
+				Valid:  false,
+			}, nil
+		}
+		_, err := svc.ValidateToken("token")
+		assert.ErrorIs(t, err, ErrInvalidToken)
+	})
+}

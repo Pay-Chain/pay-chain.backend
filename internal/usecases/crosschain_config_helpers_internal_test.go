@@ -15,7 +15,9 @@ type ccfgChainRepoStub struct {
 	getByCAIP2Fn func(ctx context.Context, caip2 string) (*entities.Chain, error)
 }
 
-func (s *ccfgChainRepoStub) GetByID(context.Context, uuid.UUID) (*entities.Chain, error) { return nil, domainerrors.ErrNotFound }
+func (s *ccfgChainRepoStub) GetByID(context.Context, uuid.UUID) (*entities.Chain, error) {
+	return nil, domainerrors.ErrNotFound
+}
 func (s *ccfgChainRepoStub) GetByChainID(context.Context, string) (*entities.Chain, error) {
 	return nil, domainerrors.ErrNotFound
 }
@@ -63,7 +65,7 @@ func (s *ccfgContractRepoStub) GetAll(context.Context, utils.PaginationParams) (
 	return nil, 0, nil
 }
 func (s *ccfgContractRepoStub) Update(context.Context, *entities.SmartContract) error { return nil }
-func (s *ccfgContractRepoStub) SoftDelete(context.Context, uuid.UUID) error            { return nil }
+func (s *ccfgContractRepoStub) SoftDelete(context.Context, uuid.UUID) error           { return nil }
 
 func TestCrosschainConfigUsecase_DeriveDestinationContractHex(t *testing.T) {
 	destUUID := uuid.New()
@@ -113,6 +115,44 @@ func TestCrosschainConfigUsecase_DeriveDestinationContractHex_NotFound(t *testin
 	_, err := u.deriveDestinationContractHex(context.Background(), "eip155:42161", entities.ContractTypeAdapterHyperbridge)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "active destination contract")
+}
+
+func TestCrosschainConfigUsecase_DeriveDestinationContractHex_InvalidDestInput(t *testing.T) {
+	chainRepo := &ccfgChainRepoStub{
+		getByCAIP2Fn: func(_ context.Context, caip2 string) (*entities.Chain, error) {
+			return nil, domainerrors.ErrNotFound
+		},
+	}
+	u := &CrosschainConfigUsecase{
+		chainRepo:     chainRepo,
+		contractRepo:  &ccfgContractRepoStub{},
+		chainResolver: NewChainResolver(chainRepo),
+	}
+	_, err := u.deriveDestinationContractHex(context.Background(), "bad-dest", entities.ContractTypeAdapterHyperbridge)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "invalid input")
+}
+
+func TestCrosschainConfigUsecase_DeriveDestinationContractHex_InvalidContractAddress(t *testing.T) {
+	destUUID := uuid.New()
+	chainRepo := &ccfgChainRepoStub{
+		getByCAIP2Fn: func(_ context.Context, caip2 string) (*entities.Chain, error) {
+			return &entities.Chain{ID: destUUID, ChainID: "42161", Type: entities.ChainTypeEVM}, nil
+		},
+	}
+	contractRepo := &ccfgContractRepoStub{
+		getActiveFn: func(context.Context, uuid.UUID, entities.SmartContractType) (*entities.SmartContract, error) {
+			return &entities.SmartContract{ContractAddress: "not-hex-address"}, nil
+		},
+	}
+	u := &CrosschainConfigUsecase{
+		chainRepo:     chainRepo,
+		contractRepo:  contractRepo,
+		chainResolver: NewChainResolver(chainRepo),
+	}
+	_, err := u.deriveDestinationContractHex(context.Background(), "eip155:42161", entities.ContractTypeAdapterHyperbridge)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "invalid hex address")
 }
 
 func TestCrosschainConfigUsecase_CheckFeeQuoteHealth_Guards(t *testing.T) {

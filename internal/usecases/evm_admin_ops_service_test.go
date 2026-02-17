@@ -42,6 +42,9 @@ func TestEVMAdminOpsService_RegisterAndDefault(t *testing.T) {
 	_, err := svc.RegisterAdapter(ctx, "eip155:8453", "eip155:42161", 0, "not-hex")
 	require.Error(t, err)
 
+	_, err = svc.RegisterAdapter(ctx, "eip155:8453", "eip155:42161", 0, "0x0000000000000000000000000000000000000000")
+	require.Error(t, err)
+
 	tx, err := svc.RegisterAdapter(ctx, "eip155:8453", "eip155:42161", 0, "0x3333333333333333333333333333333333333333")
 	require.NoError(t, err)
 	require.Equal(t, "0xtxhash", tx)
@@ -60,6 +63,28 @@ func TestEVMAdminOpsService_RegisterAndDefault(t *testing.T) {
 	_, err = svcResolveErr.SetDefaultBridgeType(ctx, "eip155:8453", "eip155:42161", 1)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "resolve failed")
+
+	svcRegisterResolveErr := newEVMAdminOpsService(
+		func(context.Context, string, string) (*evmAdminContext, error) {
+			return nil, errors.New("register resolve failed")
+		},
+		nil,
+		sendTx,
+	)
+	_, err = svcRegisterResolveErr.RegisterAdapter(ctx, "eip155:8453", "eip155:42161", 1, "0x3333333333333333333333333333333333333333")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "register resolve failed")
+
+	svcRegisterTxErr := newEVMAdminOpsService(
+		func(context.Context, string, string) (*evmAdminContext, error) { return resolved, nil },
+		nil,
+		func(context.Context, uuid.UUID, string, abi.ABI, string, ...interface{}) (string, error) {
+			return "", errors.New("tx failed")
+		},
+	)
+	_, err = svcRegisterTxErr.RegisterAdapter(ctx, "eip155:8453", "eip155:42161", 1, "0x3333333333333333333333333333333333333333")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "tx failed")
 }
 
 func TestEVMAdminOpsService_SetHyperbridgeConfig(t *testing.T) {
@@ -248,5 +273,152 @@ func TestEVMAdminOpsService_SetCCIPAndLayerZeroConfig(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, "0x5555555555555555555555555555555555555555", adapter)
 		require.Equal(t, []string{"0xtx-options"}, txs)
+	})
+
+	t.Run("ccip selector tx error", func(t *testing.T) {
+		svc := newEVMAdminOpsService(
+			func(context.Context, string, string) (*evmAdminContext, error) { return resolved, nil },
+			func(context.Context, uuid.UUID, string, string, uint8) (string, error) {
+				return "0x4444444444444444444444444444444444444444", nil
+			},
+			func(_ context.Context, _ uuid.UUID, _ string, _ abi.ABI, method string, _ ...interface{}) (string, error) {
+				if method == "setChainSelector" {
+					return "", errors.New("set selector failed")
+				}
+				return "0xok", nil
+			},
+		)
+		_, _, err := svc.SetCCIPConfig(ctx, "eip155:8453", "eip155:42161", &ccipSelector, "")
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "set selector failed")
+	})
+
+	t.Run("ccip destination tx error", func(t *testing.T) {
+		svc := newEVMAdminOpsService(
+			func(context.Context, string, string) (*evmAdminContext, error) { return resolved, nil },
+			func(context.Context, uuid.UUID, string, string, uint8) (string, error) {
+				return "0x4444444444444444444444444444444444444444", nil
+			},
+			func(_ context.Context, _ uuid.UUID, _ string, _ abi.ABI, method string, _ ...interface{}) (string, error) {
+				if method == "setDestinationAdapter" {
+					return "", errors.New("set destination failed")
+				}
+				return "0xok", nil
+			},
+		)
+		_, _, err := svc.SetCCIPConfig(ctx, "eip155:8453", "eip155:42161", nil, "0xabcd")
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "set destination failed")
+	})
+
+	t.Run("layerzero adapter missing", func(t *testing.T) {
+		svc := newEVMAdminOpsService(
+			func(context.Context, string, string) (*evmAdminContext, error) { return resolved, nil },
+			func(context.Context, uuid.UUID, string, string, uint8) (string, error) {
+				return "0x0000000000000000000000000000000000000000", nil
+			},
+			func(context.Context, uuid.UUID, string, abi.ABI, string, ...interface{}) (string, error) {
+				return "unused", nil
+			},
+		)
+		_, _, err := svc.SetLayerZeroConfig(ctx, "eip155:8453", "eip155:42161", &lzEid, "0x"+strings.Repeat("1", 64), "")
+		require.Error(t, err)
+	})
+
+	t.Run("layerzero setRoute tx error", func(t *testing.T) {
+		svc := newEVMAdminOpsService(
+			func(context.Context, string, string) (*evmAdminContext, error) { return resolved, nil },
+			func(context.Context, uuid.UUID, string, string, uint8) (string, error) {
+				return "0x5555555555555555555555555555555555555555", nil
+			},
+			func(_ context.Context, _ uuid.UUID, _ string, _ abi.ABI, method string, _ ...interface{}) (string, error) {
+				if method == "setRoute" {
+					return "", errors.New("set route failed")
+				}
+				return "0xok", nil
+			},
+		)
+		_, _, err := svc.SetLayerZeroConfig(ctx, "eip155:8453", "eip155:42161", &lzEid, "0x"+strings.Repeat("1", 64), "")
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "set route failed")
+	})
+
+	t.Run("layerzero options tx error", func(t *testing.T) {
+		svc := newEVMAdminOpsService(
+			func(context.Context, string, string) (*evmAdminContext, error) { return resolved, nil },
+			func(context.Context, uuid.UUID, string, string, uint8) (string, error) {
+				return "0x5555555555555555555555555555555555555555", nil
+			},
+			func(_ context.Context, _ uuid.UUID, _ string, _ abi.ABI, method string, _ ...interface{}) (string, error) {
+				if method == "setEnforcedOptions" {
+					return "", errors.New("set options failed")
+				}
+				return "0xok", nil
+			},
+		)
+		_, _, err := svc.SetLayerZeroConfig(ctx, "eip155:8453", "eip155:42161", nil, "", "0x0102")
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "set options failed")
+	})
+
+	t.Run("layerzero payload required", func(t *testing.T) {
+		svc := newEVMAdminOpsService(
+			func(context.Context, string, string) (*evmAdminContext, error) { return resolved, nil },
+			func(context.Context, uuid.UUID, string, string, uint8) (string, error) {
+				return "0x5555555555555555555555555555555555555555", nil
+			},
+			func(context.Context, uuid.UUID, string, abi.ABI, string, ...interface{}) (string, error) {
+				return "unused", nil
+			},
+		)
+		_, _, err := svc.SetLayerZeroConfig(ctx, "eip155:8453", "eip155:42161", nil, "", "")
+		require.Error(t, err)
+		var appErr *derrs.AppError
+		require.ErrorAs(t, err, &appErr)
+		require.Equal(t, "dstEid+peerHex or optionsHex is required", appErr.Message)
+	})
+}
+
+func TestEVMAdminOpsService_SetHyperbridgeConfig_MoreBranches(t *testing.T) {
+	ctx := context.Background()
+	sourceID := uuid.New()
+	resolved := &evmAdminContext{
+		sourceChainID: sourceID,
+		destCAIP2:     "eip155:42161",
+		routerAddress: "0x1111111111111111111111111111111111111111",
+	}
+
+	t.Run("setStateMachine tx error", func(t *testing.T) {
+		svc := newEVMAdminOpsService(
+			func(context.Context, string, string) (*evmAdminContext, error) { return resolved, nil },
+			func(context.Context, uuid.UUID, string, string, uint8) (string, error) {
+				return "0x3333333333333333333333333333333333333333", nil
+			},
+			func(_ context.Context, _ uuid.UUID, _ string, _ abi.ABI, method string, _ ...interface{}) (string, error) {
+				if method == "setStateMachineId" {
+					return "", errors.New("set state machine failed")
+				}
+				return "0xok", nil
+			},
+		)
+		_, _, err := svc.SetHyperbridgeConfig(ctx, "eip155:8453", "eip155:42161", "0x01", "")
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "set state machine failed")
+	})
+
+	t.Run("destination only success", func(t *testing.T) {
+		svc := newEVMAdminOpsService(
+			func(context.Context, string, string) (*evmAdminContext, error) { return resolved, nil },
+			func(context.Context, uuid.UUID, string, string, uint8) (string, error) {
+				return "0x3333333333333333333333333333333333333333", nil
+			},
+			func(context.Context, uuid.UUID, string, abi.ABI, string, ...interface{}) (string, error) {
+				return "0xtx-dest", nil
+			},
+		)
+		adapter, txs, err := svc.SetHyperbridgeConfig(ctx, "eip155:8453", "eip155:42161", "", "0x02")
+		require.NoError(t, err)
+		require.Equal(t, "0x3333333333333333333333333333333333333333", adapter)
+		require.Equal(t, []string{"0xtx-dest"}, txs)
 	})
 }

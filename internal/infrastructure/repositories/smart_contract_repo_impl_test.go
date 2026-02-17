@@ -2,14 +2,17 @@ package repositories
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"github.com/volatiletech/null/v8"
+	"gorm.io/gorm"
 	"pay-chain.backend/internal/domain/entities"
 	domainerrors "pay-chain.backend/internal/domain/errors"
+	"pay-chain.backend/internal/infrastructure/models"
 	"pay-chain.backend/pkg/utils"
 )
 
@@ -192,4 +195,243 @@ func TestSmartContractRepository_CreateMarshalError(t *testing.T) {
 	})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "failed to marshal ABI")
+}
+
+func TestSmartContractRepository_Query_DBErrorAndFilterCompat(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("db errors when table missing", func(t *testing.T) {
+		db := newTestDB(t)
+		repo := NewSmartContractRepository(db, &stubChainRepo{})
+		chainID := uuid.New()
+
+		_, _, err := repo.GetByChain(ctx, chainID, utils.PaginationParams{Page: 1, Limit: 10})
+		require.Error(t, err)
+
+		_, _, err = repo.GetAll(ctx, utils.PaginationParams{Page: 1, Limit: 10})
+		require.Error(t, err)
+
+		_, _, err = repo.GetFiltered(ctx, &chainID, entities.ContractTypeRouter, utils.PaginationParams{Page: 1, Limit: 10})
+		require.Error(t, err)
+	})
+
+	t.Run("filter compat for pool and DEX_POOL type", func(t *testing.T) {
+		db := newTestDB(t)
+		createSmartContractTable(t, db)
+		chainID := uuid.New()
+		repo := NewSmartContractRepository(db, &stubChainRepo{
+			chains: map[uuid.UUID]*entities.Chain{
+				chainID: {ID: chainID, ChainID: "eip155:8453"},
+			},
+		})
+
+		// Legacy DEX_POOL row.
+		mustExec(t, db, `INSERT INTO smart_contracts (id,name,type,version,chain_id,address,deployer_address,is_active,abi,metadata,start_block,created_at,updated_at)
+			VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+			uuid.New().String(), "Legacy Pool", "DEX_POOL", "1.0.0", chainID.String(),
+			"0x1111111111111111111111111111111111111111", "", true, `[]`, `{}`, 0, time.Now(), time.Now(),
+		)
+
+		// New POOL row.
+		mustExec(t, db, `INSERT INTO smart_contracts (id,name,type,version,chain_id,address,deployer_address,is_active,abi,metadata,start_block,created_at,updated_at)
+			VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+			uuid.New().String(), "New Pool", string(entities.ContractTypePool), "1.0.0", chainID.String(),
+			"0x2222222222222222222222222222222222222222", "", true, `[]`, `{}`, 0, time.Now(), time.Now(),
+		)
+
+		items, total, err := repo.GetFiltered(ctx, &chainID, entities.ContractTypePool, utils.PaginationParams{Page: 1, Limit: 10})
+		require.NoError(t, err)
+		require.Equal(t, int64(2), total)
+		require.Len(t, items, 2)
+	})
+}
+
+func TestSmartContractRepository_DBErrorBranches_OnSingleLookups(t *testing.T) {
+	db := newTestDB(t)
+	// intentionally skip table creation
+	repo := NewSmartContractRepository(db, &stubChainRepo{})
+	ctx := context.Background()
+
+	_, err := repo.GetByID(ctx, uuid.New())
+	require.Error(t, err)
+
+	_, err = repo.GetByChainAndAddress(ctx, uuid.New(), "0xabc")
+	require.Error(t, err)
+
+	_, err = repo.GetActiveContract(ctx, uuid.New(), entities.ContractTypeRouter)
+	require.Error(t, err)
+
+	err = repo.SoftDelete(ctx, uuid.New())
+	require.Error(t, err)
+}
+
+func TestSmartContractRepository_Create_DBErrorBranch(t *testing.T) {
+	db := newTestDB(t)
+	// Intentionally skip table creation.
+	repo := NewSmartContractRepository(db, &stubChainRepo{})
+	ctx := context.Background()
+
+	err := repo.Create(ctx, &entities.SmartContract{
+		ID:              uuid.New(),
+		Name:            "Router",
+		Type:            entities.ContractTypeRouter,
+		Version:         "1.0.0",
+		ChainUUID:       uuid.New(),
+		ContractAddress: "0x1111111111111111111111111111111111111111",
+		ABI:             []map[string]any{{"name": "fn"}},
+		IsActive:        true,
+		CreatedAt:       time.Now(),
+		UpdatedAt:       time.Now(),
+	})
+	require.Error(t, err)
+}
+
+func TestSmartContractRepository_Update_DBErrorBranch(t *testing.T) {
+	db := newTestDB(t)
+	// Intentionally skip table creation.
+	repo := NewSmartContractRepository(db, &stubChainRepo{})
+	ctx := context.Background()
+
+	err := repo.Update(ctx, &entities.SmartContract{
+		ID:              uuid.New(),
+		Name:            "Router",
+		Type:            entities.ContractTypeRouter,
+		Version:         "1.0.0",
+		ChainUUID:       uuid.New(),
+		ContractAddress: "0x1111111111111111111111111111111111111111",
+		Metadata:        null.JSONFrom([]byte(`{}`)),
+		IsActive:        true,
+	})
+	require.Error(t, err)
+}
+
+func TestSmartContractRepository_List_FindErrorAfterCount(t *testing.T) {
+	db := newTestDB(t)
+	createSmartContractTable(t, db)
+	ctx := context.Background()
+
+	chainID := uuid.New()
+	repo := NewSmartContractRepository(db, &stubChainRepo{
+		chains: map[uuid.UUID]*entities.Chain{
+			chainID: {ID: chainID, ChainID: "8453"},
+		},
+	})
+
+	cbName := "test:smart_contract_find_error_after_count"
+	queryCount := 0
+	require.NoError(t, db.Callback().Query().Before("gorm:query").Register(cbName, func(tx *gorm.DB) {
+		if tx.Statement != nil && tx.Statement.Table == "smart_contracts" {
+			queryCount++
+			if queryCount > 1 {
+				tx.AddError(gorm.ErrInvalidDB)
+			}
+		}
+	}))
+	t.Cleanup(func() { _ = db.Callback().Query().Remove(cbName) })
+
+	_, _, err := repo.GetByChain(ctx, chainID, utils.PaginationParams{Page: 1, Limit: 10})
+	require.Error(t, err)
+
+	queryCount = 0
+	_, _, err = repo.GetAll(ctx, utils.PaginationParams{Page: 1, Limit: 10})
+	require.Error(t, err)
+}
+
+func TestSmartContractRepository_ToEntity_NullAndInvalidJSONBranches(t *testing.T) {
+	repo := &SmartContractRepositoryImpl{
+		chainRepo: &stubChainRepo{
+			chains: map[uuid.UUID]*entities.Chain{},
+		},
+	}
+
+	t.Run("null abi and null metadata fallback", func(t *testing.T) {
+		m := &models.SmartContract{
+			ID:              uuid.New(),
+			Name:            "Null ABI",
+			Type:            string(entities.ContractTypeRouter),
+			Version:         "1.0.0",
+			ChainID:         uuid.Nil,
+			ContractAddress: "0xabc",
+			ABI:             "null",
+			Metadata:        "null",
+			IsActive:        true,
+		}
+		e := repo.toEntity(m)
+		require.Nil(t, e.ABI)
+		require.Equal(t, "{}", string(e.Metadata.JSON))
+		require.Equal(t, "", e.BlockchainID)
+	})
+
+	t.Run("invalid abi json keeps entity alive", func(t *testing.T) {
+		chainID := uuid.New()
+		m := &models.SmartContract{
+			ID:              uuid.New(),
+			Name:            "Broken ABI",
+			Type:            string(entities.ContractTypeRouter),
+			Version:         "1.0.0",
+			ChainID:         chainID,
+			ContractAddress: "0xdef",
+			ABI:             "{not-json}",
+			Metadata:        "{}",
+			IsActive:        true,
+		}
+		e := repo.toEntity(m)
+		require.Nil(t, e.ABI)
+		var meta map[string]interface{}
+		require.NoError(t, json.Unmarshal(e.Metadata.JSON, &meta))
+		require.Equal(t, "", e.BlockchainID)
+	})
+}
+
+func TestSmartContractRepository_GetFiltered_NoTypeAndNoChainFilter(t *testing.T) {
+	db := newTestDB(t)
+	createSmartContractTable(t, db)
+	ctx := context.Background()
+
+	repo := NewSmartContractRepository(db, &stubChainRepo{})
+	chainID := uuid.New()
+
+	mustExec(t, db, `INSERT INTO smart_contracts (id,name,type,version,chain_id,address,deployer_address,is_active,abi,metadata,start_block,created_at,updated_at)
+	VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		uuid.New().String(), "Gateway", "GATEWAY", "1.0.0", chainID.String(), "0x1", "", true, "[]", "{}", 0, time.Now(), time.Now())
+	mustExec(t, db, `INSERT INTO smart_contracts (id,name,type,version,chain_id,address,deployer_address,is_active,abi,metadata,start_block,created_at,updated_at)
+	VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		uuid.New().String(), "Router", "ROUTER", "1.0.0", chainID.String(), "0x2", "", true, "[]", "{}", 0, time.Now(), time.Now())
+
+	items, total, err := repo.GetFiltered(ctx, nil, "", utils.PaginationParams{Page: 1, Limit: 0})
+	require.NoError(t, err)
+	require.Equal(t, int64(2), total)
+	require.Len(t, items, 2)
+}
+
+func TestSmartContractRepository_GetFiltered_FindErrorAfterCount(t *testing.T) {
+	db := newTestDB(t)
+	createSmartContractTable(t, db)
+	ctx := context.Background()
+
+	chainID := uuid.New()
+	repo := NewSmartContractRepository(db, &stubChainRepo{
+		chains: map[uuid.UUID]*entities.Chain{
+			chainID: {ID: chainID, ChainID: "8453"},
+		},
+	})
+
+	mustExec(t, db, `INSERT INTO smart_contracts (id,name,type,version,chain_id,address,deployer_address,is_active,abi,metadata,start_block,created_at,updated_at)
+	VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		uuid.New().String(), "Router", "ROUTER", "1.0.0", chainID.String(), "0x1", "", true, "[]", "{}", 0, time.Now(), time.Now())
+
+	cbName := "test:smart_contract_filtered_find_error_after_count"
+	queryCount := 0
+	require.NoError(t, db.Callback().Query().Before("gorm:query").Register(cbName, func(tx *gorm.DB) {
+		if tx.Statement != nil && tx.Statement.Table == "smart_contracts" {
+			queryCount++
+			if queryCount > 1 {
+				tx.AddError(gorm.ErrInvalidDB)
+			}
+		}
+	}))
+	t.Cleanup(func() { _ = db.Callback().Query().Remove(cbName) })
+
+	_, _, err := repo.GetFiltered(ctx, &chainID, entities.ContractTypeRouter, utils.PaginationParams{Page: 1, Limit: 10})
+	require.Error(t, err)
 }

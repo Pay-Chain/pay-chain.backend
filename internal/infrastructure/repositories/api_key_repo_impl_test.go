@@ -80,3 +80,48 @@ func TestApiKeyRepository_NotFoundBranches(t *testing.T) {
 	err = repo.Delete(ctx, id)
 	require.ErrorIs(t, err, domainerrors.ErrNotFound)
 }
+
+func TestApiKeyRepository_DBErrorBranches(t *testing.T) {
+	db := newTestDB(t)
+	// Intentionally no table creation to trigger query/insert errors.
+	repo := NewApiKeyRepository(db)
+	ctx := context.Background()
+
+	err := repo.Create(ctx, &entities.ApiKey{
+		ID:              uuid.New(),
+		UserID:          uuid.New(),
+		Name:            "default",
+		KeyPrefix:       "pk",
+		KeyHash:         "hash",
+		SecretEncrypted: "enc",
+		SecretMasked:    "mask",
+		Permissions:     []string{"read"},
+		IsActive:        true,
+	})
+	require.Error(t, err)
+
+	_, err = repo.FindByKeyHash(ctx, "hash")
+	require.Error(t, err)
+
+	_, err = repo.FindByUserID(ctx, uuid.New())
+	require.Error(t, err)
+
+	_, err = repo.FindByID(ctx, uuid.New())
+	require.Error(t, err)
+
+	err = repo.Update(ctx, &entities.ApiKey{
+		ID:              uuid.New(),
+		UserID:          uuid.New(),
+		Name:            "default",
+		KeyPrefix:       "pk",
+		KeyHash:         "hash",
+		SecretEncrypted: "enc",
+		SecretMasked:    "mask",
+		Permissions:     []string{"read"},
+		IsActive:        true,
+	})
+	require.Error(t, err)
+
+	err = repo.Delete(ctx, uuid.New())
+	require.Error(t, err)
+}

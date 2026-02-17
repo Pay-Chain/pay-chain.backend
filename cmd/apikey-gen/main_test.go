@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"os"
+	"os/exec"
 	"strings"
 	"testing"
 )
@@ -126,5 +127,21 @@ func TestGenerateRandomHex_ReadError(t *testing.T) {
 	_, err := generateRandomHex(32)
 	if err == nil {
 		t.Fatal("expected rng error")
+	}
+}
+
+func TestMain_ExitsOnInvalidInput(t *testing.T) {
+	if os.Getenv("GO_WANT_HELPER_APIKEY_GEN_MAIN") == "1" {
+		flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+		os.Args = []string{"apikey-gen", "-mode", "invalid-mode", "-hex-len", "16"}
+		main()
+		return
+	}
+
+	cmd := exec.Command(os.Args[0], "-test.run=TestMain_ExitsOnInvalidInput")
+	cmd.Env = append(os.Environ(), "GO_WANT_HELPER_APIKEY_GEN_MAIN=1")
+	err := cmd.Run()
+	if err == nil {
+		t.Fatal("expected subprocess to exit with error")
 	}
 }

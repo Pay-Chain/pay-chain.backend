@@ -143,3 +143,42 @@ func TestTeamRepository_ToEntity_DeletedAtBranch(t *testing.T) {
 	require.NotNil(t, e.DeletedAt)
 	require.Equal(t, deletedAt.Unix(), e.DeletedAt.Unix())
 }
+
+func TestTeamRepository_DBErrorBranches(t *testing.T) {
+	db := newTestDB(t)
+	// intentionally skip table creation
+	repo := NewTeamRepository(db)
+	ctx := context.Background()
+
+	err := repo.Create(ctx, &entities.Team{
+		ID:       uuid.New(),
+		Name:     "x",
+		Role:     "r",
+		Bio:      "b",
+		ImageURL: "https://img",
+		IsActive: true,
+	})
+	require.Error(t, err)
+
+	_, err = repo.GetByID(ctx, uuid.New())
+	require.Error(t, err)
+
+	_, err = repo.ListPublic(ctx)
+	require.Error(t, err)
+
+	_, err = repo.ListAdmin(ctx, "")
+	require.Error(t, err)
+
+	err = repo.Update(ctx, &entities.Team{
+		ID:       uuid.New(),
+		Name:     "x",
+		Role:     "r",
+		Bio:      "b",
+		ImageURL: "https://img",
+		IsActive: true,
+	})
+	require.Error(t, err)
+
+	err = repo.SoftDelete(ctx, uuid.New())
+	require.Error(t, err)
+}

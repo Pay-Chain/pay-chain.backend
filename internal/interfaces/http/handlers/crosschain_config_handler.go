@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 	"strings"
@@ -12,8 +13,15 @@ import (
 	"pay-chain.backend/pkg/utils"
 )
 
+type crosschainConfigService interface {
+	Overview(ctx context.Context, sourceChainInput, destChainInput string, pagination utils.PaginationParams) (*usecases.CrosschainOverview, error)
+	RecheckRoute(ctx context.Context, sourceChainInput, destChainInput string) (*usecases.CrosschainRouteStatus, error)
+	Preflight(ctx context.Context, sourceChainInput, destChainInput string) (*usecases.CrosschainPreflightResult, error)
+	AutoFix(ctx context.Context, req *usecases.AutoFixRequest) (*usecases.AutoFixResult, error)
+}
+
 type CrosschainConfigHandler struct {
-	usecase *usecases.CrosschainConfigUsecase
+	usecase crosschainConfigService
 }
 
 func NewCrosschainConfigHandler(usecase *usecases.CrosschainConfigUsecase) *CrosschainConfigHandler {

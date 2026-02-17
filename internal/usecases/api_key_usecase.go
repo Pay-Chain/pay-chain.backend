@@ -24,6 +24,8 @@ import (
 var (
 	apiKeyRandRead  = rand.Read
 	apiKeyRandReader io.Reader = rand.Reader
+	newAESCipher    = aes.NewCipher
+	newGCMCipher    = cipher.NewGCM
 )
 
 type ApiKeyUsecase struct {
@@ -264,12 +266,12 @@ func hmacSha256Hex(secret, data string) string {
 }
 
 func (u *ApiKeyUsecase) encrypt(plaintext string) (string, error) {
-	block, err := aes.NewCipher(u.encryptionKey)
+	block, err := newAESCipher(u.encryptionKey)
 	if err != nil {
 		return "", err
 	}
 
-	gcm, err := cipher.NewGCM(block)
+	gcm, err := newGCMCipher(block)
 	if err != nil {
 		return "", err
 	}
@@ -289,12 +291,12 @@ func (u *ApiKeyUsecase) decrypt(ciphertextHex string) (string, error) {
 		return "", err
 	}
 
-	block, err := aes.NewCipher(u.encryptionKey)
+	block, err := newAESCipher(u.encryptionKey)
 	if err != nil {
 		return "", err
 	}
 
-	gcm, err := cipher.NewGCM(block)
+	gcm, err := newGCMCipher(block)
 	if err != nil {
 		return "", err
 	}

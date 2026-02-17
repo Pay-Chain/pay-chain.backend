@@ -44,4 +44,23 @@ func TestApiKeyHelpers_Decrypt_MalformedCiphertext(t *testing.T) {
 	require.Contains(t, err.Error(), "malformed ciphertext")
 }
 
+func TestApiKeyHelpers_DecryptBranches(t *testing.T) {
+	u := &ApiKeyUsecase{encryptionKey: []byte("0123456789abcdef0123456789abcdef")}
+
+	// hex decode error
+	_, err := u.decrypt("zz")
+	require.Error(t, err)
+
+	// gcm open error with malformed but long-enough ciphertext
+	_, err = u.decrypt("000000000000000000000000000000000000000000000000")
+	require.Error(t, err)
+
+	// success path
+	enc, err := u.encrypt("hello-world")
+	require.NoError(t, err)
+	plain, err := u.decrypt(enc)
+	require.NoError(t, err)
+	require.Equal(t, "hello-world", plain)
+}
+
 var _ io.Reader = errReader{}

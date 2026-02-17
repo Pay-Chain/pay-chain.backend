@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/stretchr/testify/require"
 )
 
@@ -47,6 +48,51 @@ func TestClientFactory_RegisterEVMClient(t *testing.T) {
 	got, err := f.GetEVMClient(rpcURL)
 	require.NoError(t, err)
 	require.Same(t, injected, got)
+}
+
+func TestClientFactory_GetEVMClient_DoubleCheckBranchViaHook(t *testing.T) {
+	f := NewClientFactory()
+	const rpcURL = "mock://race"
+	injected := NewEVMClientWithCallView(big.NewInt(8453), func(context.Context, string, []byte) ([]byte, error) {
+		return []byte{0x01}, nil
+	})
+
+	origHook := beforeGetEVMClientWriteLockHook
+	t.Cleanup(func() { beforeGetEVMClientWriteLockHook = origHook })
+
+	beforeGetEVMClientWriteLockHook = func(url string) {
+		if url == rpcURL {
+			f.RegisterEVMClient(url, injected)
+		}
+	}
+
+	got, err := f.GetEVMClient(rpcURL)
+	require.NoError(t, err)
+	require.Same(t, injected, got)
+}
+
+func TestClientFactory_GetEVMClient_NewClientSuccessPath(t *testing.T) {
+	f := NewClientFactory()
+	const rpcURL = "mock://new-client-success"
+
+	origDial := dialEVMClient
+	origChainID := getClientChainID
+	t.Cleanup(func() {
+		dialEVMClient = origDial
+		getClientChainID = origChainID
+	})
+
+	dialEVMClient = func(string) (*ethclient.Client, error) {
+		return &ethclient.Client{}, nil
+	}
+	getClientChainID = func(*ethclient.Client, context.Context) (*big.Int, error) {
+		return big.NewInt(8453), nil
+	}
+
+	got, err := f.GetEVMClient(rpcURL)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	require.Equal(t, int64(8453), got.ChainID().Int64())
 }
 
 func TestNewEVMClientWithCallView_DefaultChainIDAndCall(t *testing.T) {

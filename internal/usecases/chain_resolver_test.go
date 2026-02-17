@@ -111,3 +111,40 @@ func TestChainResolver_ResolveFromAny_Failure(t *testing.T) {
 	assert.Equal(t, "", caip2)
 	mockRepo.AssertExpectations(t)
 }
+
+func TestChainResolver_ResolveFromAny_UUIDLookupError(t *testing.T) {
+	mockRepo := new(MockChainRepository)
+	resolver := usecases.NewChainResolver(mockRepo)
+
+	chainID := uuid.New()
+	mockRepo.On("GetByID", context.Background(), chainID).Return(nil, errors.New("db down")).Once()
+
+	id, caip2, err := resolver.ResolveFromAny(context.Background(), chainID.String())
+	assert.Error(t, err)
+	assert.Equal(t, uuid.Nil, id)
+	assert.Equal(t, "", caip2)
+	assert.Contains(t, err.Error(), "failed to get chain by ID")
+	mockRepo.AssertExpectations(t)
+}
+
+func TestChainResolver_ResolveFromAny_TrimmedInputAndSolanaFallback(t *testing.T) {
+	mockRepo := new(MockChainRepository)
+	resolver := usecases.NewChainResolver(mockRepo)
+
+	chain := &entities.Chain{
+		ID:      uuid.New(),
+		Type:    entities.ChainTypeSVM,
+		ChainID: "devnet",
+	}
+
+	caip2 := "solana:devnet"
+	mockRepo.On("GetByCAIP2", context.Background(), caip2).Return(nil, errors.New("not found")).Once()
+	mockRepo.On("GetByChainID", context.Background(), caip2).Return(nil, errors.New("not found")).Once()
+	mockRepo.On("GetByChainID", context.Background(), "devnet").Return(chain, nil).Once()
+
+	id, resolved, err := resolver.ResolveFromAny(context.Background(), "  "+caip2+"  ")
+	assert.NoError(t, err)
+	assert.Equal(t, chain.ID, id)
+	assert.Equal(t, "solana:devnet", resolved)
+	mockRepo.AssertExpectations(t)
+}

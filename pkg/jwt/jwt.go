@@ -38,6 +38,10 @@ var signJWTToken = func(token *jwt.Token, secret []byte) (string, error) {
 	return token.SignedString(secret)
 }
 
+var parseJWTWithClaims = func(tokenString string, claims jwt.Claims, keyFunc jwt.Keyfunc) (*jwt.Token, error) {
+	return jwt.ParseWithClaims(tokenString, claims, keyFunc)
+}
+
 // NewJWTService creates a new JWT service
 func NewJWTService(secret string, accessExpiry, refreshExpiry time.Duration) *JWTService {
 	return &JWTService{
@@ -67,7 +71,7 @@ func (s *JWTService) GenerateTokenPair(userID uuid.UUID, email, role string) (*T
 
 // ValidateToken validates a JWT token and returns the claims
 func (s *JWTService) ValidateToken(tokenString string) (*Claims, error) {
-	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
+	token, err := parseJWTWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, ErrInvalidToken
 		}

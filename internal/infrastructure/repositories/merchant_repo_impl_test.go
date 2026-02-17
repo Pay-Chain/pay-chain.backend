@@ -47,6 +47,7 @@ func TestMerchantRepository_CreateGetUpdateStatusDelete(t *testing.T) {
 	require.NoError(t, repo.Update(ctx, m))
 
 	require.NoError(t, repo.UpdateStatus(ctx, m.ID, entities.MerchantStatusActive))
+	require.NoError(t, repo.UpdateStatus(ctx, m.ID, entities.MerchantStatusRejected))
 
 	items, err := repo.List(ctx)
 	require.NoError(t, err)
@@ -78,4 +79,26 @@ func TestMerchantRepository_NotFoundBranches(t *testing.T) {
 
 	err = repo.SoftDelete(ctx, id)
 	require.ErrorIs(t, err, domainerrors.ErrNotFound)
+}
+
+func TestMerchantRepository_DBErrorBranches(t *testing.T) {
+	db := newTestDB(t)
+	// intentionally skip table creation
+	repo := NewMerchantRepository(db)
+	ctx := context.Background()
+
+	_, err := repo.GetByID(ctx, uuid.New())
+	require.Error(t, err)
+	_, err = repo.GetByUserID(ctx, uuid.New())
+	require.Error(t, err)
+	_, err = repo.List(ctx)
+	require.Error(t, err)
+	err = repo.Create(ctx, &entities.Merchant{ID: uuid.New(), UserID: uuid.New(), BusinessName: "x", BusinessEmail: "x@x", MerchantType: entities.MerchantTypeRetail, Status: entities.MerchantStatusPending})
+	require.Error(t, err)
+	err = repo.Update(ctx, &entities.Merchant{ID: uuid.New(), BusinessName: "x", BusinessEmail: "x@x", MerchantType: entities.MerchantTypeRetail, Status: entities.MerchantStatusPending})
+	require.Error(t, err)
+	err = repo.UpdateStatus(ctx, uuid.New(), entities.MerchantStatusActive)
+	require.Error(t, err)
+	err = repo.SoftDelete(ctx, uuid.New())
+	require.Error(t, err)
 }

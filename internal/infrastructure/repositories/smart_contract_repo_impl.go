@@ -81,7 +81,7 @@ func (r *SmartContractRepositoryImpl) GetByID(ctx context.Context, id uuid.UUID)
 		}
 		return nil, err
 	}
-	return r.toEntity(&m)
+	return r.toEntity(&m), nil
 }
 
 func (r *SmartContractRepositoryImpl) GetByChainAndAddress(ctx context.Context, chainID uuid.UUID, address string) (*entities.SmartContract, error) {
@@ -92,7 +92,7 @@ func (r *SmartContractRepositoryImpl) GetByChainAndAddress(ctx context.Context, 
 		}
 		return nil, err
 	}
-	return r.toEntity(&m)
+	return r.toEntity(&m), nil
 }
 
 func (r *SmartContractRepositoryImpl) GetActiveContract(ctx context.Context, chainID uuid.UUID, contractType entities.SmartContractType) (*entities.SmartContract, error) {
@@ -106,7 +106,7 @@ func (r *SmartContractRepositoryImpl) GetActiveContract(ctx context.Context, cha
 		}
 		return nil, err
 	}
-	return r.toEntity(&m)
+	return r.toEntity(&m), nil
 }
 
 func (r *SmartContractRepositoryImpl) GetByChain(ctx context.Context, chainID uuid.UUID, pagination utils.PaginationParams) ([]*entities.SmartContract, int64, error) {
@@ -130,10 +130,7 @@ func (r *SmartContractRepositoryImpl) GetByChain(ctx context.Context, chainID uu
 	var entitiesList []*entities.SmartContract
 	for _, m := range ms {
 		model := m
-		e, err := r.toEntity(&model)
-		if err != nil {
-			return nil, 0, err
-		}
+		e := r.toEntity(&model)
 		entitiesList = append(entitiesList, e)
 	}
 	return entitiesList, totalCount, nil
@@ -160,10 +157,7 @@ func (r *SmartContractRepositoryImpl) GetAll(ctx context.Context, pagination uti
 	var entitiesList []*entities.SmartContract
 	for _, m := range ms {
 		model := m
-		e, err := r.toEntity(&model)
-		if err != nil {
-			return nil, 0, err
-		}
+		e := r.toEntity(&model)
 		entitiesList = append(entitiesList, e)
 	}
 	return entitiesList, totalCount, nil
@@ -202,10 +196,7 @@ func (r *SmartContractRepositoryImpl) GetFiltered(ctx context.Context, chainID *
 	var entitiesList []*entities.SmartContract
 	for _, m := range ms {
 		model := m
-		e, err := r.toEntity(&model)
-		if err != nil {
-			return nil, 0, err
-		}
+		e := r.toEntity(&model)
 		entitiesList = append(entitiesList, e)
 	}
 
@@ -257,7 +248,7 @@ func (r *SmartContractRepositoryImpl) SoftDelete(ctx context.Context, id uuid.UU
 	return nil
 }
 
-func (r *SmartContractRepositoryImpl) toEntity(m *models.SmartContract) (*entities.SmartContract, error) {
+func (r *SmartContractRepositoryImpl) toEntity(m *models.SmartContract) *entities.SmartContract {
 	var abi interface{}
 	if m.ABI != "" && m.ABI != "null" {
 		if err := json.Unmarshal([]byte(m.ABI), &abi); err != nil {
@@ -307,5 +298,5 @@ func (r *SmartContractRepositoryImpl) toEntity(m *models.SmartContract) (*entiti
 		}
 	}
 
-	return e, nil
+	return e
 }

@@ -214,3 +214,41 @@ func TestMerchantUsecase_GetMerchantStatus_MessageVariants(t *testing.T) {
 		assert.Equal(t, tc.message, resp.Message)
 	}
 }
+
+func TestMerchantUsecase_GetMerchantStatus_UnknownStatusFallsBackEmptyMessage(t *testing.T) {
+	mockMerchantRepo := new(MockMerchantRepository)
+	uc := usecases.NewMerchantUsecase(mockMerchantRepo, new(MockUserRepository))
+	userID := uuid.New()
+
+	mockMerchantRepo.On("GetByUserID", context.Background(), userID).Return(&entities.Merchant{
+		ID:           uuid.New(),
+		UserID:       userID,
+		BusinessName: "Biz",
+		MerchantType: entities.MerchantTypeRetail,
+		Status:       entities.MerchantStatus("UNKNOWN"),
+	}, nil).Once()
+
+	resp, err := uc.GetMerchantStatus(context.Background(), userID)
+	assert.NoError(t, err)
+	assert.Equal(t, "", resp.Message)
+}
+
+func TestMerchantUsecase_ApplyMerchant_CreateError(t *testing.T) {
+	mockMerchantRepo := new(MockMerchantRepository)
+	mockUserRepo := new(MockUserRepository)
+	uc := usecases.NewMerchantUsecase(mockMerchantRepo, mockUserRepo)
+
+	userID := uuid.New()
+	user := &entities.User{ID: userID}
+
+	mockUserRepo.On("GetByID", context.Background(), userID).Return(user, nil).Once()
+	mockMerchantRepo.On("GetByUserID", context.Background(), userID).Return(nil, domainerrors.ErrNotFound).Once()
+	mockMerchantRepo.On("Create", context.Background(), mock.AnythingOfType("*entities.Merchant")).Return(errors.New("create merchant failed")).Once()
+
+	_, err := uc.ApplyMerchant(context.Background(), userID, &entities.MerchantApplyInput{
+		MerchantType:  entities.MerchantTypeRetail,
+		BusinessName:  "Biz",
+		BusinessEmail: "biz@mail.com",
+	})
+	assert.EqualError(t, err, "create merchant failed")
+}

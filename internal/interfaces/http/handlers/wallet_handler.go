@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -12,9 +13,16 @@ import (
 	"pay-chain.backend/internal/usecases"
 )
 
+type walletService interface {
+	ConnectWallet(ctx context.Context, userID uuid.UUID, input *entities.ConnectWalletInput) (*entities.Wallet, error)
+	GetWallets(ctx context.Context, userID uuid.UUID) ([]*entities.Wallet, error)
+	SetPrimaryWallet(ctx context.Context, userID, walletID uuid.UUID) error
+	DisconnectWallet(ctx context.Context, userID, walletID uuid.UUID) error
+}
+
 // WalletHandler handles wallet endpoints
 type WalletHandler struct {
-	walletUsecase *usecases.WalletUsecase
+	walletUsecase walletService
 }
 
 // NewWalletHandler creates a new wallet handler

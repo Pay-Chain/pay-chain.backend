@@ -16,7 +16,10 @@ type MockUnitOfWork struct {
 }
 
 func (m *MockUnitOfWork) Do(ctx context.Context, f func(context.Context) error) error {
-	m.Called(ctx, f)
+	args := m.Called(ctx, f)
+	if args.Error(0) != nil {
+		return args.Error(0)
+	}
 	return f(ctx)
 }
 

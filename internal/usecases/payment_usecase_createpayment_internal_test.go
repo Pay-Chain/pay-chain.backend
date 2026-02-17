@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"pay-chain.backend/internal/domain/entities"
 	domainerrors "pay-chain.backend/internal/domain/errors"
+	"pay-chain.backend/internal/infrastructure/blockchain"
 	"pay-chain.backend/pkg/utils"
 )
 
@@ -264,4 +265,167 @@ func TestPaymentUsecase_CreatePayment_UOWAndEventBranches(t *testing.T) {
 	require.NotNil(t, resp)
 	require.NotNil(t, paymentRepo.created)
 	require.NotNil(t, eventRepo.created)
+}
+
+func TestPaymentUsecase_CreatePayment_ChainLookupAndPersistenceBranches(t *testing.T) {
+	sourceID := uuid.New()
+	destID := uuid.New()
+	source := &entities.Chain{ID: sourceID, ChainID: "8453", Type: entities.ChainTypeEVM}
+	dest := &entities.Chain{ID: destID, ChainID: "42161", Type: entities.ChainTypeEVM}
+	userID := uuid.New()
+
+	t.Run("invalid dest chain resolve", func(t *testing.T) {
+		chainRepo := &quoteChainRepoStub{
+			byID: map[uuid.UUID]*entities.Chain{sourceID: source},
+			byCAIP2: map[string]*entities.Chain{
+				"eip155:8453": source,
+			},
+		}
+		u := &PaymentUsecase{chainRepo: chainRepo, chainResolver: NewChainResolver(chainRepo)}
+		_, err := u.CreatePayment(context.Background(), userID, &entities.CreatePaymentInput{
+			SourceChainID:      "eip155:8453",
+			DestChainID:        "eip155:42161",
+			ReceiverAddress:    "0xreceiver",
+			SourceTokenAddress: "0xsource",
+			DestTokenAddress:   "0xdest",
+			Amount:             "1",
+		})
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "invalid dest chain")
+	})
+
+	t.Run("error fetching source chain by id", func(t *testing.T) {
+		chainRepo := &quoteChainRepoStub{
+			byID: map[uuid.UUID]*entities.Chain{
+				destID: dest,
+			},
+			byCAIP2: map[string]*entities.Chain{
+				"eip155:8453":  source,
+				"eip155:42161": dest,
+			},
+		}
+		u := &PaymentUsecase{chainRepo: chainRepo, chainResolver: NewChainResolver(chainRepo)}
+		_, err := u.CreatePayment(context.Background(), userID, &entities.CreatePaymentInput{
+			SourceChainID:      "eip155:8453",
+			DestChainID:        "eip155:42161",
+			ReceiverAddress:    "0xreceiver",
+			SourceTokenAddress: "0xsource",
+			DestTokenAddress:   "0xdest",
+			Amount:             "1",
+		})
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "error fetching source chain")
+	})
+
+	t.Run("error fetching dest chain by id", func(t *testing.T) {
+		chainRepo := &quoteChainRepoStub{
+			byID: map[uuid.UUID]*entities.Chain{
+				sourceID: source,
+			},
+			byCAIP2: map[string]*entities.Chain{
+				"eip155:8453":  source,
+				"eip155:42161": dest,
+			},
+		}
+		u := &PaymentUsecase{chainRepo: chainRepo, chainResolver: NewChainResolver(chainRepo)}
+		_, err := u.CreatePayment(context.Background(), userID, &entities.CreatePaymentInput{
+			SourceChainID:      "eip155:8453",
+			DestChainID:        "eip155:42161",
+			ReceiverAddress:    "0xreceiver",
+			SourceTokenAddress: "0xsource",
+			DestTokenAddress:   "0xdest",
+			Amount:             "1",
+		})
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "error fetching dest chain")
+	})
+
+	t.Run("payment repo create error inside uow", func(t *testing.T) {
+		srcTok := &entities.Token{ID: uuid.New(), Decimals: 6, ContractAddress: "0xsource", ChainUUID: sourceID}
+		dstTok := &entities.Token{ID: uuid.New(), Decimals: 6, ContractAddress: "0xdest", ChainUUID: sourceID}
+		chainRepo := &quoteChainRepoStub{
+			byID: map[uuid.UUID]*entities.Chain{
+				sourceID: source,
+			},
+			byCAIP2: map[string]*entities.Chain{
+				"eip155:8453": source,
+			},
+		}
+		tokenRepo := &createPaymentTokenRepoStub{
+			byAddress: map[string]*entities.Token{
+				sourceID.String() + "|0xsource": srcTok,
+				sourceID.String() + "|0xdest":   dstTok,
+			},
+		}
+		paymentRepo := &createPaymentRepoStub{createErr: errors.New("insert payment failed")}
+		u := &PaymentUsecase{
+			paymentRepo:      paymentRepo,
+			paymentEventRepo: &createPaymentEventRepoStub{},
+			chainRepo:        chainRepo,
+			chainResolver:    NewChainResolver(chainRepo),
+			tokenRepo:        tokenRepo,
+			contractRepo: &scRepoStub{getActiveFn: func(context.Context, uuid.UUID, entities.SmartContractType) (*entities.SmartContract, error) {
+				return nil, domainerrors.ErrNotFound
+			}},
+			uow: &createPaymentUOWStub{},
+		}
+		_, err := u.CreatePayment(context.Background(), userID, &entities.CreatePaymentInput{
+			SourceChainID:      "eip155:8453",
+			DestChainID:        "eip155:8453",
+			SourceTokenAddress: "0xsource",
+			DestTokenAddress:   "0xdest",
+			ReceiverAddress:    "0xreceiver",
+			Amount:             "1",
+			Decimals:           6,
+		})
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "insert payment failed")
+	})
+
+	t.Run("build transaction data error after persistence", func(t *testing.T) {
+		srcTok := &entities.Token{ID: uuid.New(), Decimals: 6, ContractAddress: "0xsource", ChainUUID: sourceID}
+		dstTok := &entities.Token{ID: uuid.New(), Decimals: 6, ContractAddress: "0xdest", ChainUUID: destID}
+		chainRepo := &quoteChainRepoStub{
+			byID: map[uuid.UUID]*entities.Chain{
+				sourceID: source,
+				destID:   dest,
+			},
+			byCAIP2: map[string]*entities.Chain{
+				"eip155:8453":  source,
+				"eip155:42161": dest,
+			},
+		}
+		tokenRepo := &createPaymentTokenRepoStub{
+			byAddress: map[string]*entities.Token{
+				sourceID.String() + "|0xsource": srcTok,
+				destID.String() + "|0xdest":     dstTok,
+			},
+		}
+		u := &PaymentUsecase{
+			paymentRepo:      &createPaymentRepoStub{},
+			paymentEventRepo: &createPaymentEventRepoStub{},
+			chainRepo:        chainRepo,
+			chainResolver:    NewChainResolver(chainRepo),
+			tokenRepo:        tokenRepo,
+			contractRepo: &scRepoStub{getActiveFn: func(_ context.Context, _ uuid.UUID, t entities.SmartContractType) (*entities.SmartContract, error) {
+				if t == entities.ContractTypeGateway {
+					return &entities.SmartContract{ContractAddress: "0x1111111111111111111111111111111111111111"}, nil
+				}
+				return nil, errors.New("router missing")
+			}},
+			clientFactory: blockchain.NewClientFactory(),
+			uow:           &createPaymentUOWStub{},
+		}
+		_, err := u.CreatePayment(context.Background(), userID, &entities.CreatePaymentInput{
+			SourceChainID:      "eip155:8453",
+			DestChainID:        "eip155:42161",
+			SourceTokenAddress: "0xsource",
+			DestTokenAddress:   "0xdest",
+			ReceiverAddress:    "0xreceiver",
+			Amount:             "1",
+			Decimals:           6,
+		})
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "failed to resolve bridge fee quote")
+	})
 }

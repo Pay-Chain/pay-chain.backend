@@ -153,6 +153,32 @@ func TestTeamHandler_FullFlow(t *testing.T) {
 		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
 	}
 
+	// Update without isActive should keep previous value (covers nil pointer branch).
+	updatePayloadNoActive := map[string]any{
+		"name":         "Alice Updated 2",
+		"role":         "Principal Engineer",
+		"bio":          "Builder+++",
+		"imageUrl":     "https://img3",
+		"displayOrder": 3,
+	}
+	body, _ = json.Marshal(updatePayloadNoActive)
+	req = httptest.NewRequest(http.MethodPut, "/admin/teams/"+created.Team.ID.String(), bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+
+	// Malformed JSON for bind error branch with existing ID.
+	req = httptest.NewRequest(http.MethodPut, "/admin/teams/"+created.Team.ID.String(), bytes.NewReader([]byte(`{"name":`)))
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d body=%s", rec.Code, rec.Body.String())
+	}
+
 	// Delete
 	req = httptest.NewRequest(http.MethodDelete, "/admin/teams/"+created.Team.ID.String(), nil)
 	rec = httptest.NewRecorder()
@@ -196,5 +222,19 @@ func TestTeamHandler_ValidationAndNotFound(t *testing.T) {
 	r.ServeHTTP(rec, req)
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d body=%s", rec.Code, rec.Body.String())
+	}
+
+	// Required fields after trim should fail.
+	req = httptest.NewRequest(http.MethodPost, "/admin/teams", bytes.NewReader([]byte(`{
+		"name":"   ",
+		"role":"Engineer",
+		"bio":"Builder",
+		"imageUrl":"https://img"
+	}`)))
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d body=%s", rec.Code, rec.Body.String())
 	}
 }

@@ -113,3 +113,26 @@ func TestStartStop_StopsByStopChannel(t *testing.T) {
 		t.Fatal("job did not stop on Stop()")
 	}
 }
+
+func TestStartStop_TickerTriggersProcessingBeforeStop(t *testing.T) {
+	id := uuid.New()
+	repo := &paymentRequestExpiryRepoStub{expired: []*entities.PaymentRequest{{ID: id}}}
+	job := &PaymentRequestExpiryJob{repo: repo, interval: 2 * time.Millisecond, stop: make(chan struct{})}
+
+	done := make(chan struct{})
+	go func() {
+		job.Start(context.Background())
+		close(done)
+	}()
+
+	require.Eventually(t, func() bool {
+		return repo.expireCall > 0
+	}, 400*time.Millisecond, 5*time.Millisecond)
+
+	job.Stop()
+	select {
+	case <-done:
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("job did not stop on Stop() after ticker")
+	}
+}

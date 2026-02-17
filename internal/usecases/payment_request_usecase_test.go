@@ -171,6 +171,56 @@ func TestPaymentRequestUsecase_CreatePaymentRequest_DecimalsMismatch(t *testing.
 	assert.Equal(t, "invalid input", err.Error())
 }
 
+func TestPaymentRequestUsecase_CreatePaymentRequest_NoPrimaryWallet_UsesFirstWallet(t *testing.T) {
+	pr := new(MockPaymentRequestRepository)
+	mr := new(MockMerchantRepository)
+	wr := new(MockWalletRepository)
+	cr := new(MockChainRepository)
+	sr := new(MockSmartContractRepository)
+	tr := new(MockTokenRepository)
+	uc := newPaymentRequestUC(pr, mr, wr, cr, sr, tr)
+
+	userID := uuid.New()
+	merchantID := uuid.New()
+	chainID := uuid.New()
+	tokenID := uuid.New()
+	input := usecases.CreatePaymentRequestInput{
+		UserID:       userID,
+		ChainID:      "eip155:8453",
+		TokenAddress: "0xToken",
+		Amount:       "2.0",
+		Decimals:     6,
+	}
+
+	firstWallet := &entities.Wallet{ID: uuid.New(), Address: "0xFirstWallet", IsPrimary: false}
+	mr.On("GetByUserID", context.Background(), userID).Return(&entities.Merchant{
+		ID:     merchantID,
+		UserID: userID,
+		Status: entities.MerchantStatusActive,
+	}, nil).Once()
+	wr.On("GetByUserID", context.Background(), userID).Return([]*entities.Wallet{
+		firstWallet,
+		{ID: uuid.New(), Address: "0xSecondWallet", IsPrimary: false},
+	}, nil).Once()
+	cr.On("GetByCAIP2", context.Background(), input.ChainID).Return(&entities.Chain{
+		ID:      chainID,
+		Type:    entities.ChainTypeEVM,
+		ChainID: "8453",
+	}, nil).Once()
+	tr.On("GetByAddress", context.Background(), input.TokenAddress, chainID).Return(&entities.Token{
+		ID:       tokenID,
+		Decimals: 6,
+	}, nil).Once()
+	sr.On("GetActiveContract", context.Background(), chainID, entities.ContractTypeGateway).Return(nil, nil).Once()
+	pr.On("Create", context.Background(), mock.MatchedBy(func(req *entities.PaymentRequest) bool {
+		return req != nil && req.WalletAddress == firstWallet.Address
+	})).Return(nil).Once()
+
+	out, err := uc.CreatePaymentRequest(context.Background(), input)
+	assert.NoError(t, err)
+	assert.NotNil(t, out)
+}
+
 func TestPaymentRequestUsecase_GetPaymentRequest_ExpirePending(t *testing.T) {
 	pr := new(MockPaymentRequestRepository)
 	mr := new(MockMerchantRepository)

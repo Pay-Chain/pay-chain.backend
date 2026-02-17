@@ -18,6 +18,7 @@ func TestPadHelpers(t *testing.T) {
 
 func TestChainTypeHelpers(t *testing.T) {
 	assert.Equal(t, "eip155", getChainTypeFromCAIP2("eip155:8453"))
+	assert.Equal(t, "eip155", getChainTypeFromCAIP2("  eip155:8453  "))
 	assert.Equal(t, "", getChainTypeFromCAIP2(""))
 	assert.True(t, isEVMChain("eip155:8453"))
 	assert.False(t, isEVMChain("solana:devnet"))
@@ -63,6 +64,9 @@ func TestAddDecimalStrings(t *testing.T) {
 
 	_, err = addDecimalStrings("x", "1")
 	assert.Error(t, err)
+
+	_, err = addDecimalStrings("1", "y")
+	assert.Error(t, err)
 }
 
 func TestBase58EncodeDecode(t *testing.T) {
@@ -105,11 +109,30 @@ func TestAddressToBytes32(t *testing.T) {
 	evm := addressToBytes32("0x000000000000000000000000000000000000dEaD")
 	assert.Equal(t, "000000000000000000000000000000000000000000000000000000000000dead", hex.EncodeToString(evm[:]))
 
+	tooLongHex := addressToBytes32("0x111111111111111111111111111111111111111111111111111111111111111111")
+	assert.NotEqual(t, [32]byte{}, tooLongHex)
+
 	solRaw := addressToBytes32("2")
 	assert.NotEqual(t, [32]byte{}, solRaw)
 
+	longASCII := addressToBytes32("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+	assert.NotEqual(t, [32]byte{}, longASCII)
+
 	textRaw := addressToBytes32("plain-address")
 	assert.NotEqual(t, [32]byte{}, textRaw)
+
+	// "0x" prefix with invalid hex should fall back to base58/ascii handling.
+	invalidHexPrefixed := addressToBytes32("0xzzzz")
+	assert.NotEqual(t, [32]byte{}, invalidHexPrefixed)
+
+	// Base58 decoded payload > 32 bytes should be right-trimmed.
+	longRaw := make([]byte, 40)
+	for i := range longRaw {
+		longRaw[i] = byte(i + 1)
+	}
+	longBase58 := base58Encode(longRaw)
+	longDecoded := addressToBytes32(longBase58)
+	assert.NotEqual(t, [32]byte{}, longDecoded)
 }
 
 func TestUUIDAndAnchorHelpers(t *testing.T) {

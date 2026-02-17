@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/ethereum/go-ethereum"
@@ -159,6 +160,52 @@ func TestClientFactory_GetEVMClient_CachePath(t *testing.T) {
 	c1.Close()
 }
 
+func TestClientFactory_GetEVMClient_DoubleCheckPath(t *testing.T) {
+	srv := newEVMRPCServer(t)
+	defer srv.Close()
+
+	f := NewClientFactory()
+	const workers = 16
+	results := make(chan *EVMClient, workers)
+	errs := make(chan error, workers)
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			c, err := f.GetEVMClient(srv.URL)
+			if err != nil {
+				errs <- err
+				return
+			}
+			results <- c
+		}()
+	}
+
+	close(start)
+	wg.Wait()
+	close(results)
+	close(errs)
+
+	for err := range errs {
+		require.NoError(t, err)
+	}
+
+	var first *EVMClient
+	for c := range results {
+		if first == nil {
+			first = c
+			continue
+		}
+		require.Same(t, first, c)
+	}
+	require.NotNil(t, first)
+	first.Close()
+}
+
 func TestNewEVMClient_ErrorBranches(t *testing.T) {
 	t.Run("dial failure", func(t *testing.T) {
 		origDial := dialEVMClient
@@ -219,5 +266,61 @@ func TestEVMClient_Close_WithNilClient(t *testing.T) {
 	c := &EVMClient{}
 	require.NotPanics(t, func() {
 		c.Close()
+	})
+}
+
+func TestEVMClient_Close_WithNonNilClient(t *testing.T) {
+	origClose := closeEVMClient
+	defer func() { closeEVMClient = origClose }()
+
+	called := false
+	closeEVMClient = func(*ethclient.Client) { called = true }
+
+	c := &EVMClient{client: &ethclient.Client{}}
+	c.Close()
+	require.True(t, called)
+}
+
+func TestEVMClient_GetTokenBalance_CallError(t *testing.T) {
+	origCall := callContract
+	defer func() { callContract = origCall }()
+
+	callContract = func(*ethclient.Client, context.Context, ethereum.CallMsg) ([]byte, error) {
+		return nil, errors.New("call failed")
+	}
+	client := &EVMClient{client: &ethclient.Client{}}
+
+	_, err := client.GetTokenBalance(
+		context.Background(),
+		"0x4444444444444444444444444444444444444444",
+		"0x3333333333333333333333333333333333333333",
+	)
+	require.Error(t, err)
+}
+
+func TestEVMClient_GetTokenBalance_SuccessViaCallContractHook(t *testing.T) {
+	origCall := callContract
+	defer func() { callContract = origCall }()
+
+	callContract = func(*ethclient.Client, context.Context, ethereum.CallMsg) ([]byte, error) {
+		return []byte{0x03, 0xe8}, nil // 1000
+	}
+	client := &EVMClient{client: &ethclient.Client{}}
+
+	bal, err := client.GetTokenBalance(
+		context.Background(),
+		"0x4444444444444444444444444444444444444444",
+		"0x3333333333333333333333333333333333333333",
+	)
+	require.NoError(t, err)
+	require.Equal(t, "1000", bal.String())
+}
+
+func TestEVMClient_DefaultHookBodies_AreReachable(t *testing.T) {
+	require.Panics(t, func() {
+		_, _ = getClientChainID(&ethclient.Client{}, context.Background())
+	})
+	require.Panics(t, func() {
+		closeEVMClient(&ethclient.Client{})
 	})
 }

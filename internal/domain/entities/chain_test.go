@@ -17,4 +17,14 @@ func TestChain_GetCAIP2ID(t *testing.T) {
 	if got := caip2.GetCAIP2ID(); got != "eip155:42161" {
 		t.Fatalf("expected eip155:42161 got %s", got)
 	}
+
+	trimmed := &Chain{Type: ChainTypeEVM, ChainID: "  10  "}
+	if got := trimmed.GetCAIP2ID(); got != "eip155:10" {
+		t.Fatalf("expected eip155:10 got %s", got)
+	}
+
+	substrate := &Chain{Type: ChainTypeSubstrate, ChainID: "polkadot"}
+	if got := substrate.GetCAIP2ID(); got != "polkadot" {
+		t.Fatalf("expected polkadot got %s", got)
+	}
 }

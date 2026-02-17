@@ -5,6 +5,8 @@ import (
 	"sync"
 )
 
+var beforeGetEVMClientWriteLockHook func(rpcURL string)
+
 // ClientFactory manages blockchain clients
 type ClientFactory struct {
 	evmClients    map[string]*EVMClient
@@ -28,6 +30,9 @@ func (f *ClientFactory) GetEVMClient(rpcURL string) (*EVMClient, error) {
 	f.mu.RUnlock()
 	if ok {
 		return client, nil
+	}
+	if beforeGetEVMClientWriteLockHook != nil {
+		beforeGetEVMClientWriteLockHook(rpcURL)
 	}
 
 	f.mu.Lock()

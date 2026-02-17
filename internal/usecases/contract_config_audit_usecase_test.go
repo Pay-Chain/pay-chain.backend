@@ -86,3 +86,60 @@ func TestContractConfigAuditUsecase_CheckByContractID_NonEvmSkipsOnchain(t *test
 	chainRepo.AssertExpectations(t)
 	contractRepo.AssertExpectations(t)
 }
+
+func TestContractConfigAuditUsecase_CheckByContractID_ErrorBranches(t *testing.T) {
+	t.Run("get contract failed", func(t *testing.T) {
+		chainRepo := new(MockChainRepository)
+		contractRepo := new(MockSmartContractRepository)
+		id := uuid.New()
+		contractRepo.On("GetByID", mock.Anything, id).Return((*entities.SmartContract)(nil), errors.New("contract db down"))
+
+		u := uc.NewContractConfigAuditUsecase(chainRepo, contractRepo, nil)
+		_, err := u.CheckByContractID(context.Background(), id)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "failed to get contract")
+	})
+
+	t.Run("nil contract returned", func(t *testing.T) {
+		chainRepo := new(MockChainRepository)
+		contractRepo := new(MockSmartContractRepository)
+		id := uuid.New()
+		contractRepo.On("GetByID", mock.Anything, id).Return((*entities.SmartContract)(nil), nil)
+
+		u := uc.NewContractConfigAuditUsecase(chainRepo, contractRepo, nil)
+		_, err := u.CheckByContractID(context.Background(), id)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "contract not found")
+	})
+
+	t.Run("get source chain failed", func(t *testing.T) {
+		chainRepo := new(MockChainRepository)
+		contractRepo := new(MockSmartContractRepository)
+		sourceID := uuid.New()
+		contractID := uuid.New()
+		contractRepo.On("GetByID", mock.Anything, contractID).Return(&entities.SmartContract{ID: contractID, ChainUUID: sourceID}, nil)
+		chainRepo.On("GetByID", mock.Anything, sourceID).Return((*entities.Chain)(nil), errors.New("chain db down"))
+
+		u := uc.NewContractConfigAuditUsecase(chainRepo, contractRepo, nil)
+		_, err := u.CheckByContractID(context.Background(), contractID)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "failed to load source chain")
+	})
+
+	t.Run("get all chains failed", func(t *testing.T) {
+		chainRepo := new(MockChainRepository)
+		contractRepo := new(MockSmartContractRepository)
+		sourceID := uuid.New()
+		contractID := uuid.New()
+		source := &entities.Chain{ID: sourceID, ChainID: "8453", Type: entities.ChainTypeEVM, IsActive: true, Name: "Base"}
+		contract := &entities.SmartContract{ID: contractID, Name: "Gateway", Type: entities.ContractTypeGateway, ChainUUID: sourceID, ContractAddress: "0xabc", IsActive: true}
+		contractRepo.On("GetByID", mock.Anything, contractID).Return(contract, nil)
+		chainRepo.On("GetByID", mock.Anything, sourceID).Return(source, nil)
+		chainRepo.On("GetAll", mock.Anything).Return(nil, errors.New("get all failed"))
+
+		u := uc.NewContractConfigAuditUsecase(chainRepo, contractRepo, nil)
+		_, err := u.CheckByContractID(context.Background(), contractID)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "failed to list chains")
+	})
+}

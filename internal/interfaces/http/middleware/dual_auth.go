@@ -74,15 +74,15 @@ func DualAuthMiddleware(jwtService *jwt.JWTService, apiKeyUsecase *usecases.ApiK
 		tokenFromTrustedSession := false
 
 		// Check for Session ID first (trusted proxy)
-		sessionID := c.GetHeader("x-session-id")
-		if sessionID != "" && IsTrustedProxyRequest(c) {
-			// Retrieve from Redis
-			session, err := sessionStore.GetSession(c.Request.Context(), sessionID)
-			if err == nil && session != nil {
-				tokenString = session.AccessToken
-				tokenFromTrustedSession = true
+			sessionID := c.GetHeader("x-session-id")
+			if sessionStore != nil && sessionID != "" && IsTrustedProxyRequest(c) {
+				// Retrieve from Redis
+				session, err := loadSessionFromStore(c.Request.Context(), sessionStore, sessionID)
+				if err == nil && session != nil {
+					tokenString = session.AccessToken
+					tokenFromTrustedSession = true
+				}
 			}
-		}
 
 		// Legacy fallback (non-strict mode only)
 		if tokenString == "" && !strictSessionMode && authHeader != "" && strings.HasPrefix(authHeader, BearerPrefix) {

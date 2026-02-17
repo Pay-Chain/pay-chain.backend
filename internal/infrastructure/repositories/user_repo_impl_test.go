@@ -113,3 +113,22 @@ func TestUserRepository_Update_WithKYCVerifiedAt_AndDBErrorBranch(t *testing.T) 
 	err = badRepo.Update(ctx, &entities.User{ID: uuid.New(), Name: "x", Role: entities.UserRoleUser, KYCStatus: entities.KYCNotStarted})
 	require.Error(t, err)
 }
+
+func TestUserRepository_DBErrorBranches(t *testing.T) {
+	db := newTestDB(t)
+	// intentionally skip table creation
+	repo := NewUserRepository(db)
+	ctx := context.Background()
+
+	_, err := repo.GetByID(ctx, uuid.New())
+	require.Error(t, err)
+
+	_, err = repo.GetByEmail(ctx, "x@paychain.io")
+	require.Error(t, err)
+
+	err = repo.UpdatePassword(ctx, uuid.New(), "hash")
+	require.Error(t, err)
+
+	err = repo.SoftDelete(ctx, uuid.New())
+	require.Error(t, err)
+}

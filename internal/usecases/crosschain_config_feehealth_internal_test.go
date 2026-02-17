@@ -72,4 +72,18 @@ func TestCrosschainConfigUsecase_CheckFeeQuoteHealth_Matrix(t *testing.T) {
 		clientFactory: factoryErr,
 	}
 	require.False(t, uErr.checkFeeQuoteHealth(context.Background(), source, dest, 0))
+
+	sourceBadRPC := &entities.Chain{ID: sourceID, ChainID: "8453", Name: "Base", Type: entities.ChainTypeEVM, RPCURL: "://bad-rpc"}
+	require.False(t, u.checkFeeQuoteHealth(context.Background(), sourceBadRPC, dest, 0))
+
+	factoryEmpty := blockchain.NewClientFactory()
+	factoryEmpty.RegisterEVMClient(source.RPCURL, blockchain.NewEVMClientWithCallView(big.NewInt(8453), func(context.Context, string, []byte) ([]byte, error) {
+		return []byte{}, nil
+	}))
+	uEmpty := &CrosschainConfigUsecase{
+		contractRepo:  contractRepo,
+		tokenRepo:     tokenRepo,
+		clientFactory: factoryEmpty,
+	}
+	require.False(t, uEmpty.checkFeeQuoteHealth(context.Background(), source, dest, 0))
 }

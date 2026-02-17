@@ -21,6 +21,10 @@ type UnitOfWorkImpl struct {
 	db *gorm.DB
 }
 
+var beginTx = func(db *gorm.DB) *gorm.DB { return db.Begin() }
+var commitTx = func(tx *gorm.DB) error { return tx.Commit().Error }
+var rollbackTx = func(tx *gorm.DB) { tx.Rollback() }
+
 // NewUnitOfWork creates a new UnitOfWork
 func NewUnitOfWork(db *gorm.DB) domainRepos.UnitOfWork {
 	return &UnitOfWorkImpl{db: db}
@@ -28,7 +32,7 @@ func NewUnitOfWork(db *gorm.DB) domainRepos.UnitOfWork {
 
 // Do executes the given function within a transaction scope
 func (u *UnitOfWorkImpl) Do(ctx context.Context, fn func(ctx context.Context) error) error {
-	tx := u.GetDB(ctx).Begin()
+	tx := beginTx(u.GetDB(ctx))
 	if tx.Error != nil {
 		return fmt.Errorf("failed to begin transaction: %w", tx.Error)
 	}
@@ -38,12 +42,12 @@ func (u *UnitOfWorkImpl) Do(ctx context.Context, fn func(ctx context.Context) er
 
 	// Execute function
 	if err := fn(txCtx); err != nil {
-		tx.Rollback()
+		rollbackTx(tx)
 		return err
 	}
 
 	// Commit
-	if err := tx.Commit().Error; err != nil {
+	if err := commitTx(tx); err != nil {
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 

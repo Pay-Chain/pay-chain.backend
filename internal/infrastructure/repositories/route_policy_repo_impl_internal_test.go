@@ -8,15 +8,13 @@ import (
 
 func TestRoutePolicyRepo_FallbackOrderHelpers(t *testing.T) {
 	t.Run("marshal empty defaults to bridge type 0", func(t *testing.T) {
-		raw, err := marshalFallbackOrder(nil)
-		require.NoError(t, err)
-		require.Equal(t, "\"AA==\"", raw)
+		raw := marshalFallbackOrder(nil)
+		require.Equal(t, "[0]", raw)
 	})
 
 	t.Run("marshal non-empty order", func(t *testing.T) {
-		raw, err := marshalFallbackOrder([]uint8{2, 1, 0})
-		require.NoError(t, err)
-		require.Equal(t, "\"AgEA\"", raw)
+		raw := marshalFallbackOrder([]uint8{2, 1, 0})
+		require.Equal(t, "[2,1,0]", raw)
 	})
 
 	t.Run("parse empty or invalid defaults to 0", func(t *testing.T) {
@@ -26,6 +24,6 @@ func TestRoutePolicyRepo_FallbackOrderHelpers(t *testing.T) {
 	})
 
 	t.Run("parse valid order", func(t *testing.T) {
-		require.Equal(t, []uint8{2, 1, 0}, parseFallbackOrder("\"AgEA\""))
+		require.Equal(t, []uint8{2, 1, 0}, parseFallbackOrder("[2,1,0]"))
 	})
 }

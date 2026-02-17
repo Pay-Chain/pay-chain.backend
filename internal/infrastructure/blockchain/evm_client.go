@@ -11,9 +11,15 @@ import (
 )
 
 var (
-	dialEVMClient = ethclient.Dial
+	dialEVMClient    = ethclient.Dial
 	getClientChainID = func(client *ethclient.Client, ctx context.Context) (*big.Int, error) {
 		return client.ChainID(ctx)
+	}
+	callContract = func(client *ethclient.Client, ctx context.Context, msg ethereum.CallMsg) ([]byte, error) {
+		return client.CallContract(ctx, msg, nil)
+	}
+	closeEVMClient = func(client *ethclient.Client) {
+		client.Close()
 	}
 )
 
@@ -81,7 +87,7 @@ func (c *EVMClient) GetTokenBalance(ctx context.Context, tokenAddress, ownerAddr
 		Data: data,
 	}
 
-	result, err := c.client.CallContract(ctx, msg, nil)
+	result, err := callContract(c.client, ctx, msg)
 	if err != nil {
 		return nil, err
 	}
@@ -127,6 +133,6 @@ func (c *EVMClient) CallView(ctx context.Context, to string, data []byte) ([]byt
 // Close closes the client connection
 func (c *EVMClient) Close() {
 	if c.client != nil {
-		c.client.Close()
+		closeEVMClient(c.client)
 	}
 }

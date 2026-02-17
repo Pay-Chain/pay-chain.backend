@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
@@ -25,6 +26,10 @@ const (
 	UserRoleKey = "userRole"
 )
 
+var loadSessionFromStore = func(ctx context.Context, store *redis.SessionStore, sessionID string) (*redis.SessionData, error) {
+	return store.GetSession(ctx, sessionID)
+}
+
 // AuthMiddleware creates a new authentication middleware
 func AuthMiddleware(jwtService *jwt.JWTService, sessionStore *redis.SessionStore) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -32,13 +37,13 @@ func AuthMiddleware(jwtService *jwt.JWTService, sessionStore *redis.SessionStore
 		strictSessionMode := os.Getenv("INTERNAL_PROXY_SECRET") != ""
 
 		// 1. Check for X-Session-Id header (from trusted proxy)
-		sessionID := c.GetHeader("X-Session-Id")
-		if sessionID != "" && IsTrustedProxyRequest(c) {
-			session, err := sessionStore.GetSession(c.Request.Context(), sessionID)
-			if err == nil && session != nil {
-				tokenString = session.AccessToken
+			sessionID := c.GetHeader("X-Session-Id")
+			if sessionStore != nil && sessionID != "" && IsTrustedProxyRequest(c) {
+				session, err := loadSessionFromStore(c.Request.Context(), sessionStore, sessionID)
+				if err == nil && session != nil {
+					tokenString = session.AccessToken
+				}
 			}
-		}
 
 		// 2. Legacy fallback to Authorization header when strict mode is disabled.
 		if tokenString == "" && !strictSessionMode {

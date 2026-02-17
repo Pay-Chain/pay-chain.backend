@@ -231,6 +231,84 @@ func TestRunAdminAPIKey_Branches(t *testing.T) {
 			t.Fatalf("missing api key in output: %s", out.String())
 		}
 	})
+
+	t.Run("nil closer fallback branch", func(t *testing.T) {
+		var out bytes.Buffer
+		err := runAdminAPIKey([]string{"-user-id", userID.String(), "-name", "explicit-name"}, adminAPIKeyDeps{
+			loadEnv: func() error { return nil },
+			loadCfg: func() *config.Config { return cfg },
+			prepare: func(*config.Config) (adminAPIKeyRuntime, io.Closer, error) {
+				return fakeAdminRuntime{
+					user: &entities.User{ID: userID, Role: entities.UserRoleAdmin},
+					resp: &entities.CreateApiKeyResponse{
+						ID:        uuid.New(),
+						Name:      "explicit-name",
+						ApiKey:    "pk_explicit",
+						SecretKey: "sk_explicit",
+					},
+				}, nil, nil
+			},
+			now: nowFunc(now),
+			out: &out,
+		})
+		if err != nil {
+			t.Fatalf("unexpected err: %v", err)
+		}
+		if !strings.Contains(out.String(), "name=explicit-name") {
+			t.Fatalf("unexpected output: %s", out.String())
+		}
+	})
+}
+
+func TestRunAdminAPIKey_UsesDefaultInjectedFunctionsWhenNil(t *testing.T) {
+	userID := uuid.New()
+	err := runAdminAPIKey([]string{"-user-id", userID.String(), "-name", "from-default"}, adminAPIKeyDeps{
+		loadEnv: func() error { return nil },
+		loadCfg: func() *config.Config {
+			cfg := &config.Config{}
+			cfg.Database.Host = "localhost"
+			cfg.Database.Port = -1
+			cfg.Database.User = "postgres"
+			cfg.Database.Password = "postgres"
+			cfg.Database.DBName = "paychain"
+			cfg.Database.SSLMode = "disable"
+			return cfg
+		},
+		prepare: nil,
+		now:     nowFunc(time.Date(2026, 2, 16, 10, 0, 0, 0, time.UTC)),
+		out:     &bytes.Buffer{},
+	})
+	if err == nil {
+		t.Fatal("expected default prepare to fail with invalid db config")
+	}
+}
+
+func TestRunAdminAPIKey_DefaultNilsForLoaders(t *testing.T) {
+	userID := uuid.New()
+	var out bytes.Buffer
+	err := runAdminAPIKey([]string{"-user-id", userID.String(), "-name", "nil-defaults"}, adminAPIKeyDeps{
+		loadEnv: nil,
+		loadCfg: nil,
+		now:     nil,
+		prepare: func(*config.Config) (adminAPIKeyRuntime, io.Closer, error) {
+			return fakeAdminRuntime{
+				user: &entities.User{ID: userID, Role: entities.UserRoleAdmin},
+				resp: &entities.CreateApiKeyResponse{
+					ID:        uuid.New(),
+					Name:      "nil-defaults",
+					ApiKey:    "pk_nil",
+					SecretKey: "sk_nil",
+				},
+			}, nopCloser{}, nil
+		},
+		out: &out,
+	})
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if !strings.Contains(out.String(), "API_KEY=pk_nil") {
+		t.Fatalf("unexpected output: %s", out.String())
+	}
 }
 
 func nowFunc(t time.Time) func() time.Time {
@@ -242,26 +320,34 @@ type runtimeUserRepoStub struct {
 	err  error
 }
 
-func (s runtimeUserRepoStub) Create(context.Context, *entities.User) error                     { return nil }
-func (s runtimeUserRepoStub) GetByID(context.Context, uuid.UUID) (*entities.User, error)       { return s.user, s.err }
-func (s runtimeUserRepoStub) GetByEmail(context.Context, string) (*entities.User, error)       { return nil, errors.New("unused") }
-func (s runtimeUserRepoStub) Update(context.Context, *entities.User) error                      { return nil }
-func (s runtimeUserRepoStub) UpdatePassword(context.Context, uuid.UUID, string) error           { return nil }
-func (s runtimeUserRepoStub) SoftDelete(context.Context, uuid.UUID) error                       { return nil }
-func (s runtimeUserRepoStub) List(context.Context, string) ([]*entities.User, error)            { return nil, nil }
+func (s runtimeUserRepoStub) Create(context.Context, *entities.User) error { return nil }
+func (s runtimeUserRepoStub) GetByID(context.Context, uuid.UUID) (*entities.User, error) {
+	return s.user, s.err
+}
+func (s runtimeUserRepoStub) GetByEmail(context.Context, string) (*entities.User, error) {
+	return nil, errors.New("unused")
+}
+func (s runtimeUserRepoStub) Update(context.Context, *entities.User) error            { return nil }
+func (s runtimeUserRepoStub) UpdatePassword(context.Context, uuid.UUID, string) error { return nil }
+func (s runtimeUserRepoStub) SoftDelete(context.Context, uuid.UUID) error             { return nil }
+func (s runtimeUserRepoStub) List(context.Context, string) ([]*entities.User, error)  { return nil, nil }
 
 type runtimeAPIKeyRepoStub struct {
 	createErr error
 }
 
-func (s runtimeAPIKeyRepoStub) Create(context.Context, *entities.ApiKey) error                  { return s.createErr }
-func (s runtimeAPIKeyRepoStub) FindByKeyHash(context.Context, string) (*entities.ApiKey, error) { return nil, errors.New("unused") }
+func (s runtimeAPIKeyRepoStub) Create(context.Context, *entities.ApiKey) error { return s.createErr }
+func (s runtimeAPIKeyRepoStub) FindByKeyHash(context.Context, string) (*entities.ApiKey, error) {
+	return nil, errors.New("unused")
+}
 func (s runtimeAPIKeyRepoStub) FindByUserID(context.Context, uuid.UUID) ([]*entities.ApiKey, error) {
 	return nil, errors.New("unused")
 }
-func (s runtimeAPIKeyRepoStub) FindByID(context.Context, uuid.UUID) (*entities.ApiKey, error) { return nil, errors.New("unused") }
-func (s runtimeAPIKeyRepoStub) Update(context.Context, *entities.ApiKey) error                 { return nil }
-func (s runtimeAPIKeyRepoStub) Delete(context.Context, uuid.UUID) error                        { return nil }
+func (s runtimeAPIKeyRepoStub) FindByID(context.Context, uuid.UUID) (*entities.ApiKey, error) {
+	return nil, errors.New("unused")
+}
+func (s runtimeAPIKeyRepoStub) Update(context.Context, *entities.ApiKey) error { return nil }
+func (s runtimeAPIKeyRepoStub) Delete(context.Context, uuid.UUID) error        { return nil }
 
 func TestAdminRuntimeImpl_WrapperMethods(t *testing.T) {
 	userID := uuid.New()
@@ -320,4 +406,30 @@ func TestDefaultAdminAPIKeyDeps_PrepareBranch(t *testing.T) {
 		t.Fatalf("expected runtime and closer, got runtime=%v closer=%v", runtime, closer)
 	}
 	_ = closer.Close()
+}
+
+func TestDefaultAdminAPIKeyDeps_Prepare_SQLDBInitErrorBranch(t *testing.T) {
+	deps := defaultAdminAPIKeyDeps()
+	cfg := &config.Config{}
+	cfg.Database.Host = "localhost"
+	cfg.Database.Port = 5432
+
+	origOpen := openAdminAPIKeyDB
+	origOpenSQL := openAdminSQLDB
+	defer func() {
+		openAdminAPIKeyDB = origOpen
+		openAdminSQLDB = origOpenSQL
+	}()
+
+	openAdminAPIKeyDB = func(string) (*gorm.DB, error) {
+		return gorm.Open(sqlite.Open("file:admin_apikey_sql_err?mode=memory&cache=shared"), &gorm.Config{})
+	}
+	openAdminSQLDB = func(*gorm.DB) (io.Closer, error) {
+		return nil, errors.New("sql db init failed")
+	}
+
+	_, _, err := deps.prepare(cfg)
+	if err == nil || !strings.Contains(err.Error(), "failed to init sql db") {
+		t.Fatalf("expected sql db init error, got %v", err)
+	}
 }

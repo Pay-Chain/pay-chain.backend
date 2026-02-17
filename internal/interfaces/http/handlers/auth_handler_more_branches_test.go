@@ -23,8 +23,12 @@ func TestAuthHandler_GetMe_ErrorBranches(t *testing.T) {
 	userID := uuid.New()
 	h := NewAuthHandler(
 		authServiceStub{
-			registerFn:    func(context.Context, *entities.CreateUserInput) (*entities.User, string, error) { return nil, "", errors.New("unused") },
-			loginFn:       func(context.Context, *entities.LoginInput) (*entities.AuthResponse, error) { return nil, errors.New("unused") },
+			registerFn: func(context.Context, *entities.CreateUserInput) (*entities.User, string, error) {
+				return nil, "", errors.New("unused")
+			},
+			loginFn: func(context.Context, *entities.LoginInput) (*entities.AuthResponse, error) {
+				return nil, errors.New("unused")
+			},
 			verifyEmailFn: func(context.Context, string) error { return errors.New("unused") },
 			refreshTokenFn: func(context.Context, string) (*jwt.TokenPair, error) {
 				return nil, errors.New("unused")
@@ -78,8 +82,12 @@ func TestAuthHandler_RefreshToken_LegacyFallbackBranches(t *testing.T) {
 	t.Setenv("INTERNAL_PROXY_SECRET", "")
 	h := NewAuthHandler(
 		authServiceStub{
-			registerFn:    func(context.Context, *entities.CreateUserInput) (*entities.User, string, error) { return nil, "", errors.New("unused") },
-			loginFn:       func(context.Context, *entities.LoginInput) (*entities.AuthResponse, error) { return nil, errors.New("unused") },
+			registerFn: func(context.Context, *entities.CreateUserInput) (*entities.User, string, error) {
+				return nil, "", errors.New("unused")
+			},
+			loginFn: func(context.Context, *entities.LoginInput) (*entities.AuthResponse, error) {
+				return nil, errors.New("unused")
+			},
 			verifyEmailFn: func(context.Context, string) error { return errors.New("unused") },
 			refreshTokenFn: func(_ context.Context, refreshToken string) (*jwt.TokenPair, error) {
 				if refreshToken == "bad" {
@@ -143,3 +151,77 @@ func TestAuthHandler_RefreshToken_LegacyFallbackBranches(t *testing.T) {
 	}
 }
 
+func TestAuthHandler_VerifyEmail_GenericError(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	h := NewAuthHandler(
+		authServiceStub{
+			registerFn: func(context.Context, *entities.CreateUserInput) (*entities.User, string, error) {
+				return nil, "", errors.New("unused")
+			},
+			loginFn: func(context.Context, *entities.LoginInput) (*entities.AuthResponse, error) {
+				return nil, errors.New("unused")
+			},
+			verifyEmailFn: func(context.Context, string) error { return errors.New("verify failed") },
+			refreshTokenFn: func(context.Context, string) (*jwt.TokenPair, error) {
+				return nil, errors.New("unused")
+			},
+			getUserByIDFn: func(context.Context, uuid.UUID) (*entities.User, error) { return nil, errors.New("unused") },
+			getTokenExpFn: func(string) (int64, error) { return 0, errors.New("unused") },
+			changePassFn:  func(context.Context, uuid.UUID, *entities.ChangePasswordInput) error { return errors.New("unused") },
+		},
+		sessionStoreStub{
+			createFn: func(context.Context, string, *redis.SessionData, time.Duration) error { return nil },
+			getFn:    func(context.Context, string) (*redis.SessionData, error) { return nil, nil },
+			deleteFn: func(context.Context, string) error { return nil },
+		},
+	)
+
+	r := gin.New()
+	r.POST("/auth/verify-email", h.VerifyEmail)
+
+	req := httptest.NewRequest(http.MethodPost, "/auth/verify-email", bytes.NewReader([]byte(`{"token":"x"}`)))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestAuthHandler_Register_GenericError(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	h := NewAuthHandler(
+		authServiceStub{
+			registerFn: func(context.Context, *entities.CreateUserInput) (*entities.User, string, error) {
+				return nil, "", errors.New("register failed")
+			},
+			loginFn: func(context.Context, *entities.LoginInput) (*entities.AuthResponse, error) {
+				return nil, errors.New("unused")
+			},
+			verifyEmailFn: func(context.Context, string) error { return errors.New("unused") },
+			refreshTokenFn: func(context.Context, string) (*jwt.TokenPair, error) {
+				return nil, errors.New("unused")
+			},
+			getUserByIDFn: func(context.Context, uuid.UUID) (*entities.User, error) {
+				return nil, errors.New("unused")
+			},
+			getTokenExpFn: func(string) (int64, error) { return 0, errors.New("unused") },
+			changePassFn:  func(context.Context, uuid.UUID, *entities.ChangePasswordInput) error { return errors.New("unused") },
+		},
+		sessionStoreStub{
+			createFn: func(context.Context, string, *redis.SessionData, time.Duration) error { return nil },
+			getFn:    func(context.Context, string) (*redis.SessionData, error) { return nil, nil },
+			deleteFn: func(context.Context, string) error { return nil },
+		},
+	)
+	r := gin.New()
+	r.POST("/auth/register", h.Register)
+
+	req := httptest.NewRequest(http.MethodPost, "/auth/register", bytes.NewReader([]byte(`{"email":"u@x.com","name":"User Test","password":"secret123","walletAddress":"0xabc","walletChainId":"eip155:8453","walletSignature":"sig"}`)))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d body=%s", w.Code, w.Body.String())
+	}
+}

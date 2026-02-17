@@ -38,4 +38,16 @@ func TestCalculateMeta(t *testing.T) {
 	assert.Equal(t, 1, noLimit.Page)
 	assert.Equal(t, 15, noLimit.Limit)
 	assert.Equal(t, 1, noLimit.TotalPages)
+
+	negativeTotal := CalculateMeta(-1, 2, 10)
+	assert.Equal(t, 2, negativeTotal.Page)
+	assert.Equal(t, 10, negativeTotal.Limit)
+	assert.Equal(t, int64(-1), negativeTotal.TotalCount)
+	assert.Equal(t, 0, negativeTotal.TotalPages)
+
+	veryNegativeTotal := CalculateMeta(-1000, 3, 10)
+	assert.Equal(t, 3, veryNegativeTotal.Page)
+	assert.Equal(t, 10, veryNegativeTotal.Limit)
+	assert.Equal(t, int64(-1000), veryNegativeTotal.TotalCount)
+	assert.Equal(t, 0, veryNegativeTotal.TotalPages)
 }

@@ -184,7 +184,9 @@ func TestPaymentUsecase_ResolveVaultAddressForApproval_FromGatewayView(t *testin
 func TestPaymentUsecase_ResolveVaultAddressForApproval_FallbackBranches(t *testing.T) {
 	t.Run("chain repo miss", func(t *testing.T) {
 		u := &PaymentUsecase{
-			contractRepo:  &scRepoStub{getActiveFn: func(context.Context, uuid.UUID, entities.SmartContractType) (*entities.SmartContract, error) { return nil, domainerrors.ErrNotFound }},
+			contractRepo: &scRepoStub{getActiveFn: func(context.Context, uuid.UUID, entities.SmartContractType) (*entities.SmartContract, error) {
+				return nil, domainerrors.ErrNotFound
+			}},
 			chainRepo:     &approvalChainRepoStub{chain: nil},
 			clientFactory: blockchain.NewClientFactory(),
 		}
@@ -303,6 +305,35 @@ func TestPaymentUsecase_CalculateOnchainApprovalAmount_ErrorBranches(t *testing.
 		}, "0x1111111111111111111111111111111111111111")
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "failed to decode FIXED_BASE_FEE")
+	})
+
+	t.Run("invalid fee bps decode", func(t *testing.T) {
+		srv := newPaymentRPCServer(t, func(callIndex int, _ string) string {
+			switch callIndex {
+			case 1:
+				return "0x" // quote path fails, fallback starts
+			case 2:
+				return mustPackOutputs(t, []string{"uint256"}, big.NewInt(50))
+			case 3:
+				return "0x" // bps decode fails
+			default:
+				return "0x"
+			}
+		})
+		defer srv.Close()
+
+		chainID := uuid.New()
+		u := &PaymentUsecase{
+			chainRepo:     &approvalChainRepoStub{chain: &entities.Chain{ID: chainID, RPCURL: srv.URL}},
+			clientFactory: blockchain.NewClientFactory(),
+		}
+		_, err := u.calculateOnchainApprovalAmount(&entities.Payment{
+			SourceChainID: chainID,
+			SourceAmount:  "1000",
+			TotalCharged:  "1000",
+		}, "0x1111111111111111111111111111111111111111")
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "failed to decode FEE_RATE_BPS")
 	})
 
 	t.Run("fallback on invalid total charged keeps amount", func(t *testing.T) {

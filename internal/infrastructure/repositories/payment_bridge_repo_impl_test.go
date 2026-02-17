@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
 	"pay-chain.backend/internal/domain/entities"
 	domainerrors "pay-chain.backend/internal/domain/errors"
 	"pay-chain.backend/pkg/utils"
@@ -70,4 +71,50 @@ func TestPaymentBridgeRepository_Create_AssignsIDWhenNil(t *testing.T) {
 	bridge := &entities.PaymentBridge{Name: "LayerZero"}
 	require.NoError(t, repo.Create(ctx, bridge))
 	require.NotEqual(t, uuid.Nil, bridge.ID)
+}
+
+func TestPaymentBridgeRepository_DBErrorBranches(t *testing.T) {
+	db := newTestDB(t)
+	// intentionally skip table creation
+	repo := NewPaymentBridgeRepository(db)
+	ctx := context.Background()
+
+	_, err := repo.GetByID(ctx, uuid.New())
+	require.Error(t, err)
+
+	_, err = repo.GetByName(ctx, "ccip")
+	require.Error(t, err)
+
+	_, _, err = repo.List(ctx, utils.PaginationParams{Page: 1, Limit: 10})
+	require.Error(t, err)
+
+	err = repo.Update(ctx, &entities.PaymentBridge{ID: uuid.New(), Name: "x"})
+	require.Error(t, err)
+
+	err = repo.Delete(ctx, uuid.New())
+	require.Error(t, err)
+}
+
+func TestPaymentBridgeRepository_List_FindErrorAfterCount(t *testing.T) {
+	db := newTestDB(t)
+	createPaymentBridgeTable(t, db)
+	repo := NewPaymentBridgeRepository(db)
+	ctx := context.Background()
+
+	cbName := "test:payment_bridge_list_find_error"
+	queryCount := 0
+	require.NoError(t, db.Callback().Query().Before("gorm:query").Register(cbName, func(tx *gorm.DB) {
+		if tx.Statement != nil && tx.Statement.Table == "payment_bridge" {
+			queryCount++
+			if queryCount > 1 {
+				tx.AddError(gorm.ErrInvalidDB)
+			}
+		}
+	}))
+	t.Cleanup(func() {
+		_ = db.Callback().Query().Remove(cbName)
+	})
+
+	_, _, err := repo.List(ctx, utils.PaginationParams{Page: 1, Limit: 10})
+	require.Error(t, err)
 }

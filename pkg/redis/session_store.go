@@ -28,6 +28,8 @@ var (
 	getSessionValue = Get
 	delSessionValue = Del
 	marshalSessionJSON = json.Marshal
+	sessionStoreRandReader = rand.Reader
+	newSessionStoreGCM = cipher.NewGCM
 )
 
 // NewSessionStore creates a new session store
@@ -88,13 +90,13 @@ func (s *SessionStore) encrypt(plaintext []byte) (string, error) {
 		return "", err
 	}
 
-	gcm, err := cipher.NewGCM(block)
+	gcm, err := newSessionStoreGCM(block)
 	if err != nil {
 		return "", err
 	}
 
 	nonce := make([]byte, gcm.NonceSize())
-	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+	if _, err := io.ReadFull(sessionStoreRandReader, nonce); err != nil {
 		return "", err
 	}
 
@@ -113,7 +115,7 @@ func (s *SessionStore) decrypt(ciphertextHex string) ([]byte, error) {
 		return nil, err
 	}
 
-	gcm, err := cipher.NewGCM(block)
+	gcm, err := newSessionStoreGCM(block)
 	if err != nil {
 		return nil, err
 	}

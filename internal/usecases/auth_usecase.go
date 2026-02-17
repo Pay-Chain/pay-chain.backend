@@ -18,6 +18,16 @@ import (
 	"pay-chain.backend/pkg/utils"
 )
 
+var (
+	authHashPassword              = crypto.HashPassword
+	authGenerateVerificationToken = crypto.GenerateVerificationToken
+	authJSONMarshal               = json.Marshal
+	authRedisSet                  = redis.Set
+	authGenerateTokenPair         = func(s *jwt.JWTService, userID uuid.UUID, email, role string) (*jwt.TokenPair, error) {
+		return s.GenerateTokenPair(userID, email, role)
+	}
+)
+
 // AuthUsecase handles authentication business logic
 type AuthUsecase struct {
 	userRepo       repositories.UserRepository
@@ -83,7 +93,7 @@ func (u *AuthUsecase) Register(ctx context.Context, input *entities.CreateUserIn
 	}
 
 	// Hash password
-	passwordHash, err := crypto.HashPassword(input.Password)
+	passwordHash, err := authHashPassword(input.Password)
 	if err != nil {
 		return nil, "", err
 	}
@@ -116,7 +126,7 @@ func (u *AuthUsecase) Register(ctx context.Context, input *entities.CreateUserIn
 	}
 
 	// Generate verification token
-	token, err := crypto.GenerateVerificationToken()
+	token, err := authGenerateVerificationToken()
 	if err != nil {
 		return nil, "", err
 	}
@@ -146,7 +156,7 @@ func (u *AuthUsecase) Login(ctx context.Context, input *entities.LoginInput) (*e
 	}
 
 	// Generate tokens
-	tokenPair, err := u.jwtService.GenerateTokenPair(user.ID, user.Email, string(user.Role))
+	tokenPair, err := authGenerateTokenPair(u.jwtService, user.ID, user.Email, string(user.Role))
 	if err != nil {
 		return nil, err
 	}
@@ -167,12 +177,12 @@ func (u *AuthUsecase) Login(ctx context.Context, input *entities.LoginInput) (*e
 			"refreshToken": tokenPair.RefreshToken,
 		}
 
-		jsonData, err := json.Marshal(sessionData)
+		jsonData, err := authJSONMarshal(sessionData)
 		if err != nil {
 			return nil, fmt.Errorf("failed to marshal session data: %w", err)
 		}
 
-		if err := redis.Set(ctx, sessionKey, jsonData, expiration); err != nil {
+		if err := authRedisSet(ctx, sessionKey, jsonData, expiration); err != nil {
 			return nil, fmt.Errorf("failed to store session in redis: %w", err)
 		}
 
@@ -223,7 +233,7 @@ func (u *AuthUsecase) RefreshToken(ctx context.Context, refreshToken string) (*j
 	}
 
 	// Generate new token pair
-	return u.jwtService.GenerateTokenPair(user.ID, user.Email, string(user.Role))
+	return authGenerateTokenPair(u.jwtService, user.ID, user.Email, string(user.Role))
 }
 
 // GetUserByID gets a user by ID

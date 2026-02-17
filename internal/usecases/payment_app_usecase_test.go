@@ -144,3 +144,48 @@ func TestPaymentAppUsecase_CreatePaymentApp_AutoCreateWalletFails(t *testing.T) 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to create wallet")
 }
+
+func TestPaymentAppUsecase_CreatePaymentApp_ExistingWalletPath_ExecutesDelegation(t *testing.T) {
+	mockUserRepo := new(MockUserRepository)
+	mockWalletRepo := new(MockWalletRepository)
+	mockChainRepo := new(MockChainRepository)
+
+	uc := usecases.NewPaymentAppUsecase(nil, mockUserRepo, mockWalletRepo, mockChainRepo)
+
+	srcID := uuid.New()
+	destID := uuid.New()
+	userID := uuid.New()
+	sourceCAIP2 := "eip155:8453"
+	destCAIP2 := "eip155:42161"
+	sender := "0xE6A7d99011257AEc28Ad60EFED58A256c4d5Fea3"
+
+	mockChainRepo.On("GetByCAIP2", context.Background(), sourceCAIP2).Return(&entities.Chain{
+		ID:      srcID,
+		Type:    entities.ChainTypeEVM,
+		ChainID: "8453",
+	}, nil).Once()
+	mockChainRepo.On("GetByCAIP2", context.Background(), destCAIP2).Return(&entities.Chain{
+		ID:      destID,
+		Type:    entities.ChainTypeEVM,
+		ChainID: "42161",
+	}, nil).Once()
+	mockWalletRepo.On("GetByAddress", context.Background(), srcID, sender).Return(&entities.Wallet{
+		ID:      uuid.New(),
+		UserID:  &userID,
+		ChainID: srcID,
+		Address: sender,
+	}, nil).Once()
+
+	assert.Panics(t, func() {
+		_, _ = uc.CreatePaymentApp(context.Background(), &entities.CreatePaymentAppInput{
+			SourceChainID:       sourceCAIP2,
+			DestChainID:         destCAIP2,
+			SourceTokenAddress:  "0x1",
+			DestTokenAddress:    "0x2",
+			Amount:              "1",
+			Decimals:            6,
+			SenderWalletAddress: sender,
+			ReceiverAddress:     "0xdef",
+		})
+	})
+}

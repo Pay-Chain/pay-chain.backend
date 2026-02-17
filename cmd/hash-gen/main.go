@@ -8,6 +8,12 @@ import (
 	"pay-chain.backend/pkg/crypto"
 )
 
+var (
+	printfFn       = fmt.Printf
+	generateHashFn = generateHash
+	fatalfFn       = log.Fatalf
+)
+
 func resolvePassword(args []string) string {
 	password := "The.Conqueror-45"
 	if len(args) > 0 {
@@ -23,12 +29,12 @@ func generateHash(password string) (string, error) {
 func main() {
 	password := resolvePassword(os.Args[1:])
 
-	fmt.Printf("Generating hash for password: %s\n", password)
+	printfFn("Generating hash for password: %s\n", password)
 
-	hash, err := generateHash(password)
+	hash, err := generateHashFn(password)
 	if err != nil {
-		log.Fatalf("Failed to hash password: %v", err)
+		fatalfFn("Failed to hash password: %v", err)
 	}
 
-	fmt.Printf("Bcrypt Hash: %s\n", hash)
+	printfFn("Bcrypt Hash: %s\n", hash)
 }

@@ -131,3 +131,30 @@ func TestLayerZeroConfigRepository_CRUDAndNotFound(t *testing.T) {
 	require.ErrorIs(t, repo.Update(ctx, &entities.LayerZeroConfig{ID: uuid.New()}), domainerrors.ErrNotFound)
 	require.ErrorIs(t, repo.Delete(ctx, uuid.New()), domainerrors.ErrNotFound)
 }
+
+func TestRouteAndLayerZeroRepository_DBErrorBranches(t *testing.T) {
+	db := newTestDB(t)
+	// intentionally skip table creation
+	ctx := context.Background()
+
+	routeRepo := NewRoutePolicyRepository(db)
+	layerZeroRepo := NewLayerZeroConfigRepository(db)
+
+	_, err := routeRepo.GetByID(ctx, uuid.New())
+	require.Error(t, err)
+	_, err = routeRepo.GetByRoute(ctx, uuid.New(), uuid.New())
+	require.Error(t, err)
+	_, _, err = routeRepo.List(ctx, nil, nil, utils.PaginationParams{Page: 1, Limit: 10})
+	require.Error(t, err)
+	err = routeRepo.Delete(ctx, uuid.New())
+	require.Error(t, err)
+
+	_, err = layerZeroRepo.GetByID(ctx, uuid.New())
+	require.Error(t, err)
+	_, err = layerZeroRepo.GetByRoute(ctx, uuid.New(), uuid.New())
+	require.Error(t, err)
+	_, _, err = layerZeroRepo.List(ctx, nil, nil, nil, utils.PaginationParams{Page: 1, Limit: 10})
+	require.Error(t, err)
+	err = layerZeroRepo.Delete(ctx, uuid.New())
+	require.Error(t, err)
+}

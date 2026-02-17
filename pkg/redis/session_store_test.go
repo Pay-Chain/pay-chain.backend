@@ -2,7 +2,9 @@ package redis
 
 import (
 	"context"
+	"crypto/cipher"
 	"errors"
+	"io"
 	"testing"
 	"time"
 
@@ -155,6 +157,13 @@ func TestSessionStore_OperationHooks(t *testing.T) {
 	_, err = store.GetSession(context.Background(), "sid-hook")
 	assert.Error(t, err)
 
+	// Empty payload should fail in decrypt path.
+	getSessionValue = func(_ context.Context, _ string) (string, error) {
+		return "", nil
+	}
+	_, err = store.GetSession(context.Background(), "sid-hook")
+	assert.Error(t, err)
+
 	enc, err := store.encrypt([]byte(`{"accessToken":"ok","refreshToken":"ok2"}`))
 	assert.NoError(t, err)
 	getSessionValue = func(_ context.Context, _ string) (string, error) {
@@ -186,5 +195,68 @@ func TestSessionStore_CreateSession_MarshalErrorBranch(t *testing.T) {
 	}
 
 	err = store.CreateSession(context.Background(), "sid-marshal", &SessionData{AccessToken: "a", RefreshToken: "r"}, time.Minute)
+	assert.Error(t, err)
+}
+
+func TestSessionStore_CreateSession_EncryptErrorBranch(t *testing.T) {
+	// Invalid key length to force encrypt() error branch inside CreateSession.
+	store := &SessionStore{encryptionKey: []byte("short-key")}
+	err := store.CreateSession(context.Background(), "sid-encrypt", &SessionData{AccessToken: "a", RefreshToken: "r"}, time.Minute)
+	assert.Error(t, err)
+}
+
+type failingReader struct{}
+
+func (failingReader) Read(_ []byte) (int, error) {
+	return 0, io.ErrUnexpectedEOF
+}
+
+func TestSessionStore_Encrypt_RandReaderError(t *testing.T) {
+	store, err := NewSessionStore("0000000000000000000000000000000000000000000000000000000000000000")
+	assert.NoError(t, err)
+
+	origReader := sessionStoreRandReader
+	t.Cleanup(func() { sessionStoreRandReader = origReader })
+	sessionStoreRandReader = failingReader{}
+
+	_, err = store.encrypt([]byte(`{"a":1}`))
+	assert.Error(t, err)
+}
+
+func TestSessionStore_GCMCreationErrorBranches(t *testing.T) {
+	store, err := NewSessionStore("0000000000000000000000000000000000000000000000000000000000000000")
+	assert.NoError(t, err)
+
+	origNewGCM := newSessionStoreGCM
+	t.Cleanup(func() { newSessionStoreGCM = origNewGCM })
+
+	newSessionStoreGCM = func(cipher.Block) (cipher.AEAD, error) {
+		return nil, errors.New("gcm init failed")
+	}
+
+	_, err = store.encrypt([]byte(`{"a":1}`))
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "gcm init failed")
+
+	_, err = store.decrypt("00000000000000000000000000000000")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "gcm init failed")
+}
+
+func TestSessionStore_GetSession_JSONUnmarshalErrorHooked(t *testing.T) {
+	store, err := NewSessionStore("0000000000000000000000000000000000000000000000000000000000000000")
+	assert.NoError(t, err)
+
+	origGet := getSessionValue
+	t.Cleanup(func() { getSessionValue = origGet })
+
+	enc, err := store.encrypt([]byte("not-json-payload"))
+	assert.NoError(t, err)
+
+	getSessionValue = func(_ context.Context, _ string) (string, error) {
+		return enc, nil
+	}
+
+	_, err = store.GetSession(context.Background(), "sid-non-json")
 	assert.Error(t, err)
 }

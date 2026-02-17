@@ -58,17 +58,11 @@ func (r *PaymentEventRepository) Create(ctx context.Context, event *entities.Pay
 }
 
 func (r *PaymentEventRepository) resolveLegacyChainValue(chainID *uuid.UUID) string {
-	const maxLegacyLen = 20
 	if chainID == nil {
 		return "UNKNOWN"
 	}
-
-	// Legacy table expects short varchar(20)
-	short := fmt.Sprintf("chain-%s", chainID.String()[:8])
-	if len(short) > maxLegacyLen {
-		return short[:maxLegacyLen]
-	}
-	return short
+	// Legacy table expects short value, so keep only first 8 chars from UUID.
+	return fmt.Sprintf("chain-%s", chainID.String()[:8])
 }
 
 // GetByPaymentID gets events for a payment

@@ -58,3 +58,86 @@ func TestPaymentEventRepository_NotFoundLatest(t *testing.T) {
 	_, err := repo.GetLatestByPaymentID(ctx, uuid.New())
 	require.ErrorIs(t, err, domainerrors.ErrNotFound)
 }
+
+func TestPaymentEventRepository_DBErrorBranches(t *testing.T) {
+	db := newTestDB(t)
+	// intentionally skip table creation
+	repo := NewPaymentEventRepository(db)
+	ctx := context.Background()
+
+	err := repo.Create(ctx, &entities.PaymentEvent{
+		ID:        uuid.New(),
+		PaymentID: uuid.New(),
+		EventType: entities.PaymentEventTypeCreated,
+		TxHash:    "0x",
+	})
+	require.Error(t, err)
+
+	_, err = repo.GetByPaymentID(ctx, uuid.New())
+	require.Error(t, err)
+
+	_, err = repo.GetLatestByPaymentID(ctx, uuid.New())
+	require.Error(t, err)
+}
+
+func TestPaymentEventRepository_ResolveLegacyChainValue(t *testing.T) {
+	repo := NewPaymentEventRepository(nil)
+
+	require.Equal(t, "UNKNOWN", repo.resolveLegacyChainValue(nil))
+
+	chainID := uuid.MustParse("12345678-1234-1234-1234-1234567890ab")
+	require.Equal(t, "chain-12345678", repo.resolveLegacyChainValue(&chainID))
+}
+
+func TestPaymentEventRepository_Create_ZeroCreatedAtAndNilChain(t *testing.T) {
+	db := newTestDB(t)
+	createPaymentTables(t, db)
+	repo := NewPaymentEventRepository(db)
+	ctx := context.Background()
+
+	paymentID := uuid.New()
+	now := time.Now()
+	mustExec(t, db, `INSERT INTO payments(
+		id,sender_id,source_chain_id,dest_chain_id,source_token_id,dest_token_id,source_amount,fee_amount,total_charged,status,created_at,updated_at
+	) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+		paymentID.String(), uuid.NewString(), uuid.NewString(), uuid.NewString(), uuid.NewString(), uuid.NewString(),
+		"1", "0", "1", "PENDING", now, now)
+
+	err := repo.Create(ctx, &entities.PaymentEvent{
+		ID:        uuid.New(),
+		PaymentID: paymentID,
+		EventType: entities.PaymentEventTypeCreated,
+		TxHash:    "0xtx",
+		// zero CreatedAt + nil ChainID to hit default branches
+	})
+	require.NoError(t, err)
+
+	latest, err := repo.GetLatestByPaymentID(ctx, paymentID)
+	require.NoError(t, err)
+	require.False(t, latest.CreatedAt.IsZero())
+}
+
+func TestPaymentEventRepository_Create_WithinTxContext(t *testing.T) {
+	db := newTestDB(t)
+	createPaymentTables(t, db)
+	repo := NewPaymentEventRepository(db)
+
+	paymentID := uuid.New()
+	now := time.Now()
+	mustExec(t, db, `INSERT INTO payments(
+		id,sender_id,source_chain_id,dest_chain_id,source_token_id,dest_token_id,source_amount,fee_amount,total_charged,status,created_at,updated_at
+	) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+		paymentID.String(), uuid.NewString(), uuid.NewString(), uuid.NewString(), uuid.NewString(), uuid.NewString(),
+		"1", "0", "1", "PENDING", now, now)
+
+	tx := db.Begin()
+	ctx := context.WithValue(context.Background(), txKey, tx)
+	err := repo.Create(ctx, &entities.PaymentEvent{
+		ID:        uuid.New(),
+		PaymentID: paymentID,
+		EventType: entities.PaymentEventTypeCreated,
+		TxHash:    "0xabc",
+	})
+	require.NoError(t, err)
+	require.NoError(t, tx.Commit().Error)
+}

@@ -21,6 +21,13 @@ import (
 	"pay-chain.backend/pkg/utils"
 )
 
+var (
+	newABIType = abi.NewType
+	packABIArgs = func(args abi.Arguments, values ...interface{}) ([]byte, error) {
+		return args.Pack(values...)
+	}
+)
+
 // PaymentUsecase handles payment business logic
 type PaymentUsecase struct {
 	paymentRepo      repositories.PaymentRepository
@@ -578,8 +585,14 @@ func (u *PaymentUsecase) resolveVaultAddressForApproval(sourceChainID uuid.UUID,
 }
 
 func (u *PaymentUsecase) buildErc20ApproveHex(spender, amount string) string {
-	addressType, _ := abi.NewType("address", "", nil)
-	uintType, _ := abi.NewType("uint256", "", nil)
+	addressType, err := newABIType("address", "", nil)
+	if err != nil {
+		return ""
+	}
+	uintType, err := newABIType("uint256", "", nil)
+	if err != nil {
+		return ""
+	}
 	amountBig := new(big.Int)
 	if _, ok := amountBig.SetString(amount, 10); !ok {
 		return ""
@@ -588,7 +601,7 @@ func (u *PaymentUsecase) buildErc20ApproveHex(spender, amount string) string {
 		{Type: addressType},
 		{Type: uintType},
 	}
-	packed, err := args.Pack(common.HexToAddress(normalizeEvmAddress(spender)), amountBig)
+	packed, err := packABIArgs(args, common.HexToAddress(normalizeEvmAddress(spender)), amountBig)
 	if err != nil {
 		return ""
 	}
@@ -702,13 +715,22 @@ func (u *PaymentUsecase) buildEvmPaymentHex(payment *entities.Payment, destChain
 	// NOTE:
 	// - destChainIdBytes MUST be CAIP-2 string bytes (e.g. "eip155:8453"), not UUID raw bytes.
 	// - receiverBytes MUST be abi.encode(address) because contract decodes via abi.decode(receiverBytes, (address)).
-	stringType, _ := abi.NewType("bytes", "", nil)
-	addressType, _ := abi.NewType("address", "", nil)
-	uintType, _ := abi.NewType("uint256", "", nil)
+	stringType, err := newABIType("bytes", "", nil)
+	if err != nil {
+		return ""
+	}
+	addressType, err := newABIType("address", "", nil)
+	if err != nil {
+		return ""
+	}
+	uintType, err := newABIType("uint256", "", nil)
+	if err != nil {
+		return ""
+	}
 
 	receiverBytes := []byte(payment.ReceiverAddress)
 	if strings.HasPrefix(payment.ReceiverAddress, "0x") && len(payment.ReceiverAddress) == 42 {
-		encodedAddress, err := abi.Arguments{{Type: addressType}}.Pack(common.HexToAddress(normalizeEvmAddress(payment.ReceiverAddress)))
+		encodedAddress, err := packABIArgs(abi.Arguments{{Type: addressType}}, common.HexToAddress(normalizeEvmAddress(payment.ReceiverAddress)))
 		if err == nil {
 			receiverBytes = encodedAddress
 		}
@@ -724,7 +746,7 @@ func (u *PaymentUsecase) buildEvmPaymentHex(payment *entities.Payment, destChain
 		{Type: addressType}, // destToken
 		{Type: uintType},    // amount
 	}
-	packedArgs, err := args.Pack(
+	packedArgs, err := packABIArgs(args,
 		[]byte(destChainID),
 		receiverBytes,
 		common.HexToAddress(normalizeEvmAddress(payment.SourceTokenAddress)),
@@ -910,7 +932,7 @@ func (u *PaymentUsecase) quoteBridgeFeeByType(
 	amount *big.Int,
 ) (*big.Int, error) {
 	// ABI encode quotePaymentFee(string,uint8,(bytes32,address,address,address,uint256,string,uint256))
-	messageTupleType, err := abi.NewType("tuple", "", []abi.ArgumentMarshaling{
+	messageTupleType, err := newABIType("tuple", "", []abi.ArgumentMarshaling{
 		{Name: "paymentId", Type: "bytes32"},
 		{Name: "receiver", Type: "address"},
 		{Name: "sourceToken", Type: "address"},
@@ -922,8 +944,14 @@ func (u *PaymentUsecase) quoteBridgeFeeByType(
 	if err != nil {
 		return nil, fmt.Errorf("failed to build ABI tuple type: %w", err)
 	}
-	stringType, _ := abi.NewType("string", "", nil)
-	uint8Type, _ := abi.NewType("uint8", "", nil)
+	stringType, err := newABIType("string", "", nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build ABI string type: %w", err)
+	}
+	uint8Type, err := newABIType("uint8", "", nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build ABI uint8 type: %w", err)
+	}
 	args := abi.Arguments{
 		{Type: stringType},
 		{Type: uint8Type},
@@ -949,7 +977,7 @@ func (u *PaymentUsecase) quoteBridgeFeeByType(
 		MinAmountOut: big.NewInt(0),
 	}
 
-	packedArgs, err := args.Pack(destCAIP2, bridgeType, msgStruct)
+	packedArgs, err := packABIArgs(args, destCAIP2, bridgeType, msgStruct)
 	if err != nil {
 		return nil, fmt.Errorf("failed to pack quotePaymentFee args: %w", err)
 	}

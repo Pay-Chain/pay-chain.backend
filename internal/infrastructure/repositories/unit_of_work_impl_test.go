@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
 )
 
 func TestUnitOfWork_DoCommitAndRollback(t *testing.T) {
@@ -68,4 +69,23 @@ func TestUnitOfWork_DoBeginFailure(t *testing.T) {
 	})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "failed to begin transaction")
+}
+
+func TestUnitOfWork_DoCommitFailure_WithHook(t *testing.T) {
+	db := newTestDB(t)
+	createPaymentBridgeTable(t, db)
+	u := &UnitOfWorkImpl{db: db}
+
+	origCommit := commitTx
+	t.Cleanup(func() { commitTx = origCommit })
+	commitTx = func(tx *gorm.DB) error {
+		_ = tx
+		return errors.New("forced commit fail")
+	}
+
+	err := u.Do(context.Background(), func(ctx context.Context) error {
+		return GetDB(ctx, db).Exec("INSERT INTO payment_bridge(id,name) VALUES (?,?)", uuid.New().String(), "ccip").Error
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "failed to commit transaction")
 }

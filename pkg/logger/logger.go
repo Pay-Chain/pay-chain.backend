@@ -13,6 +13,9 @@ var (
 	log  *zap.Logger
 	once sync.Once
 	atom zap.AtomicLevel
+	buildLogger = func(config zap.Config) (*zap.Logger, error) {
+		return config.Build(zap.AddCallerSkip(1))
+	}
 )
 
 type ContextKey string
@@ -35,7 +38,7 @@ func Init(env string) {
 		}
 
 		var err error
-		log, err = config.Build(zap.AddCallerSkip(1))
+		log, err = buildLogger(config)
 		if err != nil {
 			panic(err)
 		}

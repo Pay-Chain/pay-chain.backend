@@ -156,3 +156,34 @@ func TestFeeConfigRepository_Create_AssignsIDWhenNil(t *testing.T) {
 	require.NoError(t, repo.Create(ctx, item))
 	require.NotEqual(t, uuid.Nil, item.ID)
 }
+
+func TestBridgeAndFeeConfigRepository_DBErrorBranches(t *testing.T) {
+	db := newTestDB(t)
+	// intentionally skip table creation
+	ctx := context.Background()
+
+	bridgeRepo := NewBridgeConfigRepository(db)
+	feeRepo := NewFeeConfigRepository(db)
+
+	_, err := bridgeRepo.GetByID(ctx, uuid.New())
+	require.Error(t, err)
+	_, err = bridgeRepo.GetActive(ctx, uuid.New(), uuid.New())
+	require.Error(t, err)
+	_, _, err = bridgeRepo.List(ctx, nil, nil, nil, utils.PaginationParams{Page: 1, Limit: 10})
+	require.Error(t, err)
+	err = bridgeRepo.Update(ctx, &entities.BridgeConfig{ID: uuid.New()})
+	require.Error(t, err)
+	err = bridgeRepo.Delete(ctx, uuid.New())
+	require.Error(t, err)
+
+	_, err = feeRepo.GetByID(ctx, uuid.New())
+	require.Error(t, err)
+	_, err = feeRepo.GetByChainAndToken(ctx, uuid.New(), uuid.New())
+	require.Error(t, err)
+	_, _, err = feeRepo.List(ctx, nil, nil, utils.PaginationParams{Page: 1, Limit: 10})
+	require.Error(t, err)
+	err = feeRepo.Update(ctx, &entities.FeeConfig{ID: uuid.New()})
+	require.Error(t, err)
+	err = feeRepo.Delete(ctx, uuid.New())
+	require.Error(t, err)
+}

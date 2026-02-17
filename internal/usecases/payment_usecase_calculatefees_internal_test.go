@@ -5,6 +5,8 @@ import (
 	"math/big"
 	"testing"
 
+	"pay-chain.backend/internal/infrastructure/blockchain"
+
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"pay-chain.backend/internal/domain/entities"
@@ -115,5 +117,119 @@ func TestPaymentUsecase_CalculateFees_ConfigAndFallback(t *testing.T) {
 		require.Equal(t, "10", fees.BridgeFee)
 		require.Equal(t, "63", fees.TotalFee)
 		require.Equal(t, "936", fees.NetAmount)
+	})
+
+	t.Run("max fee clamp is applied", func(t *testing.T) {
+		maxFee := "5"
+		u := &PaymentUsecase{
+			feeConfigRepo: &feeConfigRepoStub{
+				getByChainAndTokenFn: func(context.Context, uuid.UUID, uuid.UUID) (*entities.FeeConfig, error) {
+					return &entities.FeeConfig{
+						FixedBaseFee:       "1",
+						PlatformFeePercent: "1", // 100%
+						MinFee:             "0",
+						MaxFee:             &maxFee,
+					}, nil
+				},
+			},
+		}
+
+		fees := u.CalculateFees(
+			ctx,
+			big.NewInt(1000), // 10.00 token
+			2,
+			"eip155:8453",
+			"eip155:8453",
+			sourceChainUUID,
+			sourceTokenID,
+			"native",
+			"native",
+			0,
+		)
+		require.Equal(t, "500", fees.PlatformFee)
+		require.Equal(t, "500", fees.TotalFee)
+		require.Equal(t, "500", fees.NetAmount)
+	})
+
+	t.Run("invalid config numbers fallback to defaults", func(t *testing.T) {
+		maxFee := "invalid-max"
+		u := &PaymentUsecase{
+			feeConfigRepo: &feeConfigRepoStub{
+				getByChainAndTokenFn: func(context.Context, uuid.UUID, uuid.UUID) (*entities.FeeConfig, error) {
+					return &entities.FeeConfig{
+						FixedBaseFee:       "invalid-base",
+						PlatformFeePercent: "invalid-percent",
+						MinFee:             "invalid-min",
+						MaxFee:             &maxFee,
+					}, nil
+				},
+			},
+		}
+		fees := u.CalculateFees(
+			ctx,
+			big.NewInt(1000), // 10.00 token
+			2,
+			"eip155:8453",
+			"eip155:8453",
+			sourceChainUUID,
+			sourceTokenID,
+			"native",
+			"native",
+			0,
+		)
+		// defaults => platform fee 0.53 token => 53 in 2 decimals.
+		require.Equal(t, "53", fees.PlatformFee)
+		require.Equal(t, "53", fees.TotalFee)
+		require.Equal(t, "947", fees.NetAmount)
+	})
+
+	t.Run("cross-chain quote success uses quoted bridge fee", func(t *testing.T) {
+		sourceID := uuid.New()
+		destID := uuid.New()
+		sourceChain := &entities.Chain{ID: sourceID, ChainID: "8453", Type: entities.ChainTypeEVM, RPCURL: "mock://fee-ok"}
+		destChain := &entities.Chain{ID: destID, ChainID: "42161", Type: entities.ChainTypeEVM}
+		chainRepo := &quoteChainRepoStub{
+			byCAIP2: map[string]*entities.Chain{
+				"eip155:8453":  sourceChain,
+				"eip155:42161": destChain,
+			},
+			byID: map[uuid.UUID]*entities.Chain{
+				sourceID: sourceChain,
+				destID:   destChain,
+			},
+		}
+		factory := blockchain.NewClientFactory()
+		factory.RegisterEVMClient(sourceChain.RPCURL, blockchain.NewEVMClientWithCallView(big.NewInt(8453), func(context.Context, string, []byte) ([]byte, error) {
+			return []byte{0x14}, nil // 20 (smallest unit)
+		}))
+		u := &PaymentUsecase{
+			feeConfigRepo: &feeConfigRepoStub{},
+			chainRepo:     chainRepo,
+			chainResolver: NewChainResolver(chainRepo),
+			contractRepo: &quoteContractRepoStub{
+				router: &entities.SmartContract{
+					ContractAddress: "0x1111111111111111111111111111111111111111",
+					Type:            entities.ContractTypeRouter,
+				},
+			},
+			clientFactory: factory,
+		}
+
+		fees := u.CalculateFees(
+			ctx,
+			big.NewInt(1000), // 10.00 token
+			2,
+			"eip155:8453",
+			"eip155:42161",
+			sourceID,
+			sourceTokenID,
+			"0x1111111111111111111111111111111111111111",
+			"0x2222222222222222222222222222222222222222",
+			0,
+		)
+		require.Equal(t, "53", fees.PlatformFee)
+		require.Equal(t, "20", fees.BridgeFee)
+		require.Equal(t, "72", fees.TotalFee)
+		require.Equal(t, "926", fees.NetAmount)
 	})
 }

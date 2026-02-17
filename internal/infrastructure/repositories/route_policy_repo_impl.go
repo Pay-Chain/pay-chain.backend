@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -85,10 +87,7 @@ func (r *routePolicyRepo) Create(ctx context.Context, policy *entities.RoutePoli
 		policy.ID = utils.GenerateUUIDv7()
 	}
 
-	fallbackOrder, err := marshalFallbackOrder(policy.FallbackOrder)
-	if err != nil {
-		return err
-	}
+	fallbackOrder := marshalFallbackOrder(policy.FallbackOrder)
 	mode := string(policy.FallbackMode)
 	if mode == "" {
 		mode = string(entities.BridgeFallbackModeStrict)
@@ -108,10 +107,7 @@ func (r *routePolicyRepo) Create(ctx context.Context, policy *entities.RoutePoli
 }
 
 func (r *routePolicyRepo) Update(ctx context.Context, policy *entities.RoutePolicy) error {
-	fallbackOrder, err := marshalFallbackOrder(policy.FallbackOrder)
-	if err != nil {
-		return err
-	}
+	fallbackOrder := marshalFallbackOrder(policy.FallbackOrder)
 	mode := string(policy.FallbackMode)
 	if mode == "" {
 		mode = string(entities.BridgeFallbackModeStrict)
@@ -160,15 +156,20 @@ func toRoutePolicyEntity(m *models.RoutePolicy) *entities.RoutePolicy {
 	}
 }
 
-func marshalFallbackOrder(order []uint8) (string, error) {
+func marshalFallbackOrder(order []uint8) string {
 	if len(order) == 0 {
-		order = []uint8{0}
+		return "[0]"
 	}
-	raw, err := json.Marshal(order)
-	if err != nil {
-		return "", err
+	var b strings.Builder
+	b.WriteByte('[')
+	for i, item := range order {
+		if i > 0 {
+			b.WriteByte(',')
+		}
+		b.WriteString(strconv.Itoa(int(item)))
 	}
-	return string(raw), nil
+	b.WriteByte(']')
+	return b.String()
 }
 
 func parseFallbackOrder(raw string) []uint8 {

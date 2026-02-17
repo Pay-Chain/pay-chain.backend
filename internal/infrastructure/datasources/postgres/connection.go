@@ -9,6 +9,11 @@ import (
 	"pay-chain.backend/internal/config"
 )
 
+var (
+	sqlOpen = sql.Open
+	dbPing  = func(db *sql.DB) error { return db.Ping() }
+)
+
 // NewConnection creates a new PostgreSQL connection
 func NewConnection(cfg config.DatabaseConfig) (*sql.DB, error) {
 	dsn := fmt.Sprintf(
@@ -16,7 +21,7 @@ func NewConnection(cfg config.DatabaseConfig) (*sql.DB, error) {
 		cfg.Host, cfg.Port, cfg.User, cfg.Password, cfg.DBName, cfg.SSLMode,
 	)
 
-	db, err := sql.Open("postgres", dsn)
+	db, err := sqlOpen("postgres", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
@@ -28,7 +33,7 @@ func NewConnection(cfg config.DatabaseConfig) (*sql.DB, error) {
 	db.SetConnMaxIdleTime(1 * time.Minute)
 
 	// Verify connection
-	if err := db.Ping(); err != nil {
+	if err := dbPing(db); err != nil {
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 

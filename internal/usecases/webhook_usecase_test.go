@@ -98,6 +98,61 @@ func TestWebhookUsecase_ProcessIndexerWebhook_RequestPaymentReceived(t *testing.
 	assert.NoError(t, err)
 }
 
+func TestWebhookUsecase_ProcessIndexerWebhook_RequestPaymentReceived_InvalidJSON(t *testing.T) {
+	uc := usecases.NewWebhookUsecase(
+		new(MockPaymentRepository),
+		new(MockPaymentEventRepository),
+		new(MockPaymentRequestRepository),
+		new(MockUnitOfWork),
+	)
+
+	err := uc.ProcessIndexerWebhook(context.Background(), "REQUEST_PAYMENT_RECEIVED", json.RawMessage("{"))
+	assert.Error(t, err)
+}
+
+func TestWebhookUsecase_ProcessIndexerWebhook_RequestPaymentReceived_MarkCompletedErrorStillNil(t *testing.T) {
+	mockRequestRepo := new(MockPaymentRequestRepository)
+	uc := usecases.NewWebhookUsecase(
+		new(MockPaymentRepository),
+		new(MockPaymentEventRepository),
+		mockRequestRepo,
+		new(MockUnitOfWork),
+	)
+
+	requestID := uuid.New()
+	payload := map[string]any{
+		"id":     requestID.String(),
+		"payer":  "0xabc",
+		"txHash": "0xhash",
+	}
+	raw, _ := json.Marshal(payload)
+
+	mockRequestRepo.On("MarkCompleted", context.Background(), requestID, "0xhash").Return(errors.New("update failed")).Once()
+
+	err := uc.ProcessIndexerWebhook(context.Background(), "REQUEST_PAYMENT_RECEIVED", raw)
+	assert.NoError(t, err)
+}
+
+func TestWebhookUsecase_ProcessIndexerWebhook_PaymentCompleted_UOWDoError(t *testing.T) {
+	mockPaymentRepo := new(MockPaymentRepository)
+	mockEventRepo := new(MockPaymentEventRepository)
+	mockRequestRepo := new(MockPaymentRequestRepository)
+	mockUOW := new(MockUnitOfWork)
+	uc := usecases.NewWebhookUsecase(mockPaymentRepo, mockEventRepo, mockRequestRepo, mockUOW)
+
+	paymentID := uuid.New()
+	payload := map[string]any{
+		"paymentId": paymentID.String(),
+		"status":    "completed",
+	}
+	raw, _ := json.Marshal(payload)
+	ctx := context.Background()
+
+	mockUOW.On("Do", ctx, mock.Anything).Return(errors.New("tx begin failed")).Once()
+	err := uc.ProcessIndexerWebhook(ctx, "PAYMENT_COMPLETED", raw)
+	assert.Error(t, err)
+}
+
 func TestWebhookUsecase_ProcessIndexerWebhook_UnhandledEvent(t *testing.T) {
 	uc := usecases.NewWebhookUsecase(
 		new(MockPaymentRepository),
@@ -107,5 +162,42 @@ func TestWebhookUsecase_ProcessIndexerWebhook_UnhandledEvent(t *testing.T) {
 	)
 
 	err := uc.ProcessIndexerWebhook(context.Background(), "SOME_UNKNOWN_EVENT", json.RawMessage(`{"x":1}`))
+	assert.NoError(t, err)
+}
+
+func TestWebhookUsecase_ProcessIndexerWebhook_PaymentUpdateStatusError(t *testing.T) {
+	mockPaymentRepo := new(MockPaymentRepository)
+	mockEventRepo := new(MockPaymentEventRepository)
+	mockRequestRepo := new(MockPaymentRequestRepository)
+	mockUOW := new(MockUnitOfWork)
+
+	uc := usecases.NewWebhookUsecase(mockPaymentRepo, mockEventRepo, mockRequestRepo, mockUOW)
+
+	paymentID := uuid.New()
+	payload := map[string]any{
+		"paymentId": paymentID.String(),
+		"status":    "processing",
+	}
+	raw, _ := json.Marshal(payload)
+	ctx := context.Background()
+
+	mockUOW.On("Do", ctx, mock.Anything).Return(nil).Once()
+	mockUOW.On("WithLock", ctx).Return(ctx).Once()
+	mockPaymentRepo.On("GetByID", ctx, paymentID).Return(&entities.Payment{ID: paymentID}, nil).Once()
+	mockPaymentRepo.On("UpdateStatus", ctx, paymentID, entities.PaymentStatusProcessing).Return(errors.New("update status failed")).Once()
+
+	err := uc.ProcessIndexerWebhook(ctx, "PAYMENT_EXECUTED", raw)
+	assert.EqualError(t, err, "update status failed")
+}
+
+func TestWebhookUsecase_ProcessIndexerWebhook_PaymentRequestCreatedBranch(t *testing.T) {
+	uc := usecases.NewWebhookUsecase(
+		new(MockPaymentRepository),
+		new(MockPaymentEventRepository),
+		new(MockPaymentRequestRepository),
+		new(MockUnitOfWork),
+	)
+
+	err := uc.ProcessIndexerWebhook(context.Background(), "PAYMENT_REQUEST_CREATED", json.RawMessage(`{"requestId":"abc"}`))
 	assert.NoError(t, err)
 }

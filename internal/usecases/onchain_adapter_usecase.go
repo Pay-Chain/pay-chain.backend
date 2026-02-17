@@ -370,221 +370,82 @@ func (u *OnchainAdapterUsecase) sendTx(
 }
 
 func (u *OnchainAdapterUsecase) callDefaultBridgeType(ctx context.Context, client *blockchain.EVMClient, gatewayAddress, destCAIP2 string) (uint8, error) {
-	data, err := payChainGatewayAdminABI.Pack("defaultBridgeTypes", destCAIP2)
-	if err != nil {
-		return 0, err
-	}
-	out, err := client.CallView(ctx, gatewayAddress, data)
-	if err != nil {
-		return 0, err
-	}
-	vals, err := payChainGatewayAdminABI.Unpack("defaultBridgeTypes", out)
-	if err != nil || len(vals) == 0 {
-		return 0, fmt.Errorf("failed to decode defaultBridgeTypes")
-	}
-	value, ok := vals[0].(uint8)
-	if !ok {
-		return 0, fmt.Errorf("invalid defaultBridgeTypes return type")
-	}
-	return value, nil
+	return callTypedView[uint8](ctx, client, gatewayAddress, payChainGatewayAdminABI, "defaultBridgeTypes", destCAIP2)
 }
 
 func (u *OnchainAdapterUsecase) callHasAdapter(ctx context.Context, client *blockchain.EVMClient, routerAddress, destCAIP2 string, bridgeType uint8) (bool, error) {
-	data, err := payChainRouterAdminABI.Pack("hasAdapter", destCAIP2, bridgeType)
-	if err != nil {
-		return false, err
-	}
-	out, err := client.CallView(ctx, routerAddress, data)
-	if err != nil {
-		return false, err
-	}
-	vals, err := payChainRouterAdminABI.Unpack("hasAdapter", out)
-	if err != nil || len(vals) == 0 {
-		return false, fmt.Errorf("failed to decode hasAdapter")
-	}
-	value, ok := vals[0].(bool)
-	if !ok {
-		return false, fmt.Errorf("invalid hasAdapter return type")
-	}
-	return value, nil
+	return callTypedView[bool](ctx, client, routerAddress, payChainRouterAdminABI, "hasAdapter", destCAIP2, bridgeType)
 }
 
 func (u *OnchainAdapterUsecase) callGetAdapter(ctx context.Context, client *blockchain.EVMClient, routerAddress, destCAIP2 string, bridgeType uint8) (string, error) {
-	data, err := payChainRouterAdminABI.Pack("getAdapter", destCAIP2, bridgeType)
+	value, err := callTypedView[common.Address](ctx, client, routerAddress, payChainRouterAdminABI, "getAdapter", destCAIP2, bridgeType)
 	if err != nil {
 		return "", err
-	}
-	out, err := client.CallView(ctx, routerAddress, data)
-	if err != nil {
-		return "", err
-	}
-	vals, err := payChainRouterAdminABI.Unpack("getAdapter", out)
-	if err != nil || len(vals) == 0 {
-		return "", fmt.Errorf("failed to decode getAdapter")
-	}
-	value, ok := vals[0].(common.Address)
-	if !ok {
-		return "", fmt.Errorf("invalid getAdapter return type")
 	}
 	return value.Hex(), nil
 }
 
 func (u *OnchainAdapterUsecase) callHyperbridgeConfigured(ctx context.Context, client *blockchain.EVMClient, adapterAddress, destCAIP2 string) (bool, error) {
-	data, err := hyperbridgeSenderAdminABI.Pack("isChainConfigured", destCAIP2)
-	if err != nil {
-		return false, err
-	}
-	out, err := client.CallView(ctx, adapterAddress, data)
-	if err != nil {
-		return false, err
-	}
-	vals, err := hyperbridgeSenderAdminABI.Unpack("isChainConfigured", out)
-	if err != nil || len(vals) == 0 {
-		return false, fmt.Errorf("failed to decode isChainConfigured")
-	}
-	value, ok := vals[0].(bool)
-	if !ok {
-		return false, fmt.Errorf("invalid isChainConfigured return type")
-	}
-	return value, nil
+	return callTypedView[bool](ctx, client, adapterAddress, hyperbridgeSenderAdminABI, "isChainConfigured", destCAIP2)
 }
 
 func (u *OnchainAdapterUsecase) callHyperbridgeBytes(ctx context.Context, client *blockchain.EVMClient, adapterAddress, method, destCAIP2 string) ([]byte, error) {
-	data, err := hyperbridgeSenderAdminABI.Pack(method, destCAIP2)
-	if err != nil {
-		return nil, err
-	}
-	out, err := client.CallView(ctx, adapterAddress, data)
-	if err != nil {
-		return nil, err
-	}
-	vals, err := hyperbridgeSenderAdminABI.Unpack(method, out)
-	if err != nil || len(vals) == 0 {
-		return nil, fmt.Errorf("failed to decode %s", method)
-	}
-	value, ok := vals[0].([]byte)
-	if !ok {
-		return nil, fmt.Errorf("invalid %s return type", method)
-	}
-	return value, nil
+	return callTypedView[[]byte](ctx, client, adapterAddress, hyperbridgeSenderAdminABI, method, destCAIP2)
 }
 
 func (u *OnchainAdapterUsecase) callCCIPSelector(ctx context.Context, client *blockchain.EVMClient, adapterAddress, destCAIP2 string) (uint64, error) {
-	data, err := ccipSenderAdminABI.Pack("chainSelectors", destCAIP2)
-	if err != nil {
-		return 0, err
-	}
-	out, err := client.CallView(ctx, adapterAddress, data)
-	if err != nil {
-		return 0, err
-	}
-	vals, err := ccipSenderAdminABI.Unpack("chainSelectors", out)
-	if err != nil || len(vals) == 0 {
-		return 0, fmt.Errorf("failed to decode chainSelectors")
-	}
-	value, ok := vals[0].(uint64)
-	if !ok {
-		return 0, fmt.Errorf("invalid chainSelectors return type")
-	}
-	return value, nil
+	return callTypedView[uint64](ctx, client, adapterAddress, ccipSenderAdminABI, "chainSelectors", destCAIP2)
 }
 
 func (u *OnchainAdapterUsecase) callCCIPDestinationAdapter(ctx context.Context, client *blockchain.EVMClient, adapterAddress, destCAIP2 string) ([]byte, error) {
-	data, err := ccipSenderAdminABI.Pack("destinationAdapters", destCAIP2)
-	if err != nil {
-		return nil, err
-	}
-	out, err := client.CallView(ctx, adapterAddress, data)
-	if err != nil {
-		return nil, err
-	}
-	vals, err := ccipSenderAdminABI.Unpack("destinationAdapters", out)
-	if err != nil || len(vals) == 0 {
-		return nil, fmt.Errorf("failed to decode destinationAdapters")
-	}
-	value, ok := vals[0].([]byte)
-	if !ok {
-		return nil, fmt.Errorf("invalid destinationAdapters return type")
-	}
-	return value, nil
+	return callTypedView[[]byte](ctx, client, adapterAddress, ccipSenderAdminABI, "destinationAdapters", destCAIP2)
 }
 
 func (u *OnchainAdapterUsecase) callLayerZeroConfigured(ctx context.Context, client *blockchain.EVMClient, adapterAddress, destCAIP2 string) (bool, error) {
-	data, err := layerZeroSenderAdminABI.Pack("isRouteConfigured", destCAIP2)
-	if err != nil {
-		return false, err
-	}
-	out, err := client.CallView(ctx, adapterAddress, data)
-	if err != nil {
-		return false, err
-	}
-	vals, err := layerZeroSenderAdminABI.Unpack("isRouteConfigured", out)
-	if err != nil || len(vals) == 0 {
-		return false, fmt.Errorf("failed to decode isRouteConfigured")
-	}
-	value, ok := vals[0].(bool)
-	if !ok {
-		return false, fmt.Errorf("invalid isRouteConfigured return type")
-	}
-	return value, nil
+	return callTypedView[bool](ctx, client, adapterAddress, layerZeroSenderAdminABI, "isRouteConfigured", destCAIP2)
 }
 
 func (u *OnchainAdapterUsecase) callLayerZeroDstEid(ctx context.Context, client *blockchain.EVMClient, adapterAddress, destCAIP2 string) (uint32, error) {
-	data, err := layerZeroSenderAdminABI.Pack("dstEids", destCAIP2)
-	if err != nil {
-		return 0, err
-	}
-	out, err := client.CallView(ctx, adapterAddress, data)
-	if err != nil {
-		return 0, err
-	}
-	vals, err := layerZeroSenderAdminABI.Unpack("dstEids", out)
-	if err != nil || len(vals) == 0 {
-		return 0, fmt.Errorf("failed to decode dstEids")
-	}
-	value, ok := vals[0].(uint32)
-	if !ok {
-		return 0, fmt.Errorf("invalid dstEids return type")
-	}
-	return value, nil
+	return callTypedView[uint32](ctx, client, adapterAddress, layerZeroSenderAdminABI, "dstEids", destCAIP2)
 }
 
 func (u *OnchainAdapterUsecase) callLayerZeroPeer(ctx context.Context, client *blockchain.EVMClient, adapterAddress, destCAIP2 string) (common.Hash, error) {
-	data, err := layerZeroSenderAdminABI.Pack("peers", destCAIP2)
+	value, err := callTypedView[[32]byte](ctx, client, adapterAddress, layerZeroSenderAdminABI, "peers", destCAIP2)
 	if err != nil {
 		return common.Hash{}, err
-	}
-	out, err := client.CallView(ctx, adapterAddress, data)
-	if err != nil {
-		return common.Hash{}, err
-	}
-	vals, err := layerZeroSenderAdminABI.Unpack("peers", out)
-	if err != nil || len(vals) == 0 {
-		return common.Hash{}, fmt.Errorf("failed to decode peers")
-	}
-	value, ok := vals[0].([32]byte)
-	if !ok {
-		return common.Hash{}, fmt.Errorf("invalid peers return type")
 	}
 	return common.BytesToHash(value[:]), nil
 }
 
 func (u *OnchainAdapterUsecase) callLayerZeroOptions(ctx context.Context, client *blockchain.EVMClient, adapterAddress, destCAIP2 string) ([]byte, error) {
-	data, err := layerZeroSenderAdminABI.Pack("enforcedOptions", destCAIP2)
+	return callTypedView[[]byte](ctx, client, adapterAddress, layerZeroSenderAdminABI, "enforcedOptions", destCAIP2)
+}
+
+func callTypedView[T any](
+	ctx context.Context,
+	client *blockchain.EVMClient,
+	contractAddress string,
+	parsedABI abi.ABI,
+	method string,
+	args ...interface{},
+) (T, error) {
+	var zero T
+
+	data, err := parsedABI.Pack(method, args...)
 	if err != nil {
-		return nil, err
+		return zero, err
 	}
-	out, err := client.CallView(ctx, adapterAddress, data)
+	out, err := client.CallView(ctx, contractAddress, data)
 	if err != nil {
-		return nil, err
+		return zero, err
 	}
-	vals, err := layerZeroSenderAdminABI.Unpack("enforcedOptions", out)
+	vals, err := parsedABI.Unpack(method, out)
 	if err != nil || len(vals) == 0 {
-		return nil, fmt.Errorf("failed to decode enforcedOptions")
+		return zero, fmt.Errorf("failed to decode %s", method)
 	}
-	value, ok := vals[0].([]byte)
+	value, ok := vals[0].(T)
 	if !ok {
-		return nil, fmt.Errorf("invalid enforcedOptions return type")
+		return zero, fmt.Errorf("invalid %s return type", method)
 	}
 	return value, nil
 }

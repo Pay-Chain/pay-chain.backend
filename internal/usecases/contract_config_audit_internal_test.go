@@ -60,6 +60,10 @@ func TestExtractFunctionNames(t *testing.T) {
 func TestGenerateFieldsFromFunctions(t *testing.T) {
 	fields := generateFieldsFromFunctions([]string{"setRoute", "setPeer", "quoteFee", "setRoute"})
 	require.Equal(t, []string{"peer", "route"}, fields)
+
+	// ignore non-set and too-short setter names
+	fields = generateFieldsFromFunctions([]string{"set", "getRoute", " setRoute", "setA"})
+	require.Equal(t, []string{"a"}, fields)
 }
 
 func TestFindActiveContractByType(t *testing.T) {

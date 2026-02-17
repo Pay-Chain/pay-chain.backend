@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
 	"pay-chain.backend/internal/domain/entities"
 )
 
@@ -126,5 +127,95 @@ func TestPaymentRequestRepository_Create_DBError(t *testing.T) {
 		Status:        entities.PaymentRequestStatusPending,
 		ExpiresAt:     time.Now().Add(time.Hour),
 	})
+	require.Error(t, err)
+}
+
+func TestBackgroundJobRepository_Create_MarshalError(t *testing.T) {
+	db := newTestDB(t)
+	createPaymentRequestTables(t, db)
+	repo := NewBackgroundJobRepository(db)
+
+	err := repo.Create(context.Background(), &entities.BackgroundJob{
+		ID:          uuid.New(),
+		JobType:     "BAD_PAYLOAD",
+		Payload:     map[string]any{"bad": func() {}},
+		Status:      entities.JobStatusPending,
+		MaxAttempts: 1,
+		ScheduledAt: time.Now(),
+	})
+	require.Error(t, err)
+}
+
+func TestPaymentRequestRepository_GetByMerchantID_DBError(t *testing.T) {
+	db := newTestDB(t)
+	// Intentionally skip table creation.
+	repo := NewPaymentRequestRepository(db)
+
+	_, _, err := repo.GetByMerchantID(context.Background(), uuid.New(), 10, 0)
+	require.Error(t, err)
+}
+
+func TestPaymentRequestRepository_GetByMerchantID_FindErrorAfterCount(t *testing.T) {
+	db := newTestDB(t)
+	createPaymentRequestTables(t, db)
+	repo := NewPaymentRequestRepository(db)
+
+	cbName := "test:payment_request_find_fail"
+	queryCount := 0
+	require.NoError(t, db.Callback().Query().Before("gorm:query").Register(cbName, func(tx *gorm.DB) {
+		if tx.Statement != nil && tx.Statement.Table == "payment_requests" {
+			queryCount++
+			if queryCount > 1 {
+				tx.AddError(gorm.ErrInvalidDB)
+			}
+		}
+	}))
+	t.Cleanup(func() {
+		_ = db.Callback().Query().Remove(cbName)
+	})
+
+	_, _, err := repo.GetByMerchantID(context.Background(), uuid.New(), 10, 0)
+	require.Error(t, err)
+}
+
+func TestPaymentRequestRepository_ExtraDBErrorBranches(t *testing.T) {
+	db := newTestDB(t)
+	// Intentionally skip table creation.
+	repo := NewPaymentRequestRepository(db)
+	ctx := context.Background()
+
+	err := repo.UpdateStatus(ctx, uuid.New(), entities.PaymentRequestStatusPending)
+	require.Error(t, err)
+
+	err = repo.UpdateTxHash(ctx, uuid.New(), "0xtx", "0xpayer")
+	require.Error(t, err)
+
+	err = repo.MarkCompleted(ctx, uuid.New(), "0xtx")
+	require.Error(t, err)
+
+	_, err = repo.GetExpiredPending(ctx, 10)
+	require.Error(t, err)
+
+	err = repo.ExpireRequests(ctx, []uuid.UUID{uuid.New()})
+	require.Error(t, err)
+}
+
+func TestBackgroundJobRepository_DBErrorBranches(t *testing.T) {
+	db := newTestDB(t)
+	// Intentionally skip table creation.
+	repo := NewBackgroundJobRepository(db)
+	ctx := context.Background()
+	id := uuid.New()
+
+	_, err := repo.GetPending(ctx, 10)
+	require.Error(t, err)
+
+	err = repo.MarkProcessing(ctx, id)
+	require.Error(t, err)
+
+	err = repo.MarkFailed(ctx, id, "boom")
+	require.Error(t, err)
+
+	err = repo.MarkCompleted(ctx, id)
 	require.Error(t, err)
 }

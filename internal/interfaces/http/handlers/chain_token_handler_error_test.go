@@ -298,4 +298,98 @@ func TestTokenHandler_ErrorPaths(t *testing.T) {
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d body=%s", rec.Code, rec.Body.String())
 	}
+
+	// Update token with non-UUID chainId resolved via legacy chain id.
+	legacyChainID := uuid.New()
+	chainRepo.getByChainIDFn = func(_ context.Context, chainID string) (*entities.Chain, error) {
+		if chainID == "8453" {
+			return &entities.Chain{ID: legacyChainID, ChainID: "8453"}, nil
+		}
+		return nil, domainerrors.ErrNotFound
+	}
+	req = httptest.NewRequest(http.MethodPut, "/admin/tokens/"+tokenID.String(), bytes.NewReader([]byte(`{"chainId":"8453"}`)))
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	if tokenRepo.items[tokenID].ChainUUID != legacyChainID {
+		t.Fatalf("expected chain uuid updated via legacy lookup")
+	}
+
+	// Update token with unresolved non-UUID chainId should keep existing chain uuid and still succeed.
+	before := tokenRepo.items[tokenID].ChainUUID
+	chainRepo.getByChainIDFn = func(_ context.Context, chainID string) (*entities.Chain, error) {
+		return nil, domainerrors.ErrNotFound
+	}
+	req = httptest.NewRequest(http.MethodPut, "/admin/tokens/"+tokenID.String(), bytes.NewReader([]byte(`{"chainId":"unknown-chain"}`)))
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	if tokenRepo.items[tokenID].ChainUUID != before {
+		t.Fatalf("expected chain uuid unchanged when legacy lookup fails")
+	}
+}
+
+func TestTokenHandler_CreateAndUpdate_ExtraBranches(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	chainRepo := &chainRepoErrStub{chainRepoStub: newChainRepoStub()}
+	tokenRepo := &tokenRepoErrStub{tokenRepoStub: newTokenRepoStub()}
+
+	chainA := uuid.New()
+	chainB := uuid.New()
+	chainRepo.items[chainA] = &entities.Chain{ID: chainA, ChainID: "8453", Type: entities.ChainTypeEVM}
+	chainRepo.items[chainB] = &entities.Chain{ID: chainB, ChainID: "42161", Type: entities.ChainTypeEVM}
+	tokenID := uuid.New()
+	tokenRepo.items[tokenID] = &entities.Token{
+		ID:        tokenID,
+		ChainUUID: chainA,
+		Symbol:    "USDC",
+		Name:      "USD Coin",
+		Decimals:  6,
+		Type:      entities.TokenTypeERC20,
+		MinAmount: "1",
+	}
+
+	h := NewTokenHandler(tokenRepo, chainRepo)
+	r := gin.New()
+	r.POST("/admin/tokens", h.CreateToken)
+	r.PUT("/admin/tokens/:id", h.UpdateToken)
+
+	// Create with non-UUID legacy chain id that cannot be resolved.
+	chainRepo.getByChainIDFn = func(_ context.Context, _ string) (*entities.Chain, error) {
+		return nil, domainerrors.ErrNotFound
+	}
+	req := httptest.NewRequest(http.MethodPost, "/admin/tokens", bytes.NewReader([]byte(`{"symbol":"IDRX","name":"IDRX","decimals":6,"type":"ERC20","chainId":"unknown"}`)))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	chainRepo.getByChainIDFn = nil
+
+	// Update through UUID chain id branch and update all mutable fields.
+	req = httptest.NewRequest(http.MethodPut, "/admin/tokens/"+tokenID.String(), bytes.NewReader([]byte(`{"symbol":"IDRX","name":"IDRX Token","decimals":18,"logoUrl":"https://logo","type":"NATIVE","contractAddress":"0x1234","chainId":"`+chainB.String()+`","minAmount":"10","maxAmount":"999"}`)))
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+
+	updated := tokenRepo.items[tokenID]
+	if updated.Symbol != "IDRX" || updated.Name != "IDRX Token" || updated.Decimals != 18 {
+		t.Fatalf("expected token core fields updated")
+	}
+	if updated.Type != entities.TokenTypeNative || updated.ContractAddress != "0x1234" || updated.ChainUUID != chainB {
+		t.Fatalf("expected token type/contract/chain updated")
+	}
+	if updated.MinAmount != "10" || !updated.MaxAmount.Valid || updated.MaxAmount.String != "999" {
+		t.Fatalf("expected token amount fields updated")
+	}
 }

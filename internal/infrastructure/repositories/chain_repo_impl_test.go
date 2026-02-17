@@ -83,6 +83,29 @@ func TestChainRepository_NotFoundAndInvalidBranches(t *testing.T) {
 	require.ErrorIs(t, err, domainerrors.ErrNotFound)
 }
 
+func TestChainRepository_GetByCAIP2_DirectAndMalformedBranches(t *testing.T) {
+	db := newTestDB(t)
+	createChainTables(t, db)
+	repo := NewChainRepository(db)
+	ctx := context.Background()
+
+	fullCAIP2ID := uuid.New()
+	seedChain(t, db, fullCAIP2ID.String(), "eip155:8453", "Base CAIP2", "EVM", true)
+
+	// Direct match branch: chain_id stored as full CAIP-2.
+	got, err := repo.GetByCAIP2(ctx, "eip155:8453")
+	require.NoError(t, err)
+	require.Equal(t, fullCAIP2ID, got.ID)
+
+	// Malformed branch: no separator -> not found.
+	_, err = repo.GetByCAIP2(ctx, "eip155-8453")
+	require.ErrorIs(t, err, domainerrors.ErrNotFound)
+
+	// Malformed branch: empty reference -> not found.
+	_, err = repo.GetByCAIP2(ctx, "eip155:")
+	require.ErrorIs(t, err, domainerrors.ErrNotFound)
+}
+
 func TestChainRepository_GetAllRPCs(t *testing.T) {
 	db := newTestDB(t)
 	createChainTables(t, db)
@@ -101,4 +124,140 @@ func TestChainRepository_GetAllRPCs(t *testing.T) {
 	require.Equal(t, int64(1), total)
 	require.Len(t, items, 1)
 	require.Equal(t, rpcID, items[0].ID)
+
+	// search filter path
+	search := "rpc.local"
+	items, total, err = repo.GetAllRPCs(ctx, &id, &active, &search, utils.PaginationParams{Page: 1, Limit: 0})
+	require.Error(t, err)
+	require.Equal(t, int64(0), total)
+	require.Nil(t, items)
+}
+
+func TestChainRepository_Query_DBErrorBranches(t *testing.T) {
+	db := newTestDB(t)
+	// Intentionally skip creating tables.
+	repo := NewChainRepository(db)
+	ctx := context.Background()
+
+	_, err := repo.GetAll(ctx)
+	require.Error(t, err)
+
+	_, _, err = repo.GetActive(ctx, utils.PaginationParams{Page: 1, Limit: 10})
+	require.Error(t, err)
+
+	_, _, err = repo.GetAllRPCs(ctx, nil, nil, nil, utils.PaginationParams{Page: 1, Limit: 10})
+	require.Error(t, err)
+
+	_, err = repo.GetByID(ctx, uuid.New())
+	require.Error(t, err)
+
+	_, err = repo.GetByChainID(ctx, "8453")
+	require.Error(t, err)
+
+	_, err = repo.GetByCAIP2(ctx, "eip155:8453")
+	require.Error(t, err)
+
+	err = repo.Delete(ctx, uuid.New())
+	require.Error(t, err)
+
+	err = repo.Update(ctx, &entities.Chain{
+		ID:      uuid.New(),
+		ChainID: "8453",
+		Name:    "Base",
+		Type:    entities.ChainTypeEVM,
+	})
+	require.Error(t, err)
+}
+
+func TestChainRepository_GetActive_FindErrorAfterCount(t *testing.T) {
+	db := newTestDB(t)
+	createChainTables(t, db)
+	repo := NewChainRepository(db)
+	ctx := context.Background()
+
+	cbName := "test:chain_getactive_find_error"
+	queryCount := 0
+	require.NoError(t, db.Callback().Query().Before("gorm:query").Register(cbName, func(tx *gorm.DB) {
+		if tx.Statement != nil && tx.Statement.Table == "chains" {
+			queryCount++
+			if queryCount > 1 {
+				tx.AddError(gorm.ErrInvalidDB)
+			}
+		}
+	}))
+	t.Cleanup(func() { _ = db.Callback().Query().Remove(cbName) })
+
+	_, _, err := repo.GetActive(ctx, utils.PaginationParams{Page: 1, Limit: 10})
+	require.Error(t, err)
+}
+
+func TestChainRepository_GetByCAIP2_FallbackQueryError(t *testing.T) {
+	db := newTestDB(t)
+	createChainTables(t, db)
+	repo := NewChainRepository(db)
+	ctx := context.Background()
+
+	cbName := "test:chain_getbycaip2_fallback_error"
+	queryCount := 0
+	require.NoError(t, db.Callback().Query().Before("gorm:query").Register(cbName, func(tx *gorm.DB) {
+		if tx.Statement != nil && tx.Statement.Table == "chains" {
+			queryCount++
+			if queryCount > 1 {
+				tx.AddError(gorm.ErrInvalidDB)
+			}
+		}
+	}))
+	t.Cleanup(func() { _ = db.Callback().Query().Remove(cbName) })
+
+	_, err := repo.GetByCAIP2(ctx, "eip155:8453")
+	require.Error(t, err)
+}
+
+func TestChainRepository_GetAllRPCs_WithoutOptionalFilters(t *testing.T) {
+	db := newTestDB(t)
+	createChainTables(t, db)
+	repo := NewChainRepository(db)
+	ctx := context.Background()
+
+	id := uuid.New()
+	seedChain(t, db, id.String(), "8453", "Base", "EVM", true)
+	rpcID := uuid.New()
+	mustExec(t, db, `INSERT INTO chain_rpcs(id,chain_id,url,priority,is_active,error_count,created_at,updated_at)
+	VALUES (?,?,?,?,?,?,?,?)`, rpcID.String(), id.String(), "https://rpc2.local", 2, false, 1, time.Now(), time.Now())
+
+	items, total, err := repo.GetAllRPCs(ctx, nil, nil, nil, utils.PaginationParams{Page: 1, Limit: 10})
+	require.NoError(t, err)
+	require.Equal(t, int64(1), total)
+	require.Len(t, items, 1)
+	require.Equal(t, rpcID, items[0].ID)
+}
+
+func TestChainRepository_GetAllRPCs_FindErrorAfterCount(t *testing.T) {
+	db := newTestDB(t)
+	createChainTables(t, db)
+	repo := NewChainRepository(db)
+	ctx := context.Background()
+
+	id := uuid.New()
+	seedChain(t, db, id.String(), "8453", "Base", "EVM", true)
+	rpcID := uuid.New()
+	mustExec(t, db, `INSERT INTO chain_rpcs(id,chain_id,url,priority,is_active,error_count,created_at,updated_at)
+	VALUES (?,?,?,?,?,?,?,?)`, rpcID.String(), id.String(), "https://rpc3.local", 3, false, 0, time.Now(), time.Now())
+
+	cbName := "test:chain_getallrpcs_find_error_after_count"
+	queryCount := 0
+	require.NoError(t, db.Callback().Query().Before("gorm:query").Register(cbName, func(tx *gorm.DB) {
+		if tx.Statement != nil && tx.Statement.Table == "chain_rpcs" {
+			queryCount++
+			if queryCount > 1 {
+				tx.AddError(gorm.ErrInvalidDB)
+			}
+		}
+	}))
+	t.Cleanup(func() { _ = db.Callback().Query().Remove(cbName) })
+
+	search := ""
+	isActive := false
+	_, _, err := repo.GetAllRPCs(ctx, &id, &isActive, &search, utils.PaginationParams{Page: 1, Limit: 10})
+	require.Error(t, err)
 }
