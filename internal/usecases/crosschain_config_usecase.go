@@ -86,6 +86,7 @@ type CrosschainConfigUsecase struct {
 	clientFactory  *blockchain.ClientFactory
 	chainResolver  *ChainResolver
 	adapterUsecase CrosschainAdapterUsecase
+	feeQuoteHealth func(ctx context.Context, sourceChain, destChain *entities.Chain, bridgeType uint8) bool
 }
 
 type CrosschainAdapterUsecase interface {
@@ -266,7 +267,7 @@ func (u *CrosschainConfigUsecase) RecheckRoute(ctx context.Context, sourceChainI
 
 	feeQuoteHealthy := false
 	if adapterRegistered {
-		feeQuoteHealthy = u.checkFeeQuoteHealth(ctx, sourceChain, destChain, status.DefaultBridgeType)
+		feeQuoteHealthy = u.evaluateFeeQuoteHealth(ctx, sourceChain, destChain, status.DefaultBridgeType)
 		if !feeQuoteHealthy {
 			issues = append(issues, ContractConfigCheckItem{
 				Code:    "FEE_QUOTE_FAILED",
@@ -327,76 +328,15 @@ func (u *CrosschainConfigUsecase) Preflight(ctx context.Context, sourceChainInpu
 	}
 
 	bridgeRows := make([]CrosschainBridgePreflight, 0, 3)
-	buildRow := func(bridgeType uint8) CrosschainBridgePreflight {
-		row := CrosschainBridgePreflight{
-			BridgeType: bridgeType,
-			BridgeName: bridgeName(bridgeType),
-			Checks: map[string]bool{
-				"adapterRegistered": false,
-				"routeConfigured":   false,
-				"feeQuoteHealthy":   false,
-			},
-		}
-
-		var hasAdapter bool
-		switch bridgeType {
-		case 0:
-			hasAdapter = status.HasAdapterType0 && status.AdapterType0 != "" && status.AdapterType0 != "0x0000000000000000000000000000000000000000"
-			row.Checks["routeConfigured"] = status.HyperbridgeConfigured
-		case 1:
-			hasAdapter = status.HasAdapterType1 && status.AdapterType1 != "" && status.AdapterType1 != "0x0000000000000000000000000000000000000000"
-			row.Checks["routeConfigured"] = status.CCIPChainSelector != 0 && status.CCIPDestinationAdapter != "" && status.CCIPDestinationAdapter != "0x"
-		case 2:
-			hasAdapter = status.HasAdapterType2 && status.AdapterType2 != "" && status.AdapterType2 != "0x0000000000000000000000000000000000000000"
-			row.Checks["routeConfigured"] = status.LayerZeroConfigured
-		}
-		row.Checks["adapterRegistered"] = hasAdapter
-		if hasAdapter && row.Checks["routeConfigured"] {
-			row.Checks["feeQuoteHealthy"] = u.checkFeeQuoteHealth(ctx, sourceChain, destChain, bridgeType)
-		}
-
-		if row.Checks["adapterRegistered"] && row.Checks["routeConfigured"] && row.Checks["feeQuoteHealthy"] {
-			row.Ready = true
-			return row
-		}
-
-		if !row.Checks["adapterRegistered"] {
-			row.ErrorCode = "ADAPTER_NOT_REGISTERED"
-			row.ErrorMessage = "adapter is not registered for this bridge type"
-			return row
-		}
-		if !row.Checks["routeConfigured"] {
-			switch bridgeType {
-			case 0:
-				row.ErrorCode = "HYPERBRIDGE_NOT_CONFIGURED"
-				row.ErrorMessage = "missing state machine ID or destination contract"
-			case 1:
-				row.ErrorCode = "CCIP_NOT_CONFIGURED"
-				row.ErrorMessage = "missing chain selector or destination adapter"
-			case 2:
-				row.ErrorCode = "LAYERZERO_NOT_CONFIGURED"
-				row.ErrorMessage = "missing dstEid or peer"
-			}
-			return row
-		}
-		if !row.Checks["feeQuoteHealthy"] {
-			row.ErrorCode = "FEE_QUOTE_FAILED"
-			row.ErrorMessage = "fee quote call failed for this bridge route"
-		}
-		return row
-	}
+	policyExecutable := false
 
 	// preserve fixed order [0,1,2]
 	for _, bt := range []uint8{0, 1, 2} {
-		bridgeRows = append(bridgeRows, buildRow(bt))
-	}
-
-	policyExecutable := false
-	for _, row := range bridgeRows {
-		if row.BridgeType == status.DefaultBridgeType && row.Ready {
+		row := u.buildPreflightRow(ctx, sourceChain, destChain, status, bt)
+		if row.Ready && row.BridgeType == status.DefaultBridgeType {
 			policyExecutable = true
-			break
 		}
+		bridgeRows = append(bridgeRows, row)
 	}
 
 	return &CrosschainPreflightResult{
@@ -409,6 +349,70 @@ func (u *CrosschainConfigUsecase) Preflight(ctx context.Context, sourceChainInpu
 		PolicyExecutable:  policyExecutable,
 		Issues:            route.Issues,
 	}, nil
+}
+
+func (u *CrosschainConfigUsecase) buildPreflightRow(
+	ctx context.Context,
+	sourceChain, destChain *entities.Chain,
+	status *OnchainAdapterStatus,
+	bridgeType uint8,
+) CrosschainBridgePreflight {
+	row := CrosschainBridgePreflight{
+		BridgeType: bridgeType,
+		BridgeName: bridgeName(bridgeType),
+		Checks: map[string]bool{
+			"adapterRegistered": false,
+			"routeConfigured":   false,
+			"feeQuoteHealthy":   false,
+		},
+	}
+
+	var hasAdapter bool
+	switch bridgeType {
+	case 0:
+		hasAdapter = status.HasAdapterType0 && status.AdapterType0 != "" && status.AdapterType0 != "0x0000000000000000000000000000000000000000"
+		row.Checks["routeConfigured"] = status.HyperbridgeConfigured
+	case 1:
+		hasAdapter = status.HasAdapterType1 && status.AdapterType1 != "" && status.AdapterType1 != "0x0000000000000000000000000000000000000000"
+		row.Checks["routeConfigured"] = status.CCIPChainSelector != 0 && status.CCIPDestinationAdapter != "" && status.CCIPDestinationAdapter != "0x"
+	case 2:
+		hasAdapter = status.HasAdapterType2 && status.AdapterType2 != "" && status.AdapterType2 != "0x0000000000000000000000000000000000000000"
+		row.Checks["routeConfigured"] = status.LayerZeroConfigured
+	}
+	row.Checks["adapterRegistered"] = hasAdapter
+	if hasAdapter && row.Checks["routeConfigured"] {
+		row.Checks["feeQuoteHealthy"] = u.evaluateFeeQuoteHealth(ctx, sourceChain, destChain, bridgeType)
+	}
+
+	if row.Checks["adapterRegistered"] && row.Checks["routeConfigured"] && row.Checks["feeQuoteHealthy"] {
+		row.Ready = true
+		return row
+	}
+
+	if !row.Checks["adapterRegistered"] {
+		row.ErrorCode = "ADAPTER_NOT_REGISTERED"
+		row.ErrorMessage = "adapter is not registered for this bridge type"
+		return row
+	}
+	if !row.Checks["routeConfigured"] {
+		switch bridgeType {
+		case 0:
+			row.ErrorCode = "HYPERBRIDGE_NOT_CONFIGURED"
+			row.ErrorMessage = "missing state machine ID or destination contract"
+		case 1:
+			row.ErrorCode = "CCIP_NOT_CONFIGURED"
+			row.ErrorMessage = "missing chain selector or destination adapter"
+		case 2:
+			row.ErrorCode = "LAYERZERO_NOT_CONFIGURED"
+			row.ErrorMessage = "missing dstEid or peer"
+		}
+		return row
+	}
+	if !row.Checks["feeQuoteHealthy"] {
+		row.ErrorCode = "FEE_QUOTE_FAILED"
+		row.ErrorMessage = "fee quote call failed for this bridge route"
+	}
+	return row
 }
 
 func (u *CrosschainConfigUsecase) AutoFix(ctx context.Context, req *AutoFixRequest) (*AutoFixResult, error) {
@@ -616,7 +620,7 @@ func (u *CrosschainConfigUsecase) checkFeeQuoteHealth(ctx context.Context, sourc
 		destToken = common.HexToAddress(destTokens[0].ContractAddress)
 	}
 
-	messageTupleType, err := abi.NewType("tuple", "", []abi.ArgumentMarshaling{
+	messageTupleType, _ := abi.NewType("tuple", "", []abi.ArgumentMarshaling{
 		{Name: "paymentId", Type: "bytes32"},
 		{Name: "receiver", Type: "address"},
 		{Name: "sourceToken", Type: "address"},
@@ -625,9 +629,6 @@ func (u *CrosschainConfigUsecase) checkFeeQuoteHealth(ctx context.Context, sourc
 		{Name: "destChainId", Type: "string"},
 		{Name: "minAmountOut", Type: "uint256"},
 	})
-	if err != nil {
-		return false
-	}
 	stringType, _ := abi.NewType("string", "", nil)
 	uint8Type, _ := abi.NewType("uint8", "", nil)
 	args := abi.Arguments{
@@ -653,14 +654,18 @@ func (u *CrosschainConfigUsecase) checkFeeQuoteHealth(ctx context.Context, sourc
 		DestChainId:  destChain.GetCAIP2ID(),
 		MinAmountOut: big.NewInt(0),
 	}
-	packedArgs, err := args.Pack(destChain.GetCAIP2ID(), bridgeType, msgStruct)
-	if err != nil {
-		return false
-	}
+	packedArgs, _ := args.Pack(destChain.GetCAIP2ID(), bridgeType, msgStruct)
 	methodSig := []byte("quotePaymentFee(string,uint8,(bytes32,address,address,address,uint256,string,uint256))")
 	methodID := crypto.Keccak256(methodSig)[:4]
 	calldata := append(methodID, packedArgs...)
 
 	out, callErr := client.CallView(ctx, router.ContractAddress, calldata)
 	return callErr == nil && len(out) > 0
+}
+
+func (u *CrosschainConfigUsecase) evaluateFeeQuoteHealth(ctx context.Context, sourceChain, destChain *entities.Chain, bridgeType uint8) bool {
+	if u.feeQuoteHealth != nil {
+		return u.feeQuoteHealth(ctx, sourceChain, destChain, bridgeType)
+	}
+	return u.checkFeeQuoteHealth(ctx, sourceChain, destChain, bridgeType)
 }

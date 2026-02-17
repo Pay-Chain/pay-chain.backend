@@ -159,3 +159,28 @@ func TestCrosschainConfigUsecase_CheckFeeQuoteHealth_Guards(t *testing.T) {
 	u := &CrosschainConfigUsecase{}
 	require.False(t, u.checkFeeQuoteHealth(context.Background(), nil, nil, 0))
 }
+
+func TestCrosschainConfigUsecase_EvaluateFeeQuoteHealth_Override(t *testing.T) {
+	u := &CrosschainConfigUsecase{
+		feeQuoteHealth: func(context.Context, *entities.Chain, *entities.Chain, uint8) bool {
+			return true
+		},
+	}
+	require.True(t, u.evaluateFeeQuoteHealth(context.Background(), nil, nil, 0))
+}
+
+func TestCrosschainConfigUsecase_BuildPreflightRow_Ready(t *testing.T) {
+	u := &CrosschainConfigUsecase{
+		feeQuoteHealth: func(context.Context, *entities.Chain, *entities.Chain, uint8) bool { return true },
+	}
+	status := &OnchainAdapterStatus{
+		HasAdapterType0:       true,
+		AdapterType0:          "0x1111111111111111111111111111111111111111",
+		HyperbridgeConfigured: true,
+	}
+	row := u.buildPreflightRow(context.Background(), &entities.Chain{}, &entities.Chain{}, status, 0)
+	require.True(t, row.Ready)
+	require.True(t, row.Checks["adapterRegistered"])
+	require.True(t, row.Checks["routeConfigured"])
+	require.True(t, row.Checks["feeQuoteHealthy"])
+}

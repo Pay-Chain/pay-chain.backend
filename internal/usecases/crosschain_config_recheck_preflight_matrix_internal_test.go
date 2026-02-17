@@ -315,3 +315,113 @@ func TestCrosschainConfigUsecase_Preflight_DefaultCCIPPolicyExecutable(t *testin
 	require.NotNil(t, row1)
 	require.True(t, row1.Ready)
 }
+
+func TestCrosschainConfigUsecase_Preflight_DefaultHyperbridgePolicyExecutable(t *testing.T) {
+	sourceID := uuid.New()
+	destID := uuid.New()
+	rpcServer := newCrosschainFeeRPCServer(t)
+	defer rpcServer.Close()
+
+	source := &entities.Chain{ID: sourceID, ChainID: "8453", Name: "Base", Type: entities.ChainTypeEVM, IsActive: true, RPCURL: rpcServer.URL}
+	dest := &entities.Chain{ID: destID, ChainID: "42161", Name: "Arbitrum", Type: entities.ChainTypeEVM, IsActive: true}
+	chainRepo := &ccChainRepoStub{
+		byID: map[uuid.UUID]*entities.Chain{
+			sourceID: source,
+			destID:   dest,
+		},
+		byChain: map[string]*entities.Chain{
+			"8453":  source,
+			"42161": dest,
+		},
+		byCAIP2: map[string]*entities.Chain{
+			source.GetCAIP2ID(): source,
+			dest.GetCAIP2ID():   dest,
+		},
+	}
+	tokenRepo := &ccTokenRepoStub{
+		byChain: map[uuid.UUID][]*entities.Token{
+			sourceID: {{ContractAddress: "0x1111111111111111111111111111111111111111"}},
+			destID:   {{ContractAddress: "0x2222222222222222222222222222222222222222"}},
+		},
+	}
+	contractRepo := &ccContractRepoStub{
+		active: map[string]*entities.SmartContract{
+			contractKey(sourceID, entities.ContractTypeRouter): {
+				ChainUUID:       sourceID,
+				Type:            entities.ContractTypeRouter,
+				ContractAddress: "0x9999999999999999999999999999999999999999",
+				IsActive:        true,
+			},
+		},
+	}
+
+	adapter := &crosschainAdapterStub{
+		statusFn: func(context.Context, string, string) (*OnchainAdapterStatus, error) {
+			return &OnchainAdapterStatus{
+				DefaultBridgeType:      0,
+				HasAdapterDefault:      true,
+				AdapterDefaultType:     "0x1111111111111111111111111111111111111111",
+				HasAdapterType0:        true,
+				AdapterType0:           "0x1111111111111111111111111111111111111111",
+				HyperbridgeConfigured:  true,
+				CCIPChainSelector:      0,
+				CCIPDestinationAdapter: "0x",
+				LayerZeroConfigured:    false,
+			}, nil
+		},
+	}
+
+	u := NewCrosschainConfigUsecase(chainRepo, tokenRepo, contractRepo, blockchain.NewClientFactory(), adapter)
+	u.feeQuoteHealth = func(context.Context, *entities.Chain, *entities.Chain, uint8) bool { return true }
+	res, err := u.Preflight(context.Background(), source.GetCAIP2ID(), dest.GetCAIP2ID())
+	require.NoError(t, err)
+	require.True(t, res.PolicyExecutable)
+	require.Equal(t, uint8(0), res.DefaultBridgeType)
+
+	var row0 *CrosschainBridgePreflight
+	for i := range res.Bridges {
+		if res.Bridges[i].BridgeType == 0 {
+			row0 = &res.Bridges[i]
+			break
+		}
+	}
+	require.NotNil(t, row0)
+	require.True(t, row0.Ready)
+}
+
+func TestCrosschainConfigUsecase_Preflight_DefaultReadySetsPolicyExecutable(t *testing.T) {
+	sourceID := uuid.New()
+	destID := uuid.New()
+	source := &entities.Chain{ID: sourceID, ChainID: "8453", Name: "Base", Type: entities.ChainTypeEVM, IsActive: true}
+	dest := &entities.Chain{ID: destID, ChainID: "42161", Name: "Arbitrum", Type: entities.ChainTypeEVM, IsActive: true}
+	chainRepo := &ccChainRepoStub{
+		byID: map[uuid.UUID]*entities.Chain{
+			sourceID: source,
+			destID:   dest,
+		},
+		byChain: map[string]*entities.Chain{
+			"8453":  source,
+			"42161": dest,
+		},
+		byCAIP2: map[string]*entities.Chain{
+			source.GetCAIP2ID(): source,
+			dest.GetCAIP2ID():   dest,
+		},
+	}
+	adapter := &crosschainAdapterStub{
+		statusFn: func(context.Context, string, string) (*OnchainAdapterStatus, error) {
+			return &OnchainAdapterStatus{
+				DefaultBridgeType:     0,
+				HasAdapterType0:       true,
+				AdapterType0:          "0x1111111111111111111111111111111111111111",
+				HyperbridgeConfigured: true,
+			}, nil
+		},
+	}
+
+	u := NewCrosschainConfigUsecase(chainRepo, &ccTokenRepoStub{}, &ccContractRepoStub{}, nil, adapter)
+	u.feeQuoteHealth = func(context.Context, *entities.Chain, *entities.Chain, uint8) bool { return true }
+	res, err := u.Preflight(context.Background(), source.GetCAIP2ID(), dest.GetCAIP2ID())
+	require.NoError(t, err)
+	require.True(t, res.PolicyExecutable)
+}

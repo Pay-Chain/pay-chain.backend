@@ -153,3 +153,44 @@ func TestAuthHandler_RefreshToken_LegacyBodyWithoutTokenAndNoCookie(t *testing.T
 		t.Fatalf("expected 400, got %d body=%s", w.Code, w.Body.String())
 	}
 }
+
+func TestAuthHandler_RefreshToken_HeaderSessionMiss_FallbackToBody(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	t.Setenv("INTERNAL_PROXY_SECRET", "")
+
+	h := NewAuthHandler(
+		authServiceStub{
+			registerFn:    func(context.Context, *entities.CreateUserInput) (*entities.User, string, error) { return nil, "", errors.New("unused") },
+			loginFn:       func(context.Context, *entities.LoginInput) (*entities.AuthResponse, error) { return nil, errors.New("unused") },
+			verifyEmailFn: func(context.Context, string) error { return errors.New("unused") },
+			refreshTokenFn: func(_ context.Context, refreshToken string) (*jwt.TokenPair, error) {
+				if refreshToken != "from-body" {
+					return nil, errors.New("unexpected token")
+				}
+				return &jwt.TokenPair{AccessToken: "a", RefreshToken: "r"}, nil
+			},
+			getUserByIDFn: func(context.Context, uuid.UUID) (*entities.User, error) { return nil, errors.New("unused") },
+			getTokenExpFn: func(string) (int64, error) { return 0, errors.New("unused") },
+			changePassFn:  func(context.Context, uuid.UUID, *entities.ChangePasswordInput) error { return errors.New("unused") },
+		},
+		sessionStoreStub{
+			createFn: func(context.Context, string, *redis.SessionData, time.Duration) error { return nil },
+			getFn:    func(context.Context, string) (*redis.SessionData, error) { return nil, errors.New("session miss") },
+			deleteFn: func(context.Context, string) error { return nil },
+		},
+	)
+
+	r := gin.New()
+	r.POST("/auth/refresh", h.RefreshToken)
+
+	req := httptest.NewRequest(http.MethodPost, "/auth/refresh", bytes.NewBufferString(`{"refreshToken":"from-body"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Session-Id", "sid-miss")
+	req.Header.Set("X-Internal-Proxy-Secret", "proxy-secret")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+}

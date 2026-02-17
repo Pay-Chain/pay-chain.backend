@@ -225,13 +225,8 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 		return
 	}
 
-	// Update session in Redis
-	// Reuse sessionID from header/cookie if available.
-	if sessionID == "" && !strictSessionMode {
-		if cookieSessionID, cookieErr := c.Cookie("session_id"); cookieErr == nil && cookieSessionID != "" {
-			sessionID = cookieSessionID
-		}
-	}
+	// Update session in Redis.
+	// session_id cookie is already read in legacy mode earlier, so only generate when still empty.
 	if sessionID == "" {
 		sessionID = utils.GenerateUUIDv7().String()
 	}

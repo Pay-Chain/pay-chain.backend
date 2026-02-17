@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"log"
 	"os"
@@ -42,6 +43,7 @@ var (
 	}
 	newSessionStore = redis.NewSessionStore
 	runServer       = func(r *gin.Engine, port string) error { return r.Run(":" + port) }
+	getStdDB        = func(db *gorm.DB) (*sql.DB, error) { return db.DB() }
 )
 
 func main() {
@@ -82,7 +84,7 @@ func runMainProcess() error {
 		return fmt.Errorf("failed to connect to database: %w", err)
 	}
 
-	sqlDB, err := db.DB()
+	sqlDB, err := getStdDB(db)
 	if err != nil {
 		return fmt.Errorf("failed to get generic database object: %w", err)
 	}

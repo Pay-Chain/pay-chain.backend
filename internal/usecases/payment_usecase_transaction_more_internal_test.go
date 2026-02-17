@@ -57,6 +57,46 @@ func TestPaymentUsecase_BuildTransactionData_MoreBranches(t *testing.T) {
 		require.Equal(t, "0x64", m["value"])
 	})
 
+	t.Run("cross-chain fee quote zero returns invalid quote error", func(t *testing.T) {
+		sourceID := uuid.New()
+		destID := uuid.New()
+		source := &entities.Chain{ID: sourceID, ChainID: "8453", Name: "Base", Type: entities.ChainTypeEVM, RPCURL: "mock://zero-fee"}
+		dest := &entities.Chain{ID: destID, ChainID: "42161", Name: "Arbitrum", Type: entities.ChainTypeEVM}
+		repo := &quoteChainRepoStub{
+			byID:    map[uuid.UUID]*entities.Chain{sourceID: source, destID: dest},
+			byCAIP2: map[string]*entities.Chain{"eip155:8453": source, "eip155:42161": dest},
+		}
+		factory := blockchain.NewClientFactory()
+		factory.RegisterEVMClient(source.RPCURL, blockchain.NewEVMClientWithCallView(big.NewInt(8453), func(context.Context, string, []byte) ([]byte, error) {
+			return common.FromHex(mustPackOutputs(t, []string{"uint256"}, big.NewInt(0))), nil
+		}))
+		u := &PaymentUsecase{
+			chainRepo:     repo,
+			chainResolver: NewChainResolver(repo),
+			contractRepo: &quoteContractRepoStub{
+				router: &entities.SmartContract{ContractAddress: "0x1111111111111111111111111111111111111111"},
+			},
+			clientFactory: factory,
+		}
+
+		payment := &entities.Payment{
+			ID:                 uuid.New(),
+			SourceChainID:      sourceID,
+			DestChainID:        destID,
+			SourceTokenAddress: "native",
+			DestTokenAddress:   "0x2222222222222222222222222222222222222222",
+			ReceiverAddress:    "0x3333333333333333333333333333333333333333",
+			SourceAmount:       "1000",
+			SourceChain:        source,
+			DestChain:          dest,
+		}
+
+		out, err := u.buildTransactionData(payment, contract)
+		require.Nil(t, out)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "failed to resolve bridge fee quote")
+	})
+
 	t.Run("source and dest chain resolved from repo when relation missing", func(t *testing.T) {
 		sourceID := uuid.New()
 		source := &entities.Chain{ID: sourceID, ChainID: "8453", Type: entities.ChainTypeEVM}

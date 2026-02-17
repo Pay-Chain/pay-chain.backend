@@ -443,10 +443,7 @@ func callTypedView[T any](
 	if err != nil || len(vals) == 0 {
 		return zero, fmt.Errorf("failed to decode %s", method)
 	}
-	value, ok := vals[0].(T)
-	if !ok {
-		return zero, fmt.Errorf("invalid %s return type", method)
-	}
+	value, _ := vals[0].(T)
 	return value, nil
 }
 

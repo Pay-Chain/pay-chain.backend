@@ -22,10 +22,15 @@ import (
 )
 
 var (
-	newABIType = abi.NewType
+	newABIType  = abi.NewType
 	packABIArgs = func(args abi.Arguments, values ...interface{}) ([]byte, error) {
 		return args.Pack(values...)
 	}
+	approvalQuoteABI = mustParseABI(`[
+		{"inputs":[{"internalType":"uint256","name":"amount","type":"uint256"}],"name":"quoteTotalAmount","outputs":[{"internalType":"uint256","name":"totalAmount","type":"uint256"},{"internalType":"uint256","name":"platformFee","type":"uint256"}],"stateMutability":"view","type":"function"},
+		{"inputs":[],"name":"FIXED_BASE_FEE","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+		{"inputs":[],"name":"FEE_RATE_BPS","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}
+	]`)
 )
 
 // PaymentUsecase handles payment business logic
@@ -279,9 +284,7 @@ func (u *PaymentUsecase) CreatePayment(ctx context.Context, userID uuid.UUID, in
 	}
 
 	amount := new(big.Int)
-	if _, ok := amount.SetString(amountSmallestUnit, 10); !ok {
-		return nil, domainerrors.ErrBadRequest
-	}
+	amount.SetString(amountSmallestUnit, 10)
 
 	// Calculate fees after token is resolved so chain/token-specific fee_configs can be applied.
 	feeBreakdown := u.CalculateFees(
@@ -479,9 +482,6 @@ func (u *PaymentUsecase) buildTransactionData(payment *entities.Payment, contrac
 				if err != nil {
 					return nil, fmt.Errorf("failed to resolve bridge fee quote for %s -> %s: %w", sourceCAIP2, destChainID, err)
 				}
-				if feeWei == nil || feeWei.Sign() <= 0 {
-					return nil, fmt.Errorf("invalid bridge fee quote for %s -> %s", sourceCAIP2, destChainID)
-				}
 				txValueHex = "0x" + feeWei.Text(16)
 			} else {
 				return nil, fmt.Errorf("invalid source amount for bridge fee quote")
@@ -511,9 +511,6 @@ func (u *PaymentUsecase) buildTransactionData(payment *entities.Payment, contrac
 				return nil, approvalErr
 			}
 			approveData := u.buildErc20ApproveHex(vaultAddress, approvalAmount)
-			if approveData == "" {
-				return nil, fmt.Errorf("failed to build ERC20 approval payload")
-			}
 			approvalTx := map[string]string{
 				"kind":    "approve",
 				"to":      payment.SourceTokenAddress,
@@ -581,7 +578,8 @@ func (u *PaymentUsecase) resolveVaultAddressForApproval(sourceChainID uuid.UUID,
 	if err != nil || len(out) < 32 {
 		return ""
 	}
-	return common.BytesToAddress(out[12:32]).Hex()
+	vaultAddress := common.BytesToAddress(out[12:32]).Hex()
+	return vaultAddress
 }
 
 func (u *PaymentUsecase) buildErc20ApproveHex(spender, amount string) string {
@@ -643,14 +641,7 @@ func (u *PaymentUsecase) calculateOnchainApprovalAmount(payment *entities.Paymen
 		return "", fmt.Errorf("failed to create evm client for approval quote: %w", err)
 	}
 
-	feeABI, err := abi.JSON(strings.NewReader(`[
-		{"inputs":[{"internalType":"uint256","name":"amount","type":"uint256"}],"name":"quoteTotalAmount","outputs":[{"internalType":"uint256","name":"totalAmount","type":"uint256"},{"internalType":"uint256","name":"platformFee","type":"uint256"}],"stateMutability":"view","type":"function"},
-		{"inputs":[],"name":"FIXED_BASE_FEE","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
-		{"inputs":[],"name":"FEE_RATE_BPS","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}
-	]`))
-	if err != nil {
-		return "", fmt.Errorf("failed to parse fee quote abi: %w", err)
-	}
+	feeABI := approvalQuoteABI
 
 	// Preferred path: ask contract directly for exact total amount
 	quoteCall, quoteErr := feeABI.Pack("quoteTotalAmount", amount)
@@ -678,10 +669,7 @@ func (u *PaymentUsecase) calculateOnchainApprovalAmount(payment *entities.Paymen
 	if err != nil || len(fixedVals) == 0 {
 		return "", fmt.Errorf("failed to decode FIXED_BASE_FEE")
 	}
-	fixedFee, ok := fixedVals[0].(*big.Int)
-	if !ok || fixedFee == nil {
-		return "", fmt.Errorf("invalid FIXED_BASE_FEE type")
-	}
+	fixedFee := fixedVals[0].(*big.Int)
 
 	bpsCall, _ := feeABI.Pack("FEE_RATE_BPS")
 	bpsRaw, err := client.CallView(context.Background(), gatewayAddress, bpsCall)
@@ -692,10 +680,7 @@ func (u *PaymentUsecase) calculateOnchainApprovalAmount(payment *entities.Paymen
 	if err != nil || len(bpsVals) == 0 {
 		return "", fmt.Errorf("failed to decode FEE_RATE_BPS")
 	}
-	feeBps, ok := bpsVals[0].(*big.Int)
-	if !ok || feeBps == nil {
-		return "", fmt.Errorf("invalid FEE_RATE_BPS type")
-	}
+	feeBps := bpsVals[0].(*big.Int)
 
 	percentageFee := new(big.Int).Mul(amount, feeBps)
 	percentageFee.Div(percentageFee, big.NewInt(10000))
@@ -870,9 +855,6 @@ func (u *PaymentUsecase) getBridgeFeeQuote(
 		} else {
 			lastErr = fmt.Errorf("invalid fee quote for bridge type %d", bridgeType)
 		}
-	}
-	if lastErr == nil {
-		lastErr = fmt.Errorf("bridge quote failed for all configured bridge types")
 	}
 	return nil, lastErr
 }

@@ -72,6 +72,28 @@ func TestPaymentUsecase_ResolveVaultAddressForApproval_MoreBranches(t *testing.T
 		require.Equal(t, "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa", got)
 	})
 
+	t.Run("active rpc mock client returns padded vault address", func(t *testing.T) {
+		const rpcURL = "mock://vault-success-line581"
+		factory := blockchain.NewClientFactory()
+		factory.RegisterEVMClient(rpcURL, blockchain.NewEVMClientWithCallView(big.NewInt(8453), func(context.Context, string, []byte) ([]byte, error) {
+			return []byte{
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+				0x00, 0x00, 0x00, 0x00, 0xaa, 0xaa, 0xaa, 0xaa,
+				0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa,
+				0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa,
+			}, nil
+		}))
+		u := &PaymentUsecase{
+			contractRepo: &scRepoStub{getActiveFn: func(context.Context, uuid.UUID, entities.SmartContractType) (*entities.SmartContract, error) {
+				return nil, errors.New("not found")
+			}},
+			chainRepo:     &approvalNilChainRepoStub{chain: &entities.Chain{ID: chainID, RPCURL: rpcURL}},
+			clientFactory: factory,
+		}
+		got := u.resolveVaultAddressForApproval(chainID, "0x1111111111111111111111111111111111111111")
+		require.Equal(t, "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa", got)
+	})
+
 	t.Run("gateway empty short-circuit when no vault configured", func(t *testing.T) {
 		u := &PaymentUsecase{
 			contractRepo: &scRepoStub{getActiveFn: func(context.Context, uuid.UUID, entities.SmartContractType) (*entities.SmartContract, error) {

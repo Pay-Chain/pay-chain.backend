@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"errors"
 	"os"
 	"syscall"
@@ -25,6 +26,7 @@ func withMainHooks(t *testing.T) {
 	origOpenDB := openDB
 	origNewSessionStore := newSessionStore
 	origRunServer := runServer
+	origGetStdDB := getStdDB
 
 	t.Cleanup(func() {
 		loadDotenv = origLoadDotenv
@@ -34,6 +36,7 @@ func withMainHooks(t *testing.T) {
 		openDB = origOpenDB
 		newSessionStore = origNewSessionStore
 		runServer = origRunServer
+		getStdDB = origGetStdDB
 	})
 }
 
@@ -172,7 +175,6 @@ func TestRunMainProcess_SuccessPath_WithDotenvLoadError(t *testing.T) {
 	}
 }
 
-
 func TestDefaultOpenDBAndRunServerWrappers_ExecuteBodies(t *testing.T) {
 	withMainHooks(t)
 
@@ -252,5 +254,25 @@ func TestRunMainProcess_GracefulShutdownSignalBranch(t *testing.T) {
 
 	if err := runMainProcess(); err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRunMainProcess_GetStdDBError(t *testing.T) {
+	withMainHooks(t)
+
+	loadDotenv = func(...string) error { return nil }
+	loadCfg = baseTestConfig
+	initLog = plog.Init
+	initRedis = func(string, string) error { return nil }
+	openDB = func(string) (*gorm.DB, error) {
+		return gorm.Open(sqlite.Open("file:main_getstdb_error?mode=memory&cache=shared"), &gorm.Config{})
+	}
+	getStdDB = func(*gorm.DB) (*sql.DB, error) { return nil, errors.New("stdb failed") }
+	newSessionStore = redis.NewSessionStore
+	runServer = func(*gin.Engine, string) error { return nil }
+
+	err := runMainProcess()
+	if err == nil {
+		t.Fatal("expected generic database object error")
 	}
 }
