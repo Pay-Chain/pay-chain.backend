@@ -16,4 +16,5 @@ type PaymentRepository interface {
 	UpdateStatus(ctx context.Context, id uuid.UUID, status entities.PaymentStatus) error
 	UpdateDestTxHash(ctx context.Context, id uuid.UUID, txHash string) error
 	MarkRefunded(ctx context.Context, id uuid.UUID) error
+	Update(ctx context.Context, payment *entities.Payment) error
 }

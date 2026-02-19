@@ -45,9 +45,15 @@ func (s *quoteChainRepoStub) GetAllRPCs(context.Context, *uuid.UUID, *bool, *str
 func (s *quoteChainRepoStub) GetActive(context.Context, utils.PaginationParams) ([]*entities.Chain, int64, error) {
 	return nil, 0, nil
 }
-func (s *quoteChainRepoStub) Create(context.Context, *entities.Chain) error { return nil }
-func (s *quoteChainRepoStub) Update(context.Context, *entities.Chain) error { return nil }
-func (s *quoteChainRepoStub) Delete(context.Context, uuid.UUID) error       { return nil }
+func (s *quoteChainRepoStub) Create(context.Context, *entities.Chain) error       { return nil }
+func (s *quoteChainRepoStub) Update(context.Context, *entities.Chain) error       { return nil }
+func (s *quoteChainRepoStub) Delete(context.Context, uuid.UUID) error             { return nil }
+func (s *quoteChainRepoStub) CreateRPC(context.Context, *entities.ChainRPC) error { return nil }
+func (s *quoteChainRepoStub) UpdateRPC(context.Context, *entities.ChainRPC) error { return nil }
+func (s *quoteChainRepoStub) DeleteRPC(context.Context, uuid.UUID) error          { return nil }
+func (s *quoteChainRepoStub) GetRPCByID(context.Context, uuid.UUID) (*entities.ChainRPC, error) {
+	return nil, domainerrors.ErrNotFound
+}
 
 type quoteContractRepoStub struct {
 	router *entities.SmartContract
@@ -82,20 +88,24 @@ func (s *quoteContractRepoStub) GetAll(context.Context, utils.PaginationParams) 
 	return nil, 0, nil
 }
 func (s *quoteContractRepoStub) Update(context.Context, *entities.SmartContract) error { return nil }
-func (s *quoteContractRepoStub) SoftDelete(context.Context, uuid.UUID) error            { return nil }
+func (s *quoteContractRepoStub) SoftDelete(context.Context, uuid.UUID) error           { return nil }
 
 type quoteTokenRepoStub struct{}
 
-func (quoteTokenRepoStub) GetByID(context.Context, uuid.UUID) (*entities.Token, error) { return nil, domainerrors.ErrNotFound }
+func (quoteTokenRepoStub) GetByID(context.Context, uuid.UUID) (*entities.Token, error) {
+	return nil, domainerrors.ErrNotFound
+}
 func (quoteTokenRepoStub) GetBySymbol(context.Context, string, uuid.UUID) (*entities.Token, error) {
 	return nil, domainerrors.ErrNotFound
 }
 func (quoteTokenRepoStub) GetByAddress(context.Context, string, uuid.UUID) (*entities.Token, error) {
 	return nil, domainerrors.ErrNotFound
 }
-func (quoteTokenRepoStub) GetAll(context.Context) ([]*entities.Token, error)                { return nil, nil }
-func (quoteTokenRepoStub) GetStablecoins(context.Context) ([]*entities.Token, error)         { return nil, nil }
-func (quoteTokenRepoStub) GetNative(context.Context, uuid.UUID) (*entities.Token, error)     { return nil, domainerrors.ErrNotFound }
+func (quoteTokenRepoStub) GetAll(context.Context) ([]*entities.Token, error)         { return nil, nil }
+func (quoteTokenRepoStub) GetStablecoins(context.Context) ([]*entities.Token, error) { return nil, nil }
+func (quoteTokenRepoStub) GetNative(context.Context, uuid.UUID) (*entities.Token, error) {
+	return nil, domainerrors.ErrNotFound
+}
 func (quoteTokenRepoStub) GetTokensByChain(context.Context, uuid.UUID, utils.PaginationParams) ([]*entities.Token, int64, error) {
 	return []*entities.Token{}, 0, nil
 }
@@ -115,7 +125,7 @@ func TestPaymentUsecase_GetBridgeFeeQuote_ErrorBranches(t *testing.T) {
 
 	t.Run("invalid source", func(t *testing.T) {
 		u := &PaymentUsecase{chainRepo: &quoteChainRepoStub{}, chainResolver: NewChainResolver(&quoteChainRepoStub{})}
-		_, err := u.getBridgeFeeQuote(context.Background(), "eip155:8453", "eip155:42161", "0x1", "0x2", big.NewInt(1))
+		_, err := u.getBridgeFeeQuote(context.Background(), "eip155:8453", "eip155:42161", "0x1", "0x2", big.NewInt(1), big.NewInt(0))
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "source chain config not found")
 	})
@@ -123,7 +133,7 @@ func TestPaymentUsecase_GetBridgeFeeQuote_ErrorBranches(t *testing.T) {
 	t.Run("invalid destination", func(t *testing.T) {
 		repo := &quoteChainRepoStub{byCAIP2: map[string]*entities.Chain{"eip155:8453": source}, byID: map[uuid.UUID]*entities.Chain{sourceID: source}}
 		u := &PaymentUsecase{chainRepo: repo, chainResolver: NewChainResolver(repo)}
-		_, err := u.getBridgeFeeQuote(context.Background(), "eip155:8453", "eip155:42161", "0x1", "0x2", big.NewInt(1))
+		_, err := u.getBridgeFeeQuote(context.Background(), "eip155:8453", "eip155:42161", "0x1", "0x2", big.NewInt(1), big.NewInt(0))
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "dest chain config not found")
 	})
@@ -138,7 +148,7 @@ func TestPaymentUsecase_GetBridgeFeeQuote_ErrorBranches(t *testing.T) {
 			chainResolver: NewChainResolver(repo),
 			contractRepo:  &quoteContractRepoStub{err: errors.New("missing router")},
 		}
-		_, err := u.getBridgeFeeQuote(context.Background(), "eip155:8453", "eip155:42161", "0x1", "0x2", big.NewInt(1))
+		_, err := u.getBridgeFeeQuote(context.Background(), "eip155:8453", "eip155:42161", "0x1", "0x2", big.NewInt(1), big.NewInt(0))
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "active router not found")
 	})
@@ -155,7 +165,7 @@ func TestPaymentUsecase_GetBridgeFeeQuote_ErrorBranches(t *testing.T) {
 			clientFactory: blockchain.NewClientFactory(),
 			tokenRepo:     quoteTokenRepoStub{},
 		}
-		_, err := u.getBridgeFeeQuote(context.Background(), "eip155:8453", "eip155:42161", "0x1", "0x2", big.NewInt(1))
+		_, err := u.getBridgeFeeQuote(context.Background(), "eip155:8453", "eip155:42161", "0x1", "0x2", big.NewInt(1), big.NewInt(0))
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "no RPC endpoints available")
 	})
@@ -167,14 +177,14 @@ func TestPaymentUsecase_GetBridgeFeeQuote_ErrorBranches(t *testing.T) {
 			byID:    map[uuid.UUID]*entities.Chain{sourceID: sourceWithBadRPC, destID: dest},
 		}
 		u := &PaymentUsecase{
-			chainRepo:      repo,
-			chainResolver:  NewChainResolver(repo),
-			contractRepo:   &quoteContractRepoStub{router: router},
-			clientFactory:  blockchain.NewClientFactory(),
-			tokenRepo:      quoteTokenRepoStub{},
+			chainRepo:       repo,
+			chainResolver:   NewChainResolver(repo),
+			contractRepo:    &quoteContractRepoStub{router: router},
+			clientFactory:   blockchain.NewClientFactory(),
+			tokenRepo:       quoteTokenRepoStub{},
 			routePolicyRepo: nil,
 		}
-		_, err := u.getBridgeFeeQuote(context.Background(), "eip155:8453", "eip155:42161", "0x1", "0x2", big.NewInt(1))
+		_, err := u.getBridgeFeeQuote(context.Background(), "eip155:8453", "eip155:42161", "0x1", "0x2", big.NewInt(1), big.NewInt(0))
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "failed to connect to any RPC endpoint")
 	})
@@ -190,7 +200,7 @@ func TestPaymentUsecase_GetBridgeFeeQuote_ErrorBranches(t *testing.T) {
 			contractRepo:  &quoteContractRepoStub{router: router},
 			clientFactory: blockchain.NewClientFactory(),
 		}
-		_, err := u.getBridgeFeeQuote(context.Background(), "eip155:8453", "eip155:42161", "0x1", "0x2", big.NewInt(1))
+		_, err := u.getBridgeFeeQuote(context.Background(), "eip155:8453", "eip155:42161", "0x1", "0x2", big.NewInt(1), big.NewInt(0))
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "source chain not found")
 	})
@@ -209,14 +219,14 @@ func TestPaymentUsecase_GetBridgeFeeQuote_ErrorBranches(t *testing.T) {
 		}))
 
 		u := &PaymentUsecase{
-			chainRepo:      repo,
-			chainResolver:  NewChainResolver(repo),
-			contractRepo:   &quoteContractRepoStub{router: router},
-			clientFactory:  factory,
+			chainRepo:       repo,
+			chainResolver:   NewChainResolver(repo),
+			contractRepo:    &quoteContractRepoStub{router: router},
+			clientFactory:   factory,
 			routePolicyRepo: nil,
 		}
-		_, err := u.getBridgeFeeQuote(context.Background(), "eip155:8453", "eip155:42161", "0x1", "0x2", big.NewInt(100))
+		_, err := u.getBridgeFeeQuote(context.Background(), "eip155:8453", "eip155:42161", "0x1", "0x2", big.NewInt(100), big.NewInt(0))
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "invalid fee quote")
+		require.Contains(t, err.Error(), "route not configured")
 	})
 }

@@ -40,31 +40,35 @@ func (h *ChainHandler) ListChains(c *gin.Context) {
 
 	// Format response with CAIP-2 IDs
 	type chainResponse struct {
-		ID          string `json:"id"`
-		NetworkID   string `json:"networkId"`
-		CAIP2       string `json:"caip2"`
-		Name        string `json:"name"`
-		ChainType   string `json:"chainType"`
-		RPCURL      string `json:"rpcUrl"`
-		ExplorerURL string `json:"explorerUrl"`
-		Symbol      string `json:"symbol"`
-		LogoURL     string `json:"logoUrl"`
-		IsActive    bool   `json:"isActive"`
+		ID                string `json:"id"`
+		NetworkID         string `json:"networkId"`
+		CAIP2             string `json:"caip2"`
+		Name              string `json:"name"`
+		ChainType         string `json:"chainType"`
+		RPCURL            string `json:"rpcUrl"`
+		ExplorerURL       string `json:"explorerUrl"`
+		Symbol            string `json:"symbol"`
+		LogoURL           string `json:"logoUrl"`
+		IsActive          bool   `json:"isActive"`
+		CCIPChainSelector string `json:"ccipChainSelector"`
+		LayerZeroEID      int    `json:"layerZeroEid"`
 	}
 
 	var resp []chainResponse
 	for _, chain := range chains {
 		resp = append(resp, chainResponse{
-			ID:          chain.ID.String(), // Use UUID for the ID field
-			NetworkID:   chain.ChainID,     // Keep NetworkID as the string ID
-			CAIP2:       chain.GetCAIP2ID(),
-			Name:        chain.Name,
-			ChainType:   string(chain.Type),
-			RPCURL:      chain.RPCURL,
-			ExplorerURL: chain.ExplorerURL,
-			Symbol:      chain.CurrencySymbol,
-			LogoURL:     chain.ImageURL,
-			IsActive:    chain.IsActive,
+			ID:                chain.ID.String(), // Use UUID for the ID field
+			NetworkID:         chain.ChainID,     // Keep NetworkID as the string ID
+			CAIP2:             chain.GetCAIP2ID(),
+			Name:              chain.Name,
+			ChainType:         string(chain.Type),
+			RPCURL:            chain.RPCURL,
+			ExplorerURL:       chain.ExplorerURL,
+			Symbol:            chain.CurrencySymbol,
+			LogoURL:           chain.ImageURL,
+			IsActive:          chain.IsActive,
+			CCIPChainSelector: chain.CCIPChainSelector,
+			LayerZeroEID:      chain.LayerZeroEID,
 		})
 	}
 
@@ -83,13 +87,15 @@ func (h *ChainHandler) ListChains(c *gin.Context) {
 // POST /api/v1/admin/chains
 func (h *ChainHandler) CreateChain(c *gin.Context) {
 	var input struct {
-		NetworkID   string `json:"networkId" binding:"required"` // External Chain ID (e.g. "1", "solana:5ey...")
-		Name        string `json:"name" binding:"required"`
-		ChainType   string `json:"chainType" binding:"required"` // EVM, SVM
-		RPCURL      string `json:"rpcUrl" binding:"required"`
-		ExplorerURL string `json:"explorerUrl"`
-		Symbol      string `json:"symbol" binding:"required"`
-		LogoURL     string `json:"logoUrl"`
+		NetworkID         string `json:"networkId" binding:"required"` // External Chain ID (e.g. "1", "solana:5ey...")
+		Name              string `json:"name" binding:"required"`
+		ChainType         string `json:"chainType" binding:"required"` // EVM, SVM
+		RPCURL            string `json:"rpcUrl" binding:"required"`
+		ExplorerURL       string `json:"explorerUrl"`
+		Symbol            string `json:"symbol" binding:"required"`
+		LogoURL           string `json:"logoUrl"`
+		CCIPChainSelector string `json:"ccipChainSelector"`
+		LayerZeroEID      int    `json:"layerZeroEid"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -98,16 +104,18 @@ func (h *ChainHandler) CreateChain(c *gin.Context) {
 	}
 
 	chain := &entities.Chain{
-		ID:             utils.GenerateUUIDv7(),
-		ChainID:        input.NetworkID,
-		Name:           input.Name,
-		Type:           entities.ChainType(input.ChainType),
-		RPCURL:         input.RPCURL,
-		ExplorerURL:    input.ExplorerURL,
-		CurrencySymbol: input.Symbol,
-		ImageURL:       input.LogoURL,
-		IsActive:       true,
-		CreatedAt:      time.Now(),
+		ID:                utils.GenerateUUIDv7(),
+		ChainID:           input.NetworkID,
+		Name:              input.Name,
+		Type:              entities.ChainType(input.ChainType),
+		RPCURL:            input.RPCURL,
+		ExplorerURL:       input.ExplorerURL,
+		CurrencySymbol:    input.Symbol,
+		ImageURL:          input.LogoURL,
+		IsActive:          true,
+		CCIPChainSelector: input.CCIPChainSelector,
+		LayerZeroEID:      input.LayerZeroEID,
+		CreatedAt:         time.Now(),
 	}
 
 	if err := h.chainRepo.Create(c.Request.Context(), chain); err != nil {
@@ -129,14 +137,16 @@ func (h *ChainHandler) UpdateChain(c *gin.Context) {
 	}
 
 	var input struct {
-		NetworkID   string `json:"networkId" binding:"required"`
-		Name        string `json:"name" binding:"required"`
-		ChainType   string `json:"chainType" binding:"required"`
-		RPCURL      string `json:"rpcUrl" binding:"required"`
-		ExplorerURL string `json:"explorerUrl"`
-		Symbol      string `json:"symbol"`
-		LogoURL     string `json:"logoUrl"`
-		IsActive    bool   `json:"isActive"`
+		NetworkID         string `json:"networkId" binding:"required"`
+		Name              string `json:"name" binding:"required"`
+		ChainType         string `json:"chainType" binding:"required"`
+		RPCURL            string `json:"rpcUrl" binding:"required"`
+		ExplorerURL       string `json:"explorerUrl"`
+		Symbol            string `json:"symbol"`
+		LogoURL           string `json:"logoUrl"`
+		IsActive          bool   `json:"isActive"`
+		CCIPChainSelector string `json:"ccipChainSelector"`
+		LayerZeroEID      int    `json:"layerZeroEid"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -146,15 +156,17 @@ func (h *ChainHandler) UpdateChain(c *gin.Context) {
 	}
 
 	chain := &entities.Chain{
-		ID:             id,
-		ChainID:        input.NetworkID,
-		Name:           input.Name,
-		Type:           entities.ChainType(input.ChainType),
-		RPCURL:         input.RPCURL,
-		ExplorerURL:    input.ExplorerURL,
-		CurrencySymbol: input.Symbol,
-		ImageURL:       input.LogoURL,
-		IsActive:       input.IsActive,
+		ID:                id,
+		ChainID:           input.NetworkID,
+		Name:              input.Name,
+		Type:              entities.ChainType(input.ChainType),
+		RPCURL:            input.RPCURL,
+		ExplorerURL:       input.ExplorerURL,
+		CurrencySymbol:    input.Symbol,
+		ImageURL:          input.LogoURL,
+		IsActive:          input.IsActive,
+		CCIPChainSelector: input.CCIPChainSelector,
+		LayerZeroEID:      input.LayerZeroEID,
 	}
 
 	if err := h.chainRepo.Update(c.Request.Context(), chain); err != nil {

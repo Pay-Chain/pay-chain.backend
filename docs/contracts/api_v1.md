@@ -155,3 +155,29 @@ Response:
   "destChainId": "eip155:42161"
 }
 ```
+
+### 5. Route Error Diagnostics
+
+`GET /api/v1/admin/diagnostics/route-error/:paymentId?sourceChainId=<CAIP2|UUID>`
+or
+`GET /api/v1/payment-app/diagnostics/route-error/:paymentId?sourceChainId=<CAIP2|UUID>`
+
+Response:
+```json
+{
+  "diagnostics": {
+    "sourceChainId": "eip155:8453",
+    "gatewayAddress": "0x4b6e4259016Dc94b6E78221BCdEAC59F954823E8",
+    "paymentIdHex": "0x6a9f...<bytes32>",
+    "decoded": {
+      "rawHex": "0x08c379a0...",
+      "selector": "0x08c379a0",
+      "name": "Error",
+      "message": "route not configured for destination eip155:42161",
+      "details": {
+        "destChainId": "eip155:42161"
+      }
+    }
+  }
+}
+```

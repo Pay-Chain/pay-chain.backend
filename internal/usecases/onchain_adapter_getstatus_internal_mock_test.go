@@ -24,15 +24,15 @@ func encodeMethodOut(t *testing.T, methodName string, values ...interface{}) []b
 
 	switch methodName {
 	case "defaultBridgeTypes":
-		out, err = payChainGatewayAdminABI.Methods[methodName].Outputs.Pack(values...)
+		out, err = FallbackPayChainGatewayABI.Methods[methodName].Outputs.Pack(values...)
 	case "hasAdapter", "getAdapter":
-		out, err = payChainRouterAdminABI.Methods[methodName].Outputs.Pack(values...)
+		out, err = FallbackPayChainRouterAdminABI.Methods[methodName].Outputs.Pack(values...)
 	case "isChainConfigured", "stateMachineIds", "destinationContracts":
-		out, err = hyperbridgeSenderAdminABI.Methods[methodName].Outputs.Pack(values...)
+		out, err = FallbackHyperbridgeSenderAdminABI.Methods[methodName].Outputs.Pack(values...)
 	case "chainSelectors", "destinationAdapters":
-		out, err = ccipSenderAdminABI.Methods[methodName].Outputs.Pack(values...)
+		out, err = FallbackCCIPSenderAdminABI.Methods[methodName].Outputs.Pack(values...)
 	case "isRouteConfigured", "dstEids", "peers", "enforcedOptions":
-		out, err = layerZeroSenderAdminABI.Methods[methodName].Outputs.Pack(values...)
+		out, err = FallbackLayerZeroSenderAdminABI.Methods[methodName].Outputs.Pack(values...)
 	default:
 		t.Fatalf("unsupported method: %s", methodName)
 	}
@@ -84,15 +84,15 @@ func TestOnchainAdapterUsecase_GetStatus_WithInjectedClient(t *testing.T) {
 		}
 		methodID := "0x" + hex.EncodeToString(data[:4])
 		switch methodID {
-		case "0x" + hex.EncodeToString(payChainGatewayAdminABI.Methods["defaultBridgeTypes"].ID):
+		case "0x" + hex.EncodeToString(FallbackPayChainGatewayABI.Methods["defaultBridgeTypes"].ID):
 			return encodeMethodOut(t, "defaultBridgeTypes", uint8(1)), nil
-		case "0x" + hex.EncodeToString(payChainRouterAdminABI.Methods["hasAdapter"].ID):
-			vals, err := payChainRouterAdminABI.Methods["hasAdapter"].Inputs.Unpack(data[4:])
+		case "0x" + hex.EncodeToString(FallbackPayChainRouterAdminABI.Methods["hasAdapter"].ID):
+			vals, err := FallbackPayChainRouterAdminABI.Methods["hasAdapter"].Inputs.Unpack(data[4:])
 			require.NoError(t, err)
 			require.Equal(t, destCAIP2, vals[0].(string))
 			return encodeMethodOut(t, "hasAdapter", true), nil
-		case "0x" + hex.EncodeToString(payChainRouterAdminABI.Methods["getAdapter"].ID):
-			vals, err := payChainRouterAdminABI.Methods["getAdapter"].Inputs.Unpack(data[4:])
+		case "0x" + hex.EncodeToString(FallbackPayChainRouterAdminABI.Methods["getAdapter"].ID):
+			vals, err := FallbackPayChainRouterAdminABI.Methods["getAdapter"].Inputs.Unpack(data[4:])
 			require.NoError(t, err)
 			require.Equal(t, destCAIP2, vals[0].(string))
 			bridgeType := vals[1].(uint8)
@@ -103,23 +103,23 @@ func TestOnchainAdapterUsecase_GetStatus_WithInjectedClient(t *testing.T) {
 				return encodeMethodOut(t, "getAdapter", adapter1), nil
 			}
 			return encodeMethodOut(t, "getAdapter", adapter2), nil
-		case "0x" + hex.EncodeToString(hyperbridgeSenderAdminABI.Methods["isChainConfigured"].ID):
+		case "0x" + hex.EncodeToString(FallbackHyperbridgeSenderAdminABI.Methods["isChainConfigured"].ID):
 			return encodeMethodOut(t, "isChainConfigured", true), nil
-		case "0x" + hex.EncodeToString(hyperbridgeSenderAdminABI.Methods["stateMachineIds"].ID):
+		case "0x" + hex.EncodeToString(FallbackHyperbridgeSenderAdminABI.Methods["stateMachineIds"].ID):
 			return encodeMethodOut(t, "stateMachineIds", []byte("EVM-42161")), nil
-		case "0x" + hex.EncodeToString(hyperbridgeSenderAdminABI.Methods["destinationContracts"].ID):
+		case "0x" + hex.EncodeToString(FallbackHyperbridgeSenderAdminABI.Methods["destinationContracts"].ID):
 			return encodeMethodOut(t, "destinationContracts", common.LeftPadBytes(common.HexToAddress("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").Bytes(), 32)), nil
-		case "0x" + hex.EncodeToString(ccipSenderAdminABI.Methods["chainSelectors"].ID):
+		case "0x" + hex.EncodeToString(FallbackCCIPSenderAdminABI.Methods["chainSelectors"].ID):
 			return encodeMethodOut(t, "chainSelectors", uint64(4949039107694359620)), nil
-		case "0x" + hex.EncodeToString(ccipSenderAdminABI.Methods["destinationAdapters"].ID):
+		case "0x" + hex.EncodeToString(FallbackCCIPSenderAdminABI.Methods["destinationAdapters"].ID):
 			return encodeMethodOut(t, "destinationAdapters", common.LeftPadBytes(common.HexToAddress("0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb").Bytes(), 32)), nil
-		case "0x" + hex.EncodeToString(layerZeroSenderAdminABI.Methods["isRouteConfigured"].ID):
+		case "0x" + hex.EncodeToString(FallbackLayerZeroSenderAdminABI.Methods["isRouteConfigured"].ID):
 			return encodeMethodOut(t, "isRouteConfigured", true), nil
-		case "0x" + hex.EncodeToString(layerZeroSenderAdminABI.Methods["dstEids"].ID):
+		case "0x" + hex.EncodeToString(FallbackLayerZeroSenderAdminABI.Methods["dstEids"].ID):
 			return encodeMethodOut(t, "dstEids", uint32(30110)), nil
-		case "0x" + hex.EncodeToString(layerZeroSenderAdminABI.Methods["peers"].ID):
+		case "0x" + hex.EncodeToString(FallbackLayerZeroSenderAdminABI.Methods["peers"].ID):
 			return encodeMethodOut(t, "peers", [32]byte{1}), nil
-		case "0x" + hex.EncodeToString(layerZeroSenderAdminABI.Methods["enforcedOptions"].ID):
+		case "0x" + hex.EncodeToString(FallbackLayerZeroSenderAdminABI.Methods["enforcedOptions"].ID):
 			return encodeMethodOut(t, "enforcedOptions", []byte{0x01, 0x02}), nil
 		default:
 			return nil, fmt.Errorf("unexpected method id: %s", methodID)

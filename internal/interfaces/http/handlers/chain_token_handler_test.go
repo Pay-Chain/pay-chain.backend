@@ -54,6 +54,12 @@ func (s *chainRepoStub) GetActive(_ context.Context, _ utils.PaginationParams) (
 	}
 	return out, int64(len(out)), nil
 }
+func (s *chainRepoStub) CreateRPC(context.Context, *entities.ChainRPC) error { return nil }
+func (s *chainRepoStub) UpdateRPC(context.Context, *entities.ChainRPC) error { return nil }
+func (s *chainRepoStub) DeleteRPC(context.Context, uuid.UUID) error          { return nil }
+func (s *chainRepoStub) GetRPCByID(context.Context, uuid.UUID) (*entities.ChainRPC, error) {
+	return nil, domainerrors.ErrNotFound
+}
 func (s *chainRepoStub) Create(_ context.Context, chain *entities.Chain) error {
 	s.items[chain.ID] = chain
 	return nil

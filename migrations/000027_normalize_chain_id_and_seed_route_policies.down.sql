@@ -1,0 +1,4 @@
+-- Irreversible migration.
+-- 1) chain_id normalization cannot reliably restore previous CAIP-2 values.
+-- 2) seeded route_policies cannot be safely distinguished from user-created rows.
+-- Intentionally no-op.

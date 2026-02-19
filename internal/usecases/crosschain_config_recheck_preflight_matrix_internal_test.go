@@ -282,6 +282,12 @@ func TestCrosschainConfigUsecase_Preflight_DefaultCCIPPolicyExecutable(t *testin
 				ContractAddress: "0x9999999999999999999999999999999999999999",
 				IsActive:        true,
 			},
+			contractKey(sourceID, entities.ContractTypeGateway): {
+				ChainUUID:       sourceID,
+				Type:            entities.ContractTypeGateway,
+				ContractAddress: "0x8888888888888888888888888888888888888888",
+				IsActive:        true,
+			},
 		},
 	}
 

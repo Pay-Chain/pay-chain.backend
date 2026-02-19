@@ -61,9 +61,11 @@ func TestPaymentUsecase_CalculateFees_ConfigAndFallback(t *testing.T) {
 			"eip155:8453",
 			"eip155:8453",
 			sourceChainUUID,
+			sourceChainUUID, // same chain
 			sourceTokenID,
 			"native",
 			"native",
+			2,
 			0.5, // discount 50%
 		)
 		require.Equal(t, "300", fees.PlatformFee)
@@ -106,21 +108,24 @@ func TestPaymentUsecase_CalculateFees_ConfigAndFallback(t *testing.T) {
 			"eip155:8453",
 			"eip155:42161",
 			sourceID,
+			destID,
 			sourceTokenID,
-			"0x1111111111111111111111111111111111111111",
-			"0x2222222222222222222222222222222222222222",
+			"native",
+			"native",
+			2,
 			0,
 		)
 
-		// base 0.5 + 0.3%*10 = 0.53, bridge fallback 0.10
-		require.Equal(t, "53", fees.PlatformFee)
+		// platform: min(0.3%*10.00, 0.50) = min(0.03, 0.50) = 0.03 tokens => 3 in 2 decimals
+		// bridge fallback: 0.10 tokens => 10 in 2 decimals
+		require.Equal(t, "3", fees.PlatformFee)
 		require.Equal(t, "10", fees.BridgeFee)
-		require.Equal(t, "63", fees.TotalFee)
-		require.Equal(t, "936", fees.NetAmount)
+		require.Equal(t, "13", fees.TotalFee)
+		require.Equal(t, "987", fees.NetAmount)
 	})
 
 	t.Run("max fee clamp is applied", func(t *testing.T) {
-		maxFee := "5"
+		maxFee := "0.4" // Cap below FixedBaseFee (1.0) and Percentage (10.0)
 		u := &PaymentUsecase{
 			feeConfigRepo: &feeConfigRepoStub{
 				getByChainAndTokenFn: func(context.Context, uuid.UUID, uuid.UUID) (*entities.FeeConfig, error) {
@@ -141,14 +146,19 @@ func TestPaymentUsecase_CalculateFees_ConfigAndFallback(t *testing.T) {
 			"eip155:8453",
 			"eip155:8453",
 			sourceChainUUID,
+			sourceChainUUID,
 			sourceTokenID,
 			"native",
 			"native",
+			2,
 			0,
 		)
-		require.Equal(t, "500", fees.PlatformFee)
-		require.Equal(t, "500", fees.TotalFee)
-		require.Equal(t, "500", fees.NetAmount)
+		// min(10.0, 1.0) = 1.0 token.
+		// Then clamp to maxFee (0.4) = 0.4 token.
+		// 0.4 tokens in 2 decimals = 40 units.
+		require.Equal(t, "40", fees.PlatformFee)
+		require.Equal(t, "40", fees.TotalFee)
+		require.Equal(t, "960", fees.NetAmount)
 	})
 
 	t.Run("invalid config numbers fallback to defaults", func(t *testing.T) {
@@ -172,15 +182,17 @@ func TestPaymentUsecase_CalculateFees_ConfigAndFallback(t *testing.T) {
 			"eip155:8453",
 			"eip155:8453",
 			sourceChainUUID,
+			sourceChainUUID,
 			sourceTokenID,
 			"native",
 			"native",
+			2,
 			0,
 		)
-		// defaults => platform fee 0.53 token => 53 in 2 decimals.
-		require.Equal(t, "53", fees.PlatformFee)
-		require.Equal(t, "53", fees.TotalFee)
-		require.Equal(t, "947", fees.NetAmount)
+		// defaults => platform fee: min(0.3% * 10.00, 0.50) = 0.03 token => 3 in 2 decimals.
+		require.Equal(t, "3", fees.PlatformFee)
+		require.Equal(t, "3", fees.TotalFee)
+		require.Equal(t, "997", fees.NetAmount)
 	})
 
 	t.Run("cross-chain quote success uses quoted bridge fee", func(t *testing.T) {
@@ -222,14 +234,16 @@ func TestPaymentUsecase_CalculateFees_ConfigAndFallback(t *testing.T) {
 			"eip155:8453",
 			"eip155:42161",
 			sourceID,
+			destID,
 			sourceTokenID,
-			"0x1111111111111111111111111111111111111111",
-			"0x2222222222222222222222222222222222222222",
+			"native",
+			"native",
+			2,
 			0,
 		)
-		require.Equal(t, "53", fees.PlatformFee)
+		require.Equal(t, "3", fees.PlatformFee)
 		require.Equal(t, "20", fees.BridgeFee)
-		require.Equal(t, "72", fees.TotalFee)
-		require.Equal(t, "926", fees.NetAmount)
+		require.Equal(t, "23", fees.TotalFee)
+		require.Equal(t, "977", fees.NetAmount)
 	})
 }

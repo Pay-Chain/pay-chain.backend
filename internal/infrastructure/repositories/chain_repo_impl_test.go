@@ -106,6 +106,46 @@ func TestChainRepository_GetByCAIP2_DirectAndMalformedBranches(t *testing.T) {
 	require.ErrorIs(t, err, domainerrors.ErrNotFound)
 }
 
+func TestChainRepository_NormalizeOnCreateUpdateAndLookup(t *testing.T) {
+	db := newTestDB(t)
+	createChainTables(t, db)
+	repo := NewChainRepository(db)
+	ctx := context.Background()
+
+	id := uuid.New()
+	err := repo.Create(ctx, &entities.Chain{
+		ID:             id,
+		ChainID:        "eip155:8453",
+		Name:           "Base",
+		Type:           entities.ChainTypeEVM,
+		RPCURL:         "https://rpc.local",
+		ExplorerURL:    "https://exp.local",
+		CurrencySymbol: "ETH",
+		IsActive:       true,
+		CreatedAt:      time.Now(),
+	})
+	require.NoError(t, err)
+
+	// Stored value should be normalized to reference part.
+	var stored string
+	row := db.Raw(`SELECT chain_id FROM chains WHERE id = ?`, id).Row()
+	require.NoError(t, row.Scan(&stored))
+	require.Equal(t, "8453", stored)
+
+	// CAIP-2 lookup should still work through normalization in GetByChainID.
+	got, err := repo.GetByChainID(ctx, "eip155:8453")
+	require.NoError(t, err)
+	require.Equal(t, id, got.ID)
+
+	got.Name = "Base Updated"
+	got.ChainID = "eip155:8453"
+	require.NoError(t, repo.Update(ctx, got))
+
+	row = db.Raw(`SELECT chain_id FROM chains WHERE id = ?`, id).Row()
+	require.NoError(t, row.Scan(&stored))
+	require.Equal(t, "8453", stored)
+}
+
 func TestChainRepository_GetAllRPCs(t *testing.T) {
 	db := newTestDB(t)
 	createChainTables(t, db)

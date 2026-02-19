@@ -18,10 +18,16 @@ type rpcChainRepoStub struct {
 	getAllRPCsFn func(ctx context.Context, chainID *uuid.UUID, isActive *bool, search *string, pagination utils.PaginationParams) ([]*entities.ChainRPC, int64, error)
 }
 
-func (s *rpcChainRepoStub) GetByID(context.Context, uuid.UUID) (*entities.Chain, error)        { return nil, nil }
-func (s *rpcChainRepoStub) GetByChainID(context.Context, string) (*entities.Chain, error)      { return nil, nil }
-func (s *rpcChainRepoStub) GetByCAIP2(context.Context, string) (*entities.Chain, error)        { return nil, nil }
-func (s *rpcChainRepoStub) GetAll(context.Context) ([]*entities.Chain, error)                  { return nil, nil }
+func (s *rpcChainRepoStub) GetByID(context.Context, uuid.UUID) (*entities.Chain, error) {
+	return nil, nil
+}
+func (s *rpcChainRepoStub) GetByChainID(context.Context, string) (*entities.Chain, error) {
+	return nil, nil
+}
+func (s *rpcChainRepoStub) GetByCAIP2(context.Context, string) (*entities.Chain, error) {
+	return nil, nil
+}
+func (s *rpcChainRepoStub) GetAll(context.Context) ([]*entities.Chain, error) { return nil, nil }
 func (s *rpcChainRepoStub) GetActive(context.Context, utils.PaginationParams) ([]*entities.Chain, int64, error) {
 	return nil, 0, nil
 }
@@ -30,6 +36,13 @@ func (s *rpcChainRepoStub) Update(context.Context, *entities.Chain) error { retu
 func (s *rpcChainRepoStub) Delete(context.Context, uuid.UUID) error       { return nil }
 func (s *rpcChainRepoStub) GetAllRPCs(ctx context.Context, chainID *uuid.UUID, isActive *bool, search *string, pagination utils.PaginationParams) ([]*entities.ChainRPC, int64, error) {
 	return s.getAllRPCsFn(ctx, chainID, isActive, search, pagination)
+}
+
+func (s *rpcChainRepoStub) CreateRPC(context.Context, *entities.ChainRPC) error { return nil }
+func (s *rpcChainRepoStub) UpdateRPC(context.Context, *entities.ChainRPC) error { return nil }
+func (s *rpcChainRepoStub) DeleteRPC(context.Context, uuid.UUID) error          { return nil }
+func (s *rpcChainRepoStub) GetRPCByID(context.Context, uuid.UUID) (*entities.ChainRPC, error) {
+	return nil, nil
 }
 
 func TestRpcHandler_ListRPCs(t *testing.T) {

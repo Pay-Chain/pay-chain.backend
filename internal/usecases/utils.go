@@ -45,12 +45,9 @@ func isSolanaChain(chainID string) bool {
 }
 
 func formatAmount(amount float64, decimals int) string {
-	// Convert float to string with appropriate precision
-	multiplier := new(big.Float).SetFloat64(amount)
-	exp := new(big.Float).SetInt(new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(decimals)), nil))
-	result := new(big.Float).Mul(multiplier, exp)
-	intResult, _ := result.Int(nil)
-	return intResult.String()
+	// Use rounding to avoid truncation errors (e.g. 0.03 * 100 becoming 2.99... -> 2)
+	multiplier := amount * math.Pow(10, float64(decimals))
+	return fmt.Sprintf("%.0f", math.Round(multiplier))
 }
 
 func convertToSmallestUnit(amount string, decimals int) (string, error) {

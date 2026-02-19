@@ -28,3 +28,23 @@ func TestChain_GetCAIP2ID(t *testing.T) {
 		t.Fatalf("expected polkadot got %s", got)
 	}
 }
+
+func TestNormalizeChainID(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{name: "evm caip2", input: "eip155:8453", want: "8453"},
+		{name: "solana caip2", input: "solana:devnet", want: "devnet"},
+		{name: "trimmed raw", input: "  42161  ", want: "42161"},
+		{name: "empty", input: "   ", want: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := NormalizeChainID(tt.input); got != tt.want {
+				t.Fatalf("expected %q got %q", tt.want, got)
+			}
+		})
+	}
+}

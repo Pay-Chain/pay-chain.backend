@@ -20,7 +20,9 @@ type crosschainChainRepoStub struct {
 	getByCAIP2   func(ctx context.Context, caip2 string) (*entities.Chain, error)
 }
 
-func (s *crosschainChainRepoStub) GetByID(context.Context, uuid.UUID) (*entities.Chain, error) { return nil, nil }
+func (s *crosschainChainRepoStub) GetByID(context.Context, uuid.UUID) (*entities.Chain, error) {
+	return nil, nil
+}
 func (s *crosschainChainRepoStub) GetByChainID(ctx context.Context, chainID string) (*entities.Chain, error) {
 	return s.getByChainID(ctx, chainID)
 }
@@ -34,13 +36,21 @@ func (s *crosschainChainRepoStub) GetAllRPCs(context.Context, *uuid.UUID, *bool,
 func (s *crosschainChainRepoStub) GetActive(context.Context, utils.PaginationParams) ([]*entities.Chain, int64, error) {
 	return nil, 0, nil
 }
-func (s *crosschainChainRepoStub) Create(context.Context, *entities.Chain) error { return nil }
-func (s *crosschainChainRepoStub) Update(context.Context, *entities.Chain) error { return nil }
-func (s *crosschainChainRepoStub) Delete(context.Context, uuid.UUID) error       { return nil }
+func (s *crosschainChainRepoStub) Create(context.Context, *entities.Chain) error       { return nil }
+func (s *crosschainChainRepoStub) Update(context.Context, *entities.Chain) error       { return nil }
+func (s *crosschainChainRepoStub) Delete(context.Context, uuid.UUID) error             { return nil }
+func (s *crosschainChainRepoStub) CreateRPC(context.Context, *entities.ChainRPC) error { return nil }
+func (s *crosschainChainRepoStub) UpdateRPC(context.Context, *entities.ChainRPC) error { return nil }
+func (s *crosschainChainRepoStub) DeleteRPC(context.Context, uuid.UUID) error          { return nil }
+func (s *crosschainChainRepoStub) GetRPCByID(context.Context, uuid.UUID) (*entities.ChainRPC, error) {
+	return nil, domainerrors.ErrNotFound
+}
 
 type routePolicyRepoNoop struct{}
 
-func (routePolicyRepoNoop) GetByID(context.Context, uuid.UUID) (*entities.RoutePolicy, error) { return nil, nil }
+func (routePolicyRepoNoop) GetByID(context.Context, uuid.UUID) (*entities.RoutePolicy, error) {
+	return nil, nil
+}
 func (routePolicyRepoNoop) GetByRoute(context.Context, uuid.UUID, uuid.UUID) (*entities.RoutePolicy, error) {
 	return nil, nil
 }
@@ -53,7 +63,9 @@ func (routePolicyRepoNoop) Delete(context.Context, uuid.UUID) error             
 
 type layerZeroRepoNoop struct{}
 
-func (layerZeroRepoNoop) GetByID(context.Context, uuid.UUID) (*entities.LayerZeroConfig, error) { return nil, nil }
+func (layerZeroRepoNoop) GetByID(context.Context, uuid.UUID) (*entities.LayerZeroConfig, error) {
+	return nil, nil
+}
 func (layerZeroRepoNoop) GetByRoute(context.Context, uuid.UUID, uuid.UUID) (*entities.LayerZeroConfig, error) {
 	return nil, nil
 }

@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"pay-chain.backend/internal/domain/entities"
+	domainerrors "pay-chain.backend/internal/domain/errors"
 	"pay-chain.backend/internal/infrastructure/blockchain"
 	"pay-chain.backend/pkg/utils"
 )
@@ -35,9 +36,15 @@ func (s *approvalNilChainRepoStub) GetAllRPCs(context.Context, *uuid.UUID, *bool
 func (s *approvalNilChainRepoStub) GetActive(context.Context, utils.PaginationParams) ([]*entities.Chain, int64, error) {
 	return nil, 0, nil
 }
-func (s *approvalNilChainRepoStub) Create(context.Context, *entities.Chain) error { return nil }
-func (s *approvalNilChainRepoStub) Update(context.Context, *entities.Chain) error { return nil }
-func (s *approvalNilChainRepoStub) Delete(context.Context, uuid.UUID) error       { return nil }
+func (s *approvalNilChainRepoStub) Create(context.Context, *entities.Chain) error       { return nil }
+func (s *approvalNilChainRepoStub) Update(context.Context, *entities.Chain) error       { return nil }
+func (s *approvalNilChainRepoStub) Delete(context.Context, uuid.UUID) error             { return nil }
+func (s *approvalNilChainRepoStub) CreateRPC(context.Context, *entities.ChainRPC) error { return nil }
+func (s *approvalNilChainRepoStub) UpdateRPC(context.Context, *entities.ChainRPC) error { return nil }
+func (s *approvalNilChainRepoStub) DeleteRPC(context.Context, uuid.UUID) error          { return nil }
+func (s *approvalNilChainRepoStub) GetRPCByID(context.Context, uuid.UUID) (*entities.ChainRPC, error) {
+	return nil, domainerrors.ErrNotFound
+}
 
 func TestPaymentUsecase_ResolveVaultAddressForApproval_MoreBranches(t *testing.T) {
 	chainID := uuid.New()

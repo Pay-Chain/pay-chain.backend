@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"pay-chain.backend/internal/domain/entities"
 	"pay-chain.backend/internal/domain/repositories"
 )
 
@@ -36,36 +37,40 @@ func (r *ChainResolver) ResolveFromAny(ctx context.Context, input string) (uuid.
 		return chain.ID, chain.GetCAIP2ID(), nil
 	}
 
-	// 2. Try direct lookup by full input first (covers DB that stores CAIP-2).
-	// 2. Handle CAIP-2 explicitly first to avoid noisy misses on chain_id lookup.
+	// 2. Try direct lookup by full input via GetByCAIP2 (optimized for namespace:ref)
 	if strings.Contains(value, ":") {
 		if chain, err := r.chainRepo.GetByCAIP2(ctx, value); err == nil {
 			return chain.ID, chain.GetCAIP2ID(), nil
 		}
 	}
 
-	// 3. Try direct lookup by raw chain_id
-	chain, err := r.chainRepo.GetByChainID(ctx, value)
+	// 3. Try lookup by Normalized ID (which is now CAIP-2 preservation if colon exists)
+	normalized := entities.NormalizeChainID(value)
+	chain, err := r.chainRepo.GetByChainID(ctx, normalized)
 	if err == nil {
 		return chain.ID, chain.GetCAIP2ID(), nil
 	}
 
-	// 4. Try to look up by raw blockchain ChainID (e.g. "84532" or "devnet")
-	// when the input is CAIP-2.
-
-	rawID := value
-	// Handle CAIP-2 format "eip155:84532" or "solana:devnet"
-	// Note: for solana, the ref might be "devnet"
-	if len(value) > 7 && value[0:7] == "eip155:" {
-		rawID = value[7:]
-	} else if len(value) > 7 && value[0:7] == "solana:" {
-		rawID = value[7:]
+	// 4. Legacy Fallback: Try stripping namespace (e.g. eip155:8453 -> 8453)
+	// This supports DB rows that still store raw IDs.
+	if strings.Contains(normalized, ":") {
+		parts := strings.SplitN(normalized, ":", 2)
+		if len(parts) == 2 {
+			legacyID := parts[1]
+			if legacyChain, err := r.chainRepo.GetByChainID(ctx, legacyID); err == nil {
+				return legacyChain.ID, legacyChain.GetCAIP2ID(), nil
+			}
+		}
 	}
 
-	chain, err = r.chainRepo.GetByChainID(ctx, rawID)
-	if err != nil {
-		return uuid.Nil, "", fmt.Errorf("failed to find chain for %s: %w", value, err)
+	// 5. Final fallback with original input
+	// Only try if it differs from normalized, otherwise we already tried it in step 3.
+	if value != normalized {
+		chain, err = r.chainRepo.GetByChainID(ctx, value)
+		if err == nil {
+			return chain.ID, chain.GetCAIP2ID(), nil
+		}
 	}
 
-	return chain.ID, chain.GetCAIP2ID(), nil
+	return uuid.Nil, "", fmt.Errorf("failed to find chain for %s: %w", value, err)
 }

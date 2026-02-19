@@ -11,17 +11,19 @@ type Chain struct {
 	ID        uuid.UUID `gorm:"type:uuid;primaryKey;default:uuid_generate_v7()"`
 	NetworkID string    `gorm:"type:varchar(255);not null;uniqueIndex;column:chain_id"` // Mapped to chain_id column
 	// Namespace      string    `gorm:"-"` // Deprecated: Derived from Type
-	Name           string `gorm:"type:varchar(100);not null"`
-	ChainType      string `gorm:"type:varchar(50);not null;default:'EVM';column:type"`
-	RPCURL         string `gorm:"type:text;column:rpc_url"`
-	ExplorerURL    string `gorm:"type:text"`
-	Symbol         string `gorm:"type:varchar(20);column:currency_symbol"`
-	LogoURL        string `gorm:"type:text;column:image_url"`
-	IsActive       bool   `gorm:"default:true"`
-	StateMachineID string `gorm:"type:varchar(100)"`
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
-	DeletedAt      gorm.DeletedAt `gorm:"index"`
+	Name              string `gorm:"type:varchar(100);not null"`
+	ChainType         string `gorm:"type:varchar(50);not null;default:'EVM';column:type"`
+	RPCURL            string `gorm:"type:text;column:rpc_url"`
+	ExplorerURL       string `gorm:"type:text"`
+	Symbol            string `gorm:"type:varchar(20);column:currency_symbol"`
+	LogoURL           string `gorm:"type:text;column:image_url"`
+	IsActive          bool   `gorm:"default:true"`
+	StateMachineID    string `gorm:"type:varchar(100)"`
+	CCIPChainSelector string `gorm:"type:varchar(255);column:ccip_chain_selector"`
+	LayerZeroEID      int    `gorm:"type:integer;column:layerzero_eid"`
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	DeletedAt         gorm.DeletedAt `gorm:"index"`
 
 	// Relations
 	RPCs []ChainRPC `gorm:"foreignKey:ChainID;references:ID"`

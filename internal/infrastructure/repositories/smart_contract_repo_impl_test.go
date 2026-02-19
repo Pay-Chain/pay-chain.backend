@@ -40,9 +40,15 @@ func (s *stubChainRepo) GetAllRPCs(context.Context, *uuid.UUID, *bool, *string, 
 func (s *stubChainRepo) GetActive(context.Context, utils.PaginationParams) ([]*entities.Chain, int64, error) {
 	return nil, 0, nil
 }
-func (s *stubChainRepo) Create(context.Context, *entities.Chain) error { return nil }
-func (s *stubChainRepo) Update(context.Context, *entities.Chain) error { return nil }
-func (s *stubChainRepo) Delete(context.Context, uuid.UUID) error       { return nil }
+func (s *stubChainRepo) Create(context.Context, *entities.Chain) error       { return nil }
+func (s *stubChainRepo) Update(context.Context, *entities.Chain) error       { return nil }
+func (s *stubChainRepo) Delete(context.Context, uuid.UUID) error             { return nil }
+func (s *stubChainRepo) CreateRPC(context.Context, *entities.ChainRPC) error { return nil }
+func (s *stubChainRepo) UpdateRPC(context.Context, *entities.ChainRPC) error { return nil }
+func (s *stubChainRepo) DeleteRPC(context.Context, uuid.UUID) error          { return nil }
+func (s *stubChainRepo) GetRPCByID(context.Context, uuid.UUID) (*entities.ChainRPC, error) {
+	return nil, domainerrors.ErrNotFound
+}
 
 func TestSmartContractRepository_CRUDAndFilters(t *testing.T) {
 	db := newTestDB(t)

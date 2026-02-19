@@ -34,9 +34,15 @@ func (s *ccfgChainRepoStub) GetAllRPCs(context.Context, *uuid.UUID, *bool, *stri
 func (s *ccfgChainRepoStub) GetActive(context.Context, utils.PaginationParams) ([]*entities.Chain, int64, error) {
 	return nil, 0, nil
 }
-func (s *ccfgChainRepoStub) Create(context.Context, *entities.Chain) error { return nil }
-func (s *ccfgChainRepoStub) Update(context.Context, *entities.Chain) error { return nil }
-func (s *ccfgChainRepoStub) Delete(context.Context, uuid.UUID) error       { return nil }
+func (s *ccfgChainRepoStub) Create(context.Context, *entities.Chain) error       { return nil }
+func (s *ccfgChainRepoStub) Update(context.Context, *entities.Chain) error       { return nil }
+func (s *ccfgChainRepoStub) Delete(context.Context, uuid.UUID) error             { return nil }
+func (s *ccfgChainRepoStub) CreateRPC(context.Context, *entities.ChainRPC) error { return nil }
+func (s *ccfgChainRepoStub) UpdateRPC(context.Context, *entities.ChainRPC) error { return nil }
+func (s *ccfgChainRepoStub) DeleteRPC(context.Context, uuid.UUID) error          { return nil }
+func (s *ccfgChainRepoStub) GetRPCByID(context.Context, uuid.UUID) (*entities.ChainRPC, error) {
+	return nil, domainerrors.ErrNotFound
+}
 
 type ccfgContractRepoStub struct {
 	getActiveFn func(ctx context.Context, chainID uuid.UUID, t entities.SmartContractType) (*entities.SmartContract, error)

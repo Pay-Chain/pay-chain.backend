@@ -45,6 +45,7 @@ type Payment struct {
 	SourceAmount        string        `json:"sourceAmount" gorm:"type:decimal(36,18)"`
 	DestAmount          null.String   `json:"destAmount,omitempty" gorm:"type:decimal(36,18)"`
 	FeeAmount           string        `json:"feeAmount" gorm:"type:decimal(36,18)"`
+	MinDestAmount       null.String   `json:"minDestAmount,omitempty" gorm:"type:decimal(36,18)"`
 	TotalCharged        string        `json:"totalCharged" gorm:"type:decimal(36,18)"`
 	ReceiverAddress     string        `json:"receiverAddress"`
 	Status              PaymentStatus `json:"status"`
@@ -52,6 +53,8 @@ type Payment struct {
 	DestTxHash          null.String   `json:"destTxHash,omitempty"`
 	RefundTxHash        null.String   `json:"refundTxHash,omitempty"`
 	CrossChainMessageID null.String   `json:"crossChainMessageId,omitempty"`
+	FailureReason       null.String   `json:"failureReason,omitempty"`
+	RevertData          null.String   `json:"revertData,omitempty"`
 	ExpiresAt           *time.Time    `json:"expiresAt,omitempty"`
 	CreatedAt           time.Time     `json:"createdAt"`
 	UpdatedAt           time.Time     `json:"updatedAt"`
@@ -108,6 +111,8 @@ type CreatePaymentInput struct {
 	Decimals           int    `json:"decimals" binding:"required"`
 	ReceiverAddress    string `json:"receiverAddress" binding:"required"`
 	ReceiverMerchantID string `json:"receiverMerchantId,omitempty"`
+	MinAmountOut       string `json:"minAmountOut,omitempty"`
+	SlippageBps        int    `json:"slippageBps,omitempty"` // e.g. 50 = 0.5%
 }
 
 // CreatePaymentResponse represents response for payment creation
@@ -158,4 +163,6 @@ type CreatePaymentAppInput struct {
 	Decimals            int    `json:"decimals" binding:"required"`
 	SenderWalletAddress string `json:"senderWalletAddress" binding:"required"`
 	ReceiverAddress     string `json:"receiverAddress" binding:"required"`
+	MinAmountOut        string `json:"minAmountOut,omitempty"`
+	SlippageBps         int    `json:"slippageBps,omitempty"` // e.g. 50 = 0.5%
 }

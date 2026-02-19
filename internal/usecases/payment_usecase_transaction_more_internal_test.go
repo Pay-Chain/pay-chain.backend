@@ -54,7 +54,7 @@ func TestPaymentUsecase_BuildTransactionData_MoreBranches(t *testing.T) {
 		require.NoError(t, err)
 		m, ok := out.(map[string]interface{})
 		require.True(t, ok)
-		require.Equal(t, "0x64", m["value"])
+		require.Equal(t, "0x78", m["value"])
 	})
 
 	t.Run("cross-chain fee quote zero returns invalid quote error", func(t *testing.T) {
@@ -190,6 +190,15 @@ func TestPaymentUsecase_BuildTransactionData_MoreBranches(t *testing.T) {
 				return nil, errors.New("not found")
 			}},
 			clientFactory: factory,
+			ABIResolverMixin: NewABIResolverMixin(&scRepoStub{getActiveFn: func(_ context.Context, _ uuid.UUID, typ entities.SmartContractType) (*entities.SmartContract, error) {
+				if typ == entities.ContractTypeVault {
+					return &entities.SmartContract{ContractAddress: vaultAddr}, nil
+				}
+				if typ == entities.ContractTypeRouter {
+					return &entities.SmartContract{ContractAddress: routerAddr}, nil
+				}
+				return nil, errors.New("not found")
+			}}),
 		}
 		payment := &entities.Payment{
 			ID:                 uuid.New(),
@@ -208,7 +217,7 @@ func TestPaymentUsecase_BuildTransactionData_MoreBranches(t *testing.T) {
 		require.NoError(t, err)
 		m, ok := out.(map[string]interface{})
 		require.True(t, ok)
-		require.Equal(t, "0x64", m["value"])
+		require.Equal(t, "0x78", m["value"])
 		approval, ok := m["approval"].(map[string]string)
 		require.True(t, ok)
 		require.Equal(t, "1053", approval["amount"])
@@ -254,6 +263,10 @@ func TestPaymentUsecase_CalculateOnchainApprovalAmount_ClientCreateError(t *test
 			RPCURL: "://bad-rpc-url",
 		}},
 		clientFactory: blockchain.NewClientFactory(),
+		contractRepo: &scRepoStub{getActiveFn: func(context.Context, uuid.UUID, entities.SmartContractType) (*entities.SmartContract, error) {
+			return nil, errors.New("not found")
+		}},
+		ABIResolverMixin: NewABIResolverMixin(&scRepoStub{}),
 	}
 	_, err := u.calculateOnchainApprovalAmount(&entities.Payment{
 		SourceChainID: chainID,
@@ -278,6 +291,7 @@ func TestPaymentUsecase_QuoteBridgeFeeByType_CallError(t *testing.T) {
 		"0x2222222222222222222222222222222222222222",
 		"0x3333333333333333333333333333333333333333",
 		big.NewInt(1000),
+		big.NewInt(0),
 	)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "contract call failed")

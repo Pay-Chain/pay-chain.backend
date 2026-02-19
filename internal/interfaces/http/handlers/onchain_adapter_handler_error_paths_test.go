@@ -25,9 +25,15 @@ func (onchainHandlerChainRepoStub) GetByChainID(context.Context, string) (*entit
 func (onchainHandlerChainRepoStub) GetByCAIP2(context.Context, string) (*entities.Chain, error) {
 	return nil, domainerrors.ErrNotFound
 }
-func (onchainHandlerChainRepoStub) Create(context.Context, *entities.Chain) error { return nil }
-func (onchainHandlerChainRepoStub) Update(context.Context, *entities.Chain) error { return nil }
-func (onchainHandlerChainRepoStub) Delete(context.Context, uuid.UUID) error       { return nil }
+func (onchainHandlerChainRepoStub) Create(context.Context, *entities.Chain) error       { return nil }
+func (onchainHandlerChainRepoStub) Update(context.Context, *entities.Chain) error       { return nil }
+func (onchainHandlerChainRepoStub) Delete(context.Context, uuid.UUID) error             { return nil }
+func (onchainHandlerChainRepoStub) CreateRPC(context.Context, *entities.ChainRPC) error { return nil }
+func (onchainHandlerChainRepoStub) UpdateRPC(context.Context, *entities.ChainRPC) error { return nil }
+func (onchainHandlerChainRepoStub) DeleteRPC(context.Context, uuid.UUID) error          { return nil }
+func (onchainHandlerChainRepoStub) GetRPCByID(context.Context, uuid.UUID) (*entities.ChainRPC, error) {
+	return nil, domainerrors.ErrNotFound
+}
 func (onchainHandlerChainRepoStub) List(context.Context) ([]*entities.Chain, error) {
 	return nil, nil
 }

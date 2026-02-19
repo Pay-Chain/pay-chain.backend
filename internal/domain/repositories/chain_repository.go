@@ -15,6 +15,10 @@ type ChainRepository interface {
 	GetByCAIP2(ctx context.Context, caip2 string) (*entities.Chain, error)
 	GetAll(ctx context.Context) ([]*entities.Chain, error)
 	GetAllRPCs(ctx context.Context, chainID *uuid.UUID, isActive *bool, search *string, pagination utils.PaginationParams) ([]*entities.ChainRPC, int64, error)
+	GetRPCByID(ctx context.Context, id uuid.UUID) (*entities.ChainRPC, error)
+	CreateRPC(ctx context.Context, rpc *entities.ChainRPC) error
+	UpdateRPC(ctx context.Context, rpc *entities.ChainRPC) error
+	DeleteRPC(ctx context.Context, id uuid.UUID) error
 	GetActive(ctx context.Context, pagination utils.PaginationParams) ([]*entities.Chain, int64, error)
 	Create(ctx context.Context, chain *entities.Chain) error
 	Update(ctx context.Context, chain *entities.Chain) error

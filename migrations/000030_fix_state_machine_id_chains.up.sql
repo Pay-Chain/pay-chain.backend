@@ -1,0 +1,1 @@
+ALTER TABLE chains ADD COLUMN IF NOT EXISTS state_machine_id VARCHAR(100) DEFAULT '';

@@ -2,8 +2,11 @@ package usecases
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"log"
+	"strings"
 
 	"github.com/google/uuid"
 	"pay-chain.backend/internal/domain/entities"
@@ -99,6 +102,74 @@ func (u *WebhookUsecase) ProcessIndexerWebhook(ctx context.Context, eventType st
 
 		if err != nil {
 			log.Printf("Error processing payment update: %v", err)
+			return err
+		}
+
+	case "PAYMENT_FAILED":
+		var failureData struct {
+			PaymentId    string `json:"paymentId"`
+			Status       string `json:"status"`
+			Reason       string `json:"reason"`
+			RevertData   string `json:"revertData"`
+			SourceTxHash string `json:"sourceTxHash"`
+		}
+		if err := json.Unmarshal(data, &failureData); err != nil {
+			return err
+		}
+
+		paymentUUID, _ := uuid.Parse(failureData.PaymentId)
+		newStatus := mapStatus(failureData.Status)
+		if newStatus == entities.PaymentStatusPending { // Fallback if status not explicitly failed in payload
+			newStatus = entities.PaymentStatusFailed
+		}
+
+		// Try to decode revert data if present and reason is generic or empty
+		decodedReason := failureData.Reason
+		if failureData.RevertData != "" {
+			// decodeRouteErrorData is available in the same package
+			if revertBytes, err := hex.DecodeString(strings.TrimPrefix(failureData.RevertData, "0x")); err == nil {
+				decoded := decodeRouteErrorData(revertBytes)
+				if decoded.Message != "" {
+					if decodedReason != "" {
+						decodedReason = fmt.Sprintf("%s (Revert: %s)", decodedReason, decoded.Message)
+					} else {
+						decodedReason = decoded.Message
+					}
+				}
+			}
+		}
+
+		err := u.uow.Do(ctx, func(txCtx context.Context) error {
+			lockCtx := u.uow.WithLock(txCtx)
+
+			// 1. Get current Payment
+			payment, err := u.paymentRepo.GetByID(lockCtx, paymentUUID)
+			if err != nil {
+				return err
+			}
+
+			// 2. Update status and failure fields
+			payment.Status = newStatus
+			payment.FailureReason.String = decodedReason
+			payment.FailureReason.Valid = decodedReason != ""
+			payment.RevertData.String = failureData.RevertData
+			payment.RevertData.Valid = failureData.RevertData != ""
+
+			if err := u.paymentRepo.Update(lockCtx, payment); err != nil {
+				return err
+			}
+
+			// 3. Create event
+			return u.paymentEventRepo.Create(lockCtx, &entities.PaymentEvent{
+				PaymentID: paymentUUID,
+				EventType: entities.PaymentEventType(eventType),
+				TxHash:    failureData.SourceTxHash,
+				Metadata:  string(data), // Store full failure payload in metadata
+			})
+		})
+
+		if err != nil {
+			log.Printf("Error processing payment failure: %v", err)
 			return err
 		}
 

@@ -18,13 +18,19 @@ type adminUserRepoStub struct {
 	listFn func(ctx context.Context, search string) ([]*entities.User, error)
 }
 
-func (s *adminUserRepoStub) Create(context.Context, *entities.User) error                         { return nil }
-func (s *adminUserRepoStub) GetByID(context.Context, uuid.UUID) (*entities.User, error)          { return nil, nil }
-func (s *adminUserRepoStub) GetByEmail(context.Context, string) (*entities.User, error)           { return nil, nil }
-func (s *adminUserRepoStub) Update(context.Context, *entities.User) error                         { return nil }
-func (s *adminUserRepoStub) UpdatePassword(context.Context, uuid.UUID, string) error              { return nil }
-func (s *adminUserRepoStub) SoftDelete(context.Context, uuid.UUID) error                          { return nil }
-func (s *adminUserRepoStub) List(ctx context.Context, search string) ([]*entities.User, error)    { return s.listFn(ctx, search) }
+func (s *adminUserRepoStub) Create(context.Context, *entities.User) error { return nil }
+func (s *adminUserRepoStub) GetByID(context.Context, uuid.UUID) (*entities.User, error) {
+	return nil, nil
+}
+func (s *adminUserRepoStub) GetByEmail(context.Context, string) (*entities.User, error) {
+	return nil, nil
+}
+func (s *adminUserRepoStub) Update(context.Context, *entities.User) error            { return nil }
+func (s *adminUserRepoStub) UpdatePassword(context.Context, uuid.UUID, string) error { return nil }
+func (s *adminUserRepoStub) SoftDelete(context.Context, uuid.UUID) error             { return nil }
+func (s *adminUserRepoStub) List(ctx context.Context, search string) ([]*entities.User, error) {
+	return s.listFn(ctx, search)
+}
 
 type adminMerchantRepoStub struct {
 	listFn   func(ctx context.Context) ([]*entities.Merchant, error)
@@ -32,30 +38,43 @@ type adminMerchantRepoStub struct {
 	updateFn func(ctx context.Context, id uuid.UUID, status entities.MerchantStatus) error
 }
 
-func (s *adminMerchantRepoStub) Create(context.Context, *entities.Merchant) error                          { return nil }
-func (s *adminMerchantRepoStub) GetByID(ctx context.Context, id uuid.UUID) (*entities.Merchant, error)    { return s.getByID(ctx, id) }
-func (s *adminMerchantRepoStub) GetByUserID(context.Context, uuid.UUID) (*entities.Merchant, error)       { return nil, nil }
-func (s *adminMerchantRepoStub) Update(context.Context, *entities.Merchant) error                          { return nil }
+func (s *adminMerchantRepoStub) Create(context.Context, *entities.Merchant) error { return nil }
+func (s *adminMerchantRepoStub) GetByID(ctx context.Context, id uuid.UUID) (*entities.Merchant, error) {
+	return s.getByID(ctx, id)
+}
+func (s *adminMerchantRepoStub) GetByUserID(context.Context, uuid.UUID) (*entities.Merchant, error) {
+	return nil, nil
+}
+func (s *adminMerchantRepoStub) Update(context.Context, *entities.Merchant) error { return nil }
 func (s *adminMerchantRepoStub) UpdateStatus(ctx context.Context, id uuid.UUID, status entities.MerchantStatus) error {
 	if s.updateFn != nil {
 		return s.updateFn(ctx, id, status)
 	}
 	return nil
 }
-func (s *adminMerchantRepoStub) SoftDelete(context.Context, uuid.UUID) error                            { return nil }
-func (s *adminMerchantRepoStub) List(ctx context.Context) ([]*entities.Merchant, error)                 { return s.listFn(ctx) }
+func (s *adminMerchantRepoStub) SoftDelete(context.Context, uuid.UUID) error { return nil }
+func (s *adminMerchantRepoStub) List(ctx context.Context) ([]*entities.Merchant, error) {
+	return s.listFn(ctx)
+}
 
 type adminPaymentRepoStub struct{}
 
-func (adminPaymentRepoStub) Create(context.Context, *entities.Payment) error                                      { return nil }
-func (adminPaymentRepoStub) GetByID(context.Context, uuid.UUID) (*entities.Payment, error)                       { return nil, nil }
-func (adminPaymentRepoStub) GetByUserID(context.Context, uuid.UUID, int, int) ([]*entities.Payment, int, error) { return nil, 0, nil }
+func (adminPaymentRepoStub) Create(context.Context, *entities.Payment) error { return nil }
+func (adminPaymentRepoStub) GetByID(context.Context, uuid.UUID) (*entities.Payment, error) {
+	return nil, nil
+}
+func (adminPaymentRepoStub) GetByUserID(context.Context, uuid.UUID, int, int) ([]*entities.Payment, int, error) {
+	return nil, 0, nil
+}
 func (adminPaymentRepoStub) GetByMerchantID(context.Context, uuid.UUID, int, int) ([]*entities.Payment, int, error) {
 	return nil, 0, nil
 }
-func (adminPaymentRepoStub) UpdateStatus(context.Context, uuid.UUID, entities.PaymentStatus) error { return nil }
-func (adminPaymentRepoStub) UpdateDestTxHash(context.Context, uuid.UUID, string) error             { return nil }
-func (adminPaymentRepoStub) MarkRefunded(context.Context, uuid.UUID) error                          { return nil }
+func (adminPaymentRepoStub) UpdateStatus(context.Context, uuid.UUID, entities.PaymentStatus) error {
+	return nil
+}
+func (adminPaymentRepoStub) UpdateDestTxHash(context.Context, uuid.UUID, string) error { return nil }
+func (adminPaymentRepoStub) MarkRefunded(context.Context, uuid.UUID) error             { return nil }
+func (adminPaymentRepoStub) Update(context.Context, *entities.Payment) error           { return nil }
 
 func TestAdminHandler_ListAndUpdateStatus(t *testing.T) {
 	gin.SetMode(gin.TestMode)

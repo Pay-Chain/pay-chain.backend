@@ -1,0 +1,3 @@
+UPDATE smart_contracts 
+SET address = '0xFE486152702bBE140e3a054d01Be10Fe95A33974'
+WHERE chain_id = '002a7fdf-8a24-4a3d-ae13-afeeba6261b0' AND type = 'ADAPTER_HYPERBRIDGE_SENDER';

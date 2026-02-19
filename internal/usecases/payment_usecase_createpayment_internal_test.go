@@ -37,7 +37,9 @@ func (s *createPaymentTokenRepoStub) GetByAddress(_ context.Context, address str
 	}
 	return nil, domainerrors.ErrNotFound
 }
-func (s *createPaymentTokenRepoStub) GetAll(context.Context) ([]*entities.Token, error) { return nil, nil }
+func (s *createPaymentTokenRepoStub) GetAll(context.Context) ([]*entities.Token, error) {
+	return nil, nil
+}
 func (s *createPaymentTokenRepoStub) GetStablecoins(context.Context) ([]*entities.Token, error) {
 	return nil, nil
 }
@@ -78,8 +80,11 @@ func (s *createPaymentRepoStub) GetByMerchantID(context.Context, uuid.UUID, int,
 func (s *createPaymentRepoStub) UpdateStatus(context.Context, uuid.UUID, entities.PaymentStatus) error {
 	return nil
 }
-func (s *createPaymentRepoStub) UpdateDestTxHash(context.Context, uuid.UUID, string) error { return nil }
-func (s *createPaymentRepoStub) MarkRefunded(context.Context, uuid.UUID) error              { return nil }
+func (s *createPaymentRepoStub) UpdateDestTxHash(context.Context, uuid.UUID, string) error {
+	return nil
+}
+func (s *createPaymentRepoStub) MarkRefunded(context.Context, uuid.UUID) error   { return nil }
+func (s *createPaymentRepoStub) Update(context.Context, *entities.Payment) error { return nil }
 
 type createPaymentEventRepoStub struct {
 	createErr error

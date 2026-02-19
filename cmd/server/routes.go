@@ -25,6 +25,7 @@ type routeDeps struct {
 	contractConfigAuditHandler *handlers.ContractConfigAuditHandler
 	crosschainConfigHandler    *handlers.CrosschainConfigHandler
 	crosschainPolicyHandler    *handlers.CrosschainPolicyHandler
+	routeErrorHandler          *handlers.RouteErrorHandler
 	rpcHandler                 *handlers.RpcHandler
 	dualAuthMiddleware         gin.HandlerFunc
 }
@@ -148,6 +149,7 @@ func registerAPIV1Routes(r *gin.Engine, d routeDeps) {
 		paymentApp.Use(d.dualAuthMiddleware)
 		{
 			paymentApp.POST("", d.paymentAppHandler.CreatePaymentApp)
+			paymentApp.GET("/diagnostics/route-error/:paymentId", d.routeErrorHandler.GetRouteError)
 		}
 
 		// Webhook for indexer (internal)
@@ -170,6 +172,9 @@ func registerAPIV1Routes(r *gin.Engine, d routeDeps) {
 			admin.DELETE("/chains/:id", d.chainHandler.DeleteChain)
 
 			admin.GET("/rpcs", d.rpcHandler.ListRPCs)
+			admin.POST("/rpcs", d.rpcHandler.CreateRPC)
+			admin.PUT("/rpcs/:id", d.rpcHandler.UpdateRPC)
+			admin.DELETE("/rpcs/:id", d.rpcHandler.DeleteRPC)
 
 			admin.GET("/tokens", d.tokenHandler.ListSupportedTokens)
 			admin.POST("/tokens", d.tokenHandler.CreateToken)
@@ -220,6 +225,8 @@ func registerAPIV1Routes(r *gin.Engine, d routeDeps) {
 			admin.POST("/layerzero-configs", d.crosschainPolicyHandler.CreateLayerZeroConfig)
 			admin.PUT("/layerzero-configs/:id", d.crosschainPolicyHandler.UpdateLayerZeroConfig)
 			admin.DELETE("/layerzero-configs/:id", d.crosschainPolicyHandler.DeleteLayerZeroConfig)
+
+			admin.GET("/diagnostics/route-error/:paymentId", d.routeErrorHandler.GetRouteError)
 		}
 	}
 }

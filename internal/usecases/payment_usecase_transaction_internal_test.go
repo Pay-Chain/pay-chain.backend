@@ -18,14 +18,22 @@ func TestPaymentUsecase_BuildTransactionData_Branches(t *testing.T) {
 	contract := &entities.SmartContract{ContractAddress: "0x9999999999999999999999999999999999999999"}
 
 	t.Run("contract nil", func(t *testing.T) {
-		u := &PaymentUsecase{}
+		scRepo := &scRepoStub{}
+		u := &PaymentUsecase{
+			contractRepo:     scRepo,
+			ABIResolverMixin: NewABIResolverMixin(scRepo),
+		}
 		out, err := u.buildTransactionData(&entities.Payment{}, nil)
 		require.NoError(t, err)
 		require.Nil(t, out)
 	})
 
 	t.Run("evm same chain no approval", func(t *testing.T) {
-		u := &PaymentUsecase{}
+		scRepo := &scRepoStub{}
+		u := &PaymentUsecase{
+			contractRepo:     scRepo,
+			ABIResolverMixin: NewABIResolverMixin(scRepo),
+		}
 		payment := &entities.Payment{
 			ID:                 uuid.New(),
 			SourceChainID:      sourceID,
@@ -51,9 +59,11 @@ func TestPaymentUsecase_BuildTransactionData_Branches(t *testing.T) {
 
 	t.Run("evm approval required but vault missing", func(t *testing.T) {
 		chainRepo := &approvalChainRepoStub{chain: nil}
+		scRepo := &scRepoStub{}
 		u := &PaymentUsecase{
-			contractRepo: &scRepoStub{},
-			chainRepo:    chainRepo,
+			contractRepo:     scRepo,
+			chainRepo:        chainRepo,
+			ABIResolverMixin: NewABIResolverMixin(scRepo),
 		}
 		payment := &entities.Payment{
 			ID:                 uuid.New(),
@@ -73,7 +83,11 @@ func TestPaymentUsecase_BuildTransactionData_Branches(t *testing.T) {
 	})
 
 	t.Run("solana chain", func(t *testing.T) {
-		u := &PaymentUsecase{}
+		scRepo := &scRepoStub{}
+		u := &PaymentUsecase{
+			contractRepo:     scRepo,
+			ABIResolverMixin: NewABIResolverMixin(scRepo),
+		}
 		payment := &entities.Payment{
 			ID:                 uuid.New(),
 			SourceChainID:      sourceID,
@@ -95,9 +109,12 @@ func TestPaymentUsecase_BuildTransactionData_Branches(t *testing.T) {
 
 	t.Run("evm cross chain fee quote failed", func(t *testing.T) {
 		chainRepo := &approvalChainRepoStub{chain: nil}
+		scRepo := &scRepoStub{}
 		u := &PaymentUsecase{
-			chainRepo:     chainRepo,
-			chainResolver: NewChainResolver(chainRepo),
+			chainRepo:        chainRepo,
+			chainResolver:    NewChainResolver(chainRepo),
+			contractRepo:     scRepo,
+			ABIResolverMixin: NewABIResolverMixin(scRepo),
 		}
 		payment := &entities.Payment{
 			ID:                 uuid.New(),
@@ -117,7 +134,11 @@ func TestPaymentUsecase_BuildTransactionData_Branches(t *testing.T) {
 	})
 
 	t.Run("evm cross chain invalid source amount", func(t *testing.T) {
-		u := &PaymentUsecase{}
+		scRepo := &scRepoStub{}
+		u := &PaymentUsecase{
+			contractRepo:     scRepo,
+			ABIResolverMixin: NewABIResolverMixin(scRepo),
+		}
 		payment := &entities.Payment{
 			ID:                 uuid.New(),
 			SourceChainID:      sourceID,
@@ -136,7 +157,11 @@ func TestPaymentUsecase_BuildTransactionData_Branches(t *testing.T) {
 	})
 
 	t.Run("evm chain with unknown network still returns payload", func(t *testing.T) {
-		u := &PaymentUsecase{}
+		scRepo := &scRepoStub{}
+		u := &PaymentUsecase{
+			contractRepo:     scRepo,
+			ABIResolverMixin: NewABIResolverMixin(scRepo),
+		}
 		payment := &entities.Payment{
 			ID:                 uuid.New(),
 			SourceChainID:      sourceID,
@@ -156,7 +181,11 @@ func TestPaymentUsecase_BuildTransactionData_Branches(t *testing.T) {
 	})
 
 	t.Run("unknown chain type returns nil payload", func(t *testing.T) {
-		u := &PaymentUsecase{}
+		scRepo := &scRepoStub{}
+		u := &PaymentUsecase{
+			contractRepo:     scRepo,
+			ABIResolverMixin: NewABIResolverMixin(scRepo),
+		}
 		payment := &entities.Payment{
 			ID:                 uuid.New(),
 			SourceChainID:      sourceID,
@@ -185,7 +214,12 @@ func TestPaymentUsecase_BuildTransactionData_Branches(t *testing.T) {
 				dstID: dst,
 			},
 		}
-		u := &PaymentUsecase{chainRepo: chainRepo}
+		scRepo := &scRepoStub{}
+		u := &PaymentUsecase{
+			chainRepo:        chainRepo,
+			contractRepo:     scRepo,
+			ABIResolverMixin: NewABIResolverMixin(scRepo),
+		}
 		payment := &entities.Payment{
 			ID:                 uuid.New(),
 			SourceChainID:      srcID,
@@ -212,15 +246,17 @@ func TestPaymentUsecase_BuildTransactionData_Branches(t *testing.T) {
 		defer srv.Close()
 
 		chainID := uuid.New()
+		scRepo := &scRepoStub{getActiveFn: func(_ context.Context, _ uuid.UUID, t entities.SmartContractType) (*entities.SmartContract, error) {
+			if t == entities.ContractTypeVault {
+				return &entities.SmartContract{ContractAddress: "0x4444444444444444444444444444444444444444"}, nil
+			}
+			return nil, domainerrors.ErrNotFound
+		}}
 		u := &PaymentUsecase{
-			contractRepo: &scRepoStub{getActiveFn: func(_ context.Context, _ uuid.UUID, t entities.SmartContractType) (*entities.SmartContract, error) {
-				if t == entities.ContractTypeVault {
-					return &entities.SmartContract{ContractAddress: "0x4444444444444444444444444444444444444444"}, nil
-				}
-				return nil, domainerrors.ErrNotFound
-			}},
-			chainRepo:     &approvalChainRepoStub{chain: &entities.Chain{ID: chainID, RPCURL: srv.URL}},
-			clientFactory: blockchain.NewClientFactory(),
+			contractRepo:     scRepo,
+			chainRepo:        &approvalChainRepoStub{chain: &entities.Chain{ID: chainID, RPCURL: srv.URL}},
+			clientFactory:    blockchain.NewClientFactory(),
+			ABIResolverMixin: NewABIResolverMixin(scRepo),
 		}
 
 		payment := &entities.Payment{

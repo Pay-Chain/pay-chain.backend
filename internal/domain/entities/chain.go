@@ -37,6 +37,10 @@ type Chain struct {
 
 	// Relationships
 	RPCs []ChainRPC `json:"rpcs,omitempty" gorm:"foreignKey:ChainID"`
+
+	// Bridge Metadata
+	CCIPChainSelector string `json:"ccipChainSelector" gorm:"type:varchar(255);default:'';column:ccip_chain_selector"`
+	LayerZeroEID      int    `json:"layerZeroEid" gorm:"type:integer;default:0;column:layerzero_eid"`
 }
 
 // ChainRPC represents a blockchain RPC endpoint
@@ -54,6 +58,24 @@ type ChainRPC struct {
 
 	// Joined fields
 	Chain *Chain `json:"chain,omitempty"`
+}
+
+// NormalizeChainID normalizes chain identifiers for storage/lookup.
+// Examples:
+// - "eip155:8453" -> "8453"
+// - "solana:devnet" -> "devnet"
+// - "8453" -> "8453"
+func NormalizeChainID(raw string) string {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return ""
+	}
+	parts := strings.SplitN(value, ":", 2)
+	if len(parts) == 2 {
+		// Return reference part only (e.g. "8453" from "eip155:8453")
+		return strings.TrimSpace(parts[1])
+	}
+	return value
 }
 
 // GetCAIP2ID returns the CAIP-2 formatted chain ID

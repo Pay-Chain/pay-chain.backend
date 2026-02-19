@@ -66,17 +66,17 @@ func TestOnchainAdapterUsecase_GetStatus_Success(t *testing.T) {
 	destinationContract := common.LeftPadBytes(common.HexToAddress("0x2222222222222222222222222222222222222222").Bytes(), 32)
 
 	callResults := []string{
-		encodeOut(t, gatewayABI.Methods["defaultBridgeTypes"], uint8(0)),        // default bridge
-		encodeOut(t, routerABI.Methods["hasAdapter"], true),                     // has type0
-		encodeOut(t, routerABI.Methods["hasAdapter"], false),                    // has type1
-		encodeOut(t, routerABI.Methods["hasAdapter"], false),                    // has type2
-		encodeOut(t, routerABI.Methods["getAdapter"], adapter0),                 // adapter type0
-		encodeOut(t, routerABI.Methods["getAdapter"], common.Address{}),         // adapter type1
-		encodeOut(t, routerABI.Methods["getAdapter"], common.Address{}),         // adapter type2
-		encodeOut(t, routerABI.Methods["hasAdapter"], true),                     // has default
-		encodeOut(t, routerABI.Methods["getAdapter"], adapter0),                 // adapter default
-		encodeOut(t, hyperABI.Methods["isChainConfigured"], true),               // hyper configured
-		encodeOut(t, hyperABI.Methods["stateMachineIds"], stateMachine),         // hyper state machine
+		encodeOut(t, gatewayABI.Methods["defaultBridgeTypes"], uint8(0)),            // default bridge
+		encodeOut(t, routerABI.Methods["hasAdapter"], true),                         // has type0
+		encodeOut(t, routerABI.Methods["hasAdapter"], false),                        // has type1
+		encodeOut(t, routerABI.Methods["hasAdapter"], false),                        // has type2
+		encodeOut(t, routerABI.Methods["getAdapter"], adapter0),                     // adapter type0
+		encodeOut(t, routerABI.Methods["getAdapter"], common.Address{}),             // adapter type1
+		encodeOut(t, routerABI.Methods["getAdapter"], common.Address{}),             // adapter type2
+		encodeOut(t, routerABI.Methods["hasAdapter"], true),                         // has default
+		encodeOut(t, routerABI.Methods["getAdapter"], adapter0),                     // adapter default
+		encodeOut(t, hyperABI.Methods["isChainConfigured"], true),                   // hyper configured
+		encodeOut(t, hyperABI.Methods["stateMachineIds"], stateMachine),             // hyper state machine
 		encodeOut(t, hyperABI.Methods["destinationContracts"], destinationContract), // hyper destination
 	}
 	var (
@@ -125,6 +125,13 @@ func TestOnchainAdapterUsecase_GetStatus_Success(t *testing.T) {
 	chainRepo.On("GetByID", mock.Anything, sourceID).Return(source, nil)
 	contractRepo.On("GetActiveContract", mock.Anything, sourceID, entities.ContractTypeGateway).Return(gateway, nil)
 	contractRepo.On("GetActiveContract", mock.Anything, sourceID, entities.ContractTypeRouter).Return(router, nil)
+	contractRepo.On("GetActiveContract", mock.Anything, sourceID, entities.ContractTypeAdapterHyperbridge).Return(&entities.SmartContract{
+		ID:              uuid.New(),
+		ChainUUID:       sourceID,
+		Type:            entities.ContractTypeAdapterHyperbridge,
+		ContractAddress: adapter0.Hex(),
+		IsActive:        true,
+	}, nil)
 
 	u := uc.NewOnchainAdapterUsecase(chainRepo, contractRepo, blockchain.NewClientFactory(), "")
 	status, err := u.GetStatus(context.Background(), "eip155:8453", "eip155:42161")
@@ -238,6 +245,27 @@ func TestOnchainAdapterUsecase_GetStatus_AllBridgeAdapters(t *testing.T) {
 	chainRepo.On("GetByID", mock.Anything, sourceID).Return(source, nil)
 	contractRepo.On("GetActiveContract", mock.Anything, sourceID, entities.ContractTypeGateway).Return(gateway, nil)
 	contractRepo.On("GetActiveContract", mock.Anything, sourceID, entities.ContractTypeRouter).Return(router, nil)
+	contractRepo.On("GetActiveContract", mock.Anything, sourceID, entities.ContractTypeAdapterHyperbridge).Return(&entities.SmartContract{
+		ID:              uuid.New(),
+		ChainUUID:       sourceID,
+		Type:            entities.ContractTypeAdapterHyperbridge,
+		ContractAddress: adapter0.Hex(),
+		IsActive:        true,
+	}, nil)
+	contractRepo.On("GetActiveContract", mock.Anything, sourceID, entities.ContractTypeAdapterCCIP).Return(&entities.SmartContract{
+		ID:              uuid.New(),
+		ChainUUID:       sourceID,
+		Type:            entities.ContractTypeAdapterCCIP,
+		ContractAddress: adapter1.Hex(),
+		IsActive:        true,
+	}, nil)
+	contractRepo.On("GetActiveContract", mock.Anything, sourceID, entities.ContractTypeAdapterLayerZero).Return(&entities.SmartContract{
+		ID:              uuid.New(),
+		ChainUUID:       sourceID,
+		Type:            entities.ContractTypeAdapterLayerZero,
+		ContractAddress: adapter2.Hex(),
+		IsActive:        true,
+	}, nil)
 
 	u := uc.NewOnchainAdapterUsecase(chainRepo, contractRepo, blockchain.NewClientFactory(), "")
 	status, err := u.GetStatus(context.Background(), "eip155:8453", "eip155:42161")

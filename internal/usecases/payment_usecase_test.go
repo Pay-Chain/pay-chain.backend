@@ -75,10 +75,8 @@ func TestCreatePayment_Success(t *testing.T) {
 	mockUOW.On("Do", mock.Anything, mock.Anything).Return(nil)
 	mockPaymentRepo.On("Create", mock.Anything, mock.AnythingOfType("*entities.Payment")).Return(nil)
 	mockEventRepo.On("Create", mock.Anything, mock.AnythingOfType("*entities.PaymentEvent")).Return(nil)
-	mockChainRepo.On("GetByChainID", mock.Anything, "eip155:1").Return(srcChain, nil)
-	mockChainRepo.On("GetByChainID", mock.Anything, "eip155:137").Return(destChain, nil)
-	mockChainRepo.On("GetByChainID", mock.Anything, "1").Return(srcChain, nil)
-	mockChainRepo.On("GetByChainID", mock.Anything, "137").Return(destChain, nil).Maybe()
+	mockChainRepo.On("GetByCAIP2", mock.Anything, "eip155:1").Return(srcChain, nil)
+	mockChainRepo.On("GetByCAIP2", mock.Anything, "eip155:137").Return(destChain, nil)
 	mockChainRepo.On("GetByID", mock.Anything, srcChain.ID).Return(srcChain, nil)
 	mockChainRepo.On("GetByID", mock.Anything, destChain.ID).Return(destChain, nil)
 	mockTokenRepo.On("GetByAddress", mock.Anything, "0x123", srcChain.ID).Return(token, nil)
@@ -96,7 +94,14 @@ func TestCreatePayment_Success(t *testing.T) {
 		ID:              uuid.New(),
 		ContractAddress: "0xSrcRouterAddress",
 		Type:            entities.ContractTypeRouter,
-	}, nil)
+	}, nil).Maybe()
+
+	// Mock Token Swapper for source chain (price-aware quote)
+	mockContractRepo.On("GetActiveContract", mock.Anything, srcChain.ID, entities.ContractTypeTokenSwapper).Return(&entities.SmartContract{
+		ID:              uuid.New(),
+		ContractAddress: "0xSwapperAddress",
+		Type:            entities.ContractTypeTokenSwapper,
+	}, nil).Maybe()
 
 	// Execute
 	payment, err := uc.CreatePayment(context.Background(), uuid.New(), req)

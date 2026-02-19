@@ -337,7 +337,7 @@ func TestOnchainAdapterUsecase_AdminGetAdapterClosureBranches(t *testing.T) {
 		}
 		factory := blockchain.NewClientFactory()
 		factory.RegisterEVMClient(rpcURL, blockchain.NewEVMClientWithCallView(nil, func(context.Context, string, []byte) ([]byte, error) {
-			return payChainRouterAdminABI.Methods["getAdapter"].Outputs.Pack(want)
+			return FallbackPayChainRouterAdminABI.Methods["getAdapter"].Outputs.Pack(want)
 		}))
 		u := NewOnchainAdapterUsecase(repo, &scRepoStub{}, factory, "0xabc")
 		got, err := u.adminOps.getAdapter(ctx, sourceID, routerAddress, destCAIP2, bridgeType)

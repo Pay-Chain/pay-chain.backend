@@ -19,47 +19,47 @@ func TestOnchainAdapterUsecase_CallHelpers_CallViewErrorBranches(t *testing.T) {
 		return nil, errors.New("call view failed")
 	})
 
-	_, err := u.callDefaultBridgeType(ctx, client, addr, dest)
+	_, err := u.callDefaultBridgeType(ctx, client, addr, FallbackPayChainGatewayABI, dest)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "call view failed")
 
-	_, err = u.callHasAdapter(ctx, client, addr, dest, 0)
+	_, err = u.callHasAdapter(ctx, client, addr, FallbackPayChainRouterAdminABI, dest, 0)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "call view failed")
 
-	_, err = u.callGetAdapter(ctx, client, addr, dest, 0)
+	_, err = u.callGetAdapter(ctx, client, addr, FallbackPayChainRouterAdminABI, dest, 0)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "call view failed")
 
-	_, err = u.callHyperbridgeConfigured(ctx, client, addr, dest)
+	_, err = u.callHyperbridgeConfigured(ctx, client, addr, FallbackHyperbridgeSenderAdminABI, dest)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "call view failed")
 
-	_, err = u.callHyperbridgeBytes(ctx, client, addr, "stateMachineIds", dest)
+	_, err = u.callHyperbridgeBytes(ctx, client, addr, FallbackHyperbridgeSenderAdminABI, "stateMachineIds", dest)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "call view failed")
 
-	_, err = u.callCCIPSelector(ctx, client, addr, dest)
+	_, err = u.callCCIPSelector(ctx, client, addr, FallbackCCIPSenderAdminABI, dest)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "call view failed")
 
-	_, err = u.callCCIPDestinationAdapter(ctx, client, addr, dest)
+	_, err = u.callCCIPDestinationAdapter(ctx, client, addr, FallbackCCIPSenderAdminABI, dest)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "call view failed")
 
-	_, err = u.callLayerZeroConfigured(ctx, client, addr, dest)
+	_, err = u.callLayerZeroConfigured(ctx, client, addr, FallbackLayerZeroSenderAdminABI, dest)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "call view failed")
 
-	_, err = u.callLayerZeroDstEid(ctx, client, addr, dest)
+	_, err = u.callLayerZeroDstEid(ctx, client, addr, FallbackLayerZeroSenderAdminABI, dest)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "call view failed")
 
-	_, err = u.callLayerZeroPeer(ctx, client, addr, dest)
+	_, err = u.callLayerZeroPeer(ctx, client, addr, FallbackLayerZeroSenderAdminABI, dest)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "call view failed")
 
-	_, err = u.callLayerZeroOptions(ctx, client, addr, dest)
+	_, err = u.callLayerZeroOptions(ctx, client, addr, FallbackLayerZeroSenderAdminABI, dest)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "call view failed")
 }

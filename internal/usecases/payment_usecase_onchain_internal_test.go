@@ -44,9 +44,15 @@ func (s *approvalChainRepoStub) GetAllRPCs(context.Context, *uuid.UUID, *bool, *
 func (s *approvalChainRepoStub) GetActive(context.Context, utils.PaginationParams) ([]*entities.Chain, int64, error) {
 	return nil, 0, nil
 }
-func (s *approvalChainRepoStub) Create(context.Context, *entities.Chain) error { return nil }
-func (s *approvalChainRepoStub) Update(context.Context, *entities.Chain) error { return nil }
-func (s *approvalChainRepoStub) Delete(context.Context, uuid.UUID) error       { return nil }
+func (s *approvalChainRepoStub) Create(context.Context, *entities.Chain) error       { return nil }
+func (s *approvalChainRepoStub) Update(context.Context, *entities.Chain) error       { return nil }
+func (s *approvalChainRepoStub) Delete(context.Context, uuid.UUID) error             { return nil }
+func (s *approvalChainRepoStub) CreateRPC(context.Context, *entities.ChainRPC) error { return nil }
+func (s *approvalChainRepoStub) UpdateRPC(context.Context, *entities.ChainRPC) error { return nil }
+func (s *approvalChainRepoStub) DeleteRPC(context.Context, uuid.UUID) error          { return nil }
+func (s *approvalChainRepoStub) GetRPCByID(context.Context, uuid.UUID) (*entities.ChainRPC, error) {
+	return nil, domainerrors.ErrNotFound
+}
 
 type rpcReqPU struct {
 	JSONRPC string            `json:"jsonrpc"`
@@ -118,9 +124,14 @@ func TestPaymentUsecase_CalculateOnchainApprovalAmount_QuoteSuccess(t *testing.T
 	defer srv.Close()
 
 	chainID := uuid.New()
+	scRepo := &scRepoStub{getActiveFn: func(ctx context.Context, chainID uuid.UUID, t entities.SmartContractType) (*entities.SmartContract, error) {
+		return nil, domainerrors.ErrNotFound
+	}}
 	u := &PaymentUsecase{
-		chainRepo:     &approvalChainRepoStub{chain: &entities.Chain{ID: chainID, RPCURL: srv.URL}},
-		clientFactory: blockchain.NewClientFactory(),
+		contractRepo:     scRepo,
+		chainRepo:        &approvalChainRepoStub{chain: &entities.Chain{ID: chainID, RPCURL: srv.URL}},
+		clientFactory:    blockchain.NewClientFactory(),
+		ABIResolverMixin: NewABIResolverMixin(scRepo),
 	}
 
 	payment := &entities.Payment{SourceChainID: chainID, SourceAmount: "1000", TotalCharged: "1050"}
@@ -145,15 +156,20 @@ func TestPaymentUsecase_CalculateOnchainApprovalAmount_FallbackFeePath(t *testin
 	defer srv.Close()
 
 	chainID := uuid.New()
+	scRepo := &scRepoStub{getActiveFn: func(ctx context.Context, chainID uuid.UUID, t entities.SmartContractType) (*entities.SmartContract, error) {
+		return nil, domainerrors.ErrNotFound
+	}}
 	u := &PaymentUsecase{
-		chainRepo:     &approvalChainRepoStub{chain: &entities.Chain{ID: chainID, RPCURL: srv.URL}},
-		clientFactory: blockchain.NewClientFactory(),
+		contractRepo:     scRepo,
+		chainRepo:        &approvalChainRepoStub{chain: &entities.Chain{ID: chainID, RPCURL: srv.URL}},
+		clientFactory:    blockchain.NewClientFactory(),
+		ABIResolverMixin: NewABIResolverMixin(scRepo),
 	}
 
 	payment := &entities.Payment{SourceChainID: chainID, SourceAmount: "1000", TotalCharged: "1000"}
 	amount, err := u.calculateOnchainApprovalAmount(payment, "0x1111111111111111111111111111111111111111")
 	require.NoError(t, err)
-	require.Equal(t, "1050", amount)
+	require.Equal(t, "1010", amount)
 }
 
 func TestPaymentUsecase_ResolveVaultAddressForApproval_FromGatewayView(t *testing.T) {
@@ -169,12 +185,14 @@ func TestPaymentUsecase_ResolveVaultAddressForApproval_FromGatewayView(t *testin
 	defer srv.Close()
 
 	chainID := uuid.New()
+	scRepo := &scRepoStub{getActiveFn: func(context.Context, uuid.UUID, entities.SmartContractType) (*entities.SmartContract, error) {
+		return nil, domainerrors.ErrNotFound
+	}}
 	u := &PaymentUsecase{
-		contractRepo: &scRepoStub{getActiveFn: func(context.Context, uuid.UUID, entities.SmartContractType) (*entities.SmartContract, error) {
-			return nil, domainerrors.ErrNotFound
-		}},
-		chainRepo:     &approvalChainRepoStub{chain: &entities.Chain{ID: chainID, RPCURL: srv.URL}},
-		clientFactory: blockchain.NewClientFactory(),
+		contractRepo:     scRepo,
+		chainRepo:        &approvalChainRepoStub{chain: &entities.Chain{ID: chainID, RPCURL: srv.URL}},
+		clientFactory:    blockchain.NewClientFactory(),
+		ABIResolverMixin: NewABIResolverMixin(scRepo),
 	}
 
 	got := u.resolveVaultAddressForApproval(chainID, "0x1111111111111111111111111111111111111111")
@@ -294,9 +312,14 @@ func TestPaymentUsecase_CalculateOnchainApprovalAmount_ErrorBranches(t *testing.
 		defer srv.Close()
 
 		chainID := uuid.New()
+		scRepo := &scRepoStub{getActiveFn: func(ctx context.Context, chainID uuid.UUID, t entities.SmartContractType) (*entities.SmartContract, error) {
+			return nil, domainerrors.ErrNotFound
+		}}
 		u := &PaymentUsecase{
-			chainRepo:     &approvalChainRepoStub{chain: &entities.Chain{ID: chainID, RPCURL: srv.URL}},
-			clientFactory: blockchain.NewClientFactory(),
+			contractRepo:     scRepo,
+			chainRepo:        &approvalChainRepoStub{chain: &entities.Chain{ID: chainID, RPCURL: srv.URL}},
+			clientFactory:    blockchain.NewClientFactory(),
+			ABIResolverMixin: NewABIResolverMixin(scRepo),
 		}
 		_, err := u.calculateOnchainApprovalAmount(&entities.Payment{
 			SourceChainID: chainID,
@@ -323,9 +346,14 @@ func TestPaymentUsecase_CalculateOnchainApprovalAmount_ErrorBranches(t *testing.
 		defer srv.Close()
 
 		chainID := uuid.New()
+		scRepo := &scRepoStub{getActiveFn: func(ctx context.Context, chainID uuid.UUID, t entities.SmartContractType) (*entities.SmartContract, error) {
+			return nil, domainerrors.ErrNotFound
+		}}
 		u := &PaymentUsecase{
-			chainRepo:     &approvalChainRepoStub{chain: &entities.Chain{ID: chainID, RPCURL: srv.URL}},
-			clientFactory: blockchain.NewClientFactory(),
+			contractRepo:     scRepo,
+			chainRepo:        &approvalChainRepoStub{chain: &entities.Chain{ID: chainID, RPCURL: srv.URL}},
+			clientFactory:    blockchain.NewClientFactory(),
+			ABIResolverMixin: NewABIResolverMixin(scRepo),
 		}
 		_, err := u.calculateOnchainApprovalAmount(&entities.Payment{
 			SourceChainID: chainID,
@@ -352,9 +380,14 @@ func TestPaymentUsecase_CalculateOnchainApprovalAmount_ErrorBranches(t *testing.
 		defer srv.Close()
 
 		chainID := uuid.New()
+		scRepo := &scRepoStub{getActiveFn: func(ctx context.Context, chainID uuid.UUID, t entities.SmartContractType) (*entities.SmartContract, error) {
+			return nil, domainerrors.ErrNotFound
+		}}
 		u := &PaymentUsecase{
-			chainRepo:     &approvalChainRepoStub{chain: &entities.Chain{ID: chainID, RPCURL: srv.URL}},
-			clientFactory: blockchain.NewClientFactory(),
+			contractRepo:     scRepo,
+			chainRepo:        &approvalChainRepoStub{chain: &entities.Chain{ID: chainID, RPCURL: srv.URL}},
+			clientFactory:    blockchain.NewClientFactory(),
+			ABIResolverMixin: NewABIResolverMixin(scRepo),
 		}
 		amount, err := u.calculateOnchainApprovalAmount(&entities.Payment{
 			SourceChainID: chainID,
@@ -362,6 +395,6 @@ func TestPaymentUsecase_CalculateOnchainApprovalAmount_ErrorBranches(t *testing.
 			TotalCharged:  "invalid",
 		}, "0x1111111111111111111111111111111111111111")
 		require.NoError(t, err)
-		require.Equal(t, "1030", amount)
+		require.Equal(t, "1005", amount)
 	})
 }

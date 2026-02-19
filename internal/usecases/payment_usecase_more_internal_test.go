@@ -10,12 +10,15 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"pay-chain.backend/internal/domain/entities"
+	domainerrors "pay-chain.backend/internal/domain/errors"
 	"pay-chain.backend/internal/infrastructure/blockchain"
 )
 
 func TestPaymentUsecase_ResolveVaultAddress_EmptyGatewayBranch(t *testing.T) {
+	scRepo := &scRepoStub{}
 	u := &PaymentUsecase{
-		contractRepo: &scRepoStub{},
+		contractRepo:     scRepo,
+		ABIResolverMixin: NewABIResolverMixin(scRepo),
 	}
 	got := u.resolveVaultAddressForApproval(uuid.New(), "")
 	require.Equal(t, "", got)
@@ -32,9 +35,14 @@ func TestPaymentUsecase_CalculateOnchainApprovalAmount_MoreErrorBranches(t *test
 		defer srv.Close()
 
 		chainID := uuid.New()
+		scRepo := &scRepoStub{getActiveFn: func(ctx context.Context, chainID uuid.UUID, t entities.SmartContractType) (*entities.SmartContract, error) {
+			return nil, domainerrors.ErrNotFound
+		}}
 		u := &PaymentUsecase{
-			chainRepo:     &approvalChainRepoStub{chain: &entities.Chain{ID: chainID, RPCURL: srv.URL}},
-			clientFactory: blockchain.NewClientFactory(),
+			contractRepo:     scRepo,
+			chainRepo:        &approvalChainRepoStub{chain: &entities.Chain{ID: chainID, RPCURL: srv.URL}},
+			clientFactory:    blockchain.NewClientFactory(),
+			ABIResolverMixin: NewABIResolverMixin(scRepo),
 		}
 		_, err := u.calculateOnchainApprovalAmount(&entities.Payment{
 			SourceChainID: chainID,
@@ -58,9 +66,14 @@ func TestPaymentUsecase_CalculateOnchainApprovalAmount_MoreErrorBranches(t *test
 		defer srv.Close()
 
 		chainID := uuid.New()
+		scRepo := &scRepoStub{getActiveFn: func(ctx context.Context, chainID uuid.UUID, t entities.SmartContractType) (*entities.SmartContract, error) {
+			return nil, domainerrors.ErrNotFound
+		}}
 		u := &PaymentUsecase{
-			chainRepo:     &approvalChainRepoStub{chain: &entities.Chain{ID: chainID, RPCURL: srv.URL}},
-			clientFactory: blockchain.NewClientFactory(),
+			contractRepo:     scRepo,
+			chainRepo:        &approvalChainRepoStub{chain: &entities.Chain{ID: chainID, RPCURL: srv.URL}},
+			clientFactory:    blockchain.NewClientFactory(),
+			ABIResolverMixin: NewABIResolverMixin(scRepo),
 		}
 		_, err := u.calculateOnchainApprovalAmount(&entities.Payment{
 			SourceChainID: chainID,
@@ -107,15 +120,17 @@ func TestPaymentUsecase_GetBridgeFeeQuote_FirstConnectedRPCCallError(t *testing.
 		return common.FromHex(mustPackOutputs(t, []string{"uint256"}, big.NewInt(100))), nil
 	}))
 
+	scRepo := &quoteContractRepoStub{router: router}
 	u := &PaymentUsecase{
-		chainRepo:       chainRepo,
-		chainResolver:   NewChainResolver(chainRepo),
-		contractRepo:    &quoteContractRepoStub{router: router},
-		clientFactory:   factory,
-		routePolicyRepo: nil,
+		chainRepo:        chainRepo,
+		chainResolver:    NewChainResolver(chainRepo),
+		contractRepo:     scRepo,
+		clientFactory:    factory,
+		routePolicyRepo:  nil,
+		ABIResolverMixin: NewABIResolverMixin(scRepo),
 	}
 
-	_, err := u.getBridgeFeeQuote(context.Background(), "eip155:8453", "eip155:42161", "0x1", "0x2", big.NewInt(10))
+	_, err := u.getBridgeFeeQuote(context.Background(), "eip155:8453", "eip155:42161", "0x1", "0x2", big.NewInt(10), big.NewInt(0))
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "contract call failed")
 }

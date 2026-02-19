@@ -266,13 +266,18 @@ func (u *CrosschainConfigUsecase) RecheckRoute(ctx context.Context, sourceChainI
 	}
 
 	feeQuoteHealthy := false
+	feeQuoteReason := ""
 	if adapterRegistered {
-		feeQuoteHealthy = u.evaluateFeeQuoteHealth(ctx, sourceChain, destChain, status.DefaultBridgeType)
+		feeQuoteHealthy, feeQuoteReason = u.evaluateFeeQuoteHealthWithReason(ctx, sourceChain, destChain, status.DefaultBridgeType)
 		if !feeQuoteHealthy {
+			message := "fee quote call failed for this route"
+			if strings.TrimSpace(feeQuoteReason) != "" {
+				message = fmt.Sprintf("%s: %s", message, strings.TrimSpace(feeQuoteReason))
+			}
 			issues = append(issues, ContractConfigCheckItem{
 				Code:    "FEE_QUOTE_FAILED",
 				Status:  "ERROR",
-				Message: "fee quote call failed for this route",
+				Message: message,
 			})
 		}
 	}
@@ -380,8 +385,9 @@ func (u *CrosschainConfigUsecase) buildPreflightRow(
 		row.Checks["routeConfigured"] = status.LayerZeroConfigured
 	}
 	row.Checks["adapterRegistered"] = hasAdapter
+	feeQuoteReason := ""
 	if hasAdapter && row.Checks["routeConfigured"] {
-		row.Checks["feeQuoteHealthy"] = u.evaluateFeeQuoteHealth(ctx, sourceChain, destChain, bridgeType)
+		row.Checks["feeQuoteHealthy"], feeQuoteReason = u.evaluateFeeQuoteHealthWithReason(ctx, sourceChain, destChain, bridgeType)
 	}
 
 	if row.Checks["adapterRegistered"] && row.Checks["routeConfigured"] && row.Checks["feeQuoteHealthy"] {
@@ -411,6 +417,9 @@ func (u *CrosschainConfigUsecase) buildPreflightRow(
 	if !row.Checks["feeQuoteHealthy"] {
 		row.ErrorCode = "FEE_QUOTE_FAILED"
 		row.ErrorMessage = "fee quote call failed for this bridge route"
+		if strings.TrimSpace(feeQuoteReason) != "" {
+			row.ErrorMessage = fmt.Sprintf("%s: %s", row.ErrorMessage, strings.TrimSpace(feeQuoteReason))
+		}
 	}
 	return row
 }
@@ -592,22 +601,42 @@ func deriveEvmStateMachineHex(caip2 string) string {
 }
 
 func (u *CrosschainConfigUsecase) checkFeeQuoteHealth(ctx context.Context, sourceChain, destChain *entities.Chain, bridgeType uint8) bool {
+	ok, _ := u.checkFeeQuoteHealthWithReason(ctx, sourceChain, destChain, bridgeType)
+	return ok
+}
+
+func (u *CrosschainConfigUsecase) checkFeeQuoteHealthWithReason(
+	ctx context.Context,
+	sourceChain, destChain *entities.Chain,
+	bridgeType uint8,
+) (bool, string) {
 	if sourceChain == nil || destChain == nil {
-		return false
+		return false, "source/destination chain is missing"
 	}
 	router, err := u.contractRepo.GetActiveContract(ctx, sourceChain.ID, entities.ContractTypeRouter)
 	if err != nil || router == nil {
-		return false
+		return false, "router contract is not configured"
 	}
 	rpcURL := resolveRPCURL(sourceChain)
 	if rpcURL == "" {
-		return false
+		return false, "active rpc is not configured"
 	}
 	client, err := u.clientFactory.GetEVMClient(rpcURL)
 	if err != nil {
-		return false
+		return false, err.Error()
 	}
 	defer client.Close()
+
+	if runtimeOK, runtimeReason := u.checkAdapterRuntimeReadiness(
+		ctx,
+		client,
+		sourceChain,
+		destChain.GetCAIP2ID(),
+		router.ContractAddress,
+		bridgeType,
+	); !runtimeOK {
+		return false, runtimeReason
+	}
 
 	sourceTokens, _, _ := u.tokenRepo.GetTokensByChain(ctx, sourceChain.ID, utils.PaginationParams{Page: 1, Limit: 1})
 	destTokens, _, _ := u.tokenRepo.GetTokensByChain(ctx, destChain.ID, utils.PaginationParams{Page: 1, Limit: 1})
@@ -655,17 +684,235 @@ func (u *CrosschainConfigUsecase) checkFeeQuoteHealth(ctx context.Context, sourc
 		MinAmountOut: big.NewInt(0),
 	}
 	packedArgs, _ := args.Pack(destChain.GetCAIP2ID(), bridgeType, msgStruct)
+
+	// Prefer safe quote path (newer router) to get exact failure reason.
+	safeMethodSig := []byte("quotePaymentFeeSafe(string,uint8,(bytes32,address,address,address,uint256,string,uint256))")
+	safeMethodID := crypto.Keccak256(safeMethodSig)[:4]
+	safeCalldata := append(safeMethodID, packedArgs...)
+	if safeOut, safeErr := client.CallView(ctx, router.ContractAddress, safeCalldata); safeErr == nil {
+		if len(safeOut) > 0 {
+			boolType, _ := abi.NewType("bool", "", nil)
+			uint256Type, _ := abi.NewType("uint256", "", nil)
+			stringType, _ := abi.NewType("string", "", nil)
+			safeOutputs := abi.Arguments{
+				{Type: boolType},
+				{Type: uint256Type},
+				{Type: stringType},
+			}
+			if decoded, unpackErr := safeOutputs.Unpack(safeOut); unpackErr == nil && len(decoded) == 3 {
+				ok, _ := decoded[0].(bool)
+				reason, _ := decoded[2].(string)
+				if ok {
+					return true, ""
+				}
+				// If safe call failed with generic "execution_reverted", fall through to try real call
+				// which allows us to extract the raw revert data for custom errors.
+				if reason != "execution_reverted" && strings.TrimSpace(reason) != "" {
+					return false, reason
+				}
+			}
+		}
+	} else if decoded, decodedOK := decodeRevertDataFromError(safeErr); decodedOK {
+		return false, formatDecodedRouteErrorForPreflight(decoded)
+	}
+
 	methodSig := []byte("quotePaymentFee(string,uint8,(bytes32,address,address,address,uint256,string,uint256))")
 	methodID := crypto.Keccak256(methodSig)[:4]
 	calldata := append(methodID, packedArgs...)
 
 	out, callErr := client.CallView(ctx, router.ContractAddress, calldata)
-	return callErr == nil && len(out) > 0
+	if callErr != nil {
+		if decoded, decodedOK := decodeRevertDataFromError(callErr); decodedOK {
+			return false, formatDecodedRouteErrorForPreflight(decoded)
+		}
+		return false, callErr.Error()
+	}
+	if len(out) == 0 {
+		return false, "empty quote response"
+	}
+	return true, ""
+}
+
+func formatDecodedRouteErrorForPreflight(decoded RouteErrorDecoded) string {
+	name := strings.TrimSpace(decoded.Name)
+	msg := strings.TrimSpace(decoded.Message)
+	selector := strings.TrimSpace(decoded.Selector)
+	if msg != "" && msg != "execution_reverted" && msg != "no route error recorded" {
+		return msg
+	}
+	if name != "" {
+		switch name {
+		case "NativeFeeQuoteUnavailable":
+			return "native fee quote unavailable"
+		case "FeeQuoteFailed":
+			return "fee quote failed"
+		case "RouteNotConfigured":
+			return "route not configured"
+		case "ChainSelectorMissing":
+			return "ccip chain selector missing"
+		case "DestinationAdapterMissing":
+			return "destination adapter missing"
+		case "StateMachineIdNotSet":
+			return "hyperbridge state machine id not set"
+		case "DestinationNotSet":
+			return "hyperbridge destination not set"
+		case "InsufficientNativeFee":
+			return "insufficient native fee"
+		}
+		return name
+	}
+	if selector != "" {
+		return "execution_reverted (" + selector + ")"
+	}
+	return "execution_reverted"
+}
+
+func (u *CrosschainConfigUsecase) checkAdapterRuntimeReadiness(
+	ctx context.Context,
+	client *blockchain.EVMClient,
+	sourceChain *entities.Chain,
+	destCAIP2 string,
+	routerAddress string,
+	bridgeType uint8,
+) (bool, string) {
+	// LayerZero sender does not pull tokens from Vault.
+	if bridgeType == 2 {
+		return true, ""
+	}
+	if bridgeType != 0 && bridgeType != 1 {
+		return true, ""
+	}
+
+	gateway, err := u.contractRepo.GetActiveContract(ctx, sourceChain.ID, entities.ContractTypeGateway)
+	if err != nil || gateway == nil || !common.IsHexAddress(gateway.ContractAddress) {
+		return false, "gateway contract is not configured"
+	}
+	if !common.IsHexAddress(routerAddress) {
+		return false, "router contract address is invalid"
+	}
+
+	gatewayVault, err := u.callAddressView(ctx, client, gateway.ContractAddress, "vault()")
+	if err != nil || gatewayVault == (common.Address{}) {
+		return false, "failed to resolve gateway vault"
+	}
+
+	adapter, err := u.callRouterAdapter(ctx, client, routerAddress, destCAIP2, bridgeType)
+	if err != nil {
+		return false, "failed to resolve bridge adapter"
+	}
+	if adapter == (common.Address{}) {
+		return false, "adapter is not registered for this bridge type"
+	}
+
+	adapterVault, err := u.callAddressView(ctx, client, adapter.Hex(), "vault()")
+	if err != nil || adapterVault == (common.Address{}) {
+		return false, "failed to resolve adapter vault"
+	}
+	if !strings.EqualFold(gatewayVault.Hex(), adapterVault.Hex()) {
+		return false, fmt.Sprintf("adapter vault mismatch (gateway=%s adapter=%s)", gatewayVault.Hex(), adapterVault.Hex())
+	}
+
+	authorized, err := u.callVaultAuthorizedSpender(ctx, client, gatewayVault.Hex(), adapter)
+	if err != nil {
+		return false, "failed to verify vault authorization"
+	}
+	if !authorized {
+		return false, "adapter is not authorized spender on vault"
+	}
+
+	return true, ""
+}
+
+func (u *CrosschainConfigUsecase) callRouterAdapter(
+	ctx context.Context,
+	client *blockchain.EVMClient,
+	routerAddress, destCAIP2 string,
+	bridgeType uint8,
+) (common.Address, error) {
+	stringType, err := abi.NewType("string", "", nil)
+	if err != nil {
+		return common.Address{}, err
+	}
+	uint8Type, err := abi.NewType("uint8", "", nil)
+	if err != nil {
+		return common.Address{}, err
+	}
+	args := abi.Arguments{
+		{Type: stringType},
+		{Type: uint8Type},
+	}
+	packedArgs, err := args.Pack(destCAIP2, bridgeType)
+	if err != nil {
+		return common.Address{}, err
+	}
+	methodID := crypto.Keccak256([]byte("getAdapter(string,uint8)"))[:4]
+	out, err := client.CallView(ctx, routerAddress, append(methodID, packedArgs...))
+	if err != nil {
+		return common.Address{}, err
+	}
+	if len(out) < 32 {
+		return common.Address{}, fmt.Errorf("invalid getAdapter response")
+	}
+	return common.BytesToAddress(out[len(out)-20:]), nil
+}
+
+func (u *CrosschainConfigUsecase) callAddressView(
+	ctx context.Context,
+	client *blockchain.EVMClient,
+	contractAddress, signature string,
+) (common.Address, error) {
+	methodID := crypto.Keccak256([]byte(signature))[:4]
+	out, err := client.CallView(ctx, contractAddress, methodID)
+	if err != nil {
+		return common.Address{}, err
+	}
+	if len(out) < 32 {
+		return common.Address{}, fmt.Errorf("invalid %s response", signature)
+	}
+	return common.BytesToAddress(out[len(out)-20:]), nil
+}
+
+func (u *CrosschainConfigUsecase) callVaultAuthorizedSpender(
+	ctx context.Context,
+	client *blockchain.EVMClient,
+	vaultAddress string,
+	spender common.Address,
+) (bool, error) {
+	addressType, err := abi.NewType("address", "", nil)
+	if err != nil {
+		return false, err
+	}
+	args := abi.Arguments{{Type: addressType}}
+	packedArgs, err := args.Pack(spender)
+	if err != nil {
+		return false, err
+	}
+	methodID := crypto.Keccak256([]byte("authorizedSpenders(address)"))[:4]
+	out, err := client.CallView(ctx, vaultAddress, append(methodID, packedArgs...))
+	if err != nil {
+		return false, err
+	}
+	if len(out) == 0 {
+		return false, fmt.Errorf("empty authorizedSpenders response")
+	}
+	return new(big.Int).SetBytes(out).Sign() > 0, nil
 }
 
 func (u *CrosschainConfigUsecase) evaluateFeeQuoteHealth(ctx context.Context, sourceChain, destChain *entities.Chain, bridgeType uint8) bool {
+	ok, _ := u.evaluateFeeQuoteHealthWithReason(ctx, sourceChain, destChain, bridgeType)
+	return ok
+}
+
+func (u *CrosschainConfigUsecase) evaluateFeeQuoteHealthWithReason(
+	ctx context.Context,
+	sourceChain, destChain *entities.Chain,
+	bridgeType uint8,
+) (bool, string) {
 	if u.feeQuoteHealth != nil {
-		return u.feeQuoteHealth(ctx, sourceChain, destChain, bridgeType)
+		if u.feeQuoteHealth(ctx, sourceChain, destChain, bridgeType) {
+			return true, ""
+		}
+		return false, "bridge route fee quote failed"
 	}
-	return u.checkFeeQuoteHealth(ctx, sourceChain, destChain, bridgeType)
+	return u.checkFeeQuoteHealthWithReason(ctx, sourceChain, destChain, bridgeType)
 }

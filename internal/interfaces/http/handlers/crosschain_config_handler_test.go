@@ -42,22 +42,32 @@ func (s *cfgChainRepoStub) GetAllRPCs(context.Context, *uuid.UUID, *bool, *strin
 func (s *cfgChainRepoStub) GetActive(context.Context, utils.PaginationParams) ([]*entities.Chain, int64, error) {
 	return nil, 0, nil
 }
-func (s *cfgChainRepoStub) Create(context.Context, *entities.Chain) error { return nil }
-func (s *cfgChainRepoStub) Update(context.Context, *entities.Chain) error { return nil }
-func (s *cfgChainRepoStub) Delete(context.Context, uuid.UUID) error       { return nil }
+func (s *cfgChainRepoStub) Create(context.Context, *entities.Chain) error       { return nil }
+func (s *cfgChainRepoStub) Update(context.Context, *entities.Chain) error       { return nil }
+func (s *cfgChainRepoStub) Delete(context.Context, uuid.UUID) error             { return nil }
+func (s *cfgChainRepoStub) CreateRPC(context.Context, *entities.ChainRPC) error { return nil }
+func (s *cfgChainRepoStub) UpdateRPC(context.Context, *entities.ChainRPC) error { return nil }
+func (s *cfgChainRepoStub) DeleteRPC(context.Context, uuid.UUID) error          { return nil }
+func (s *cfgChainRepoStub) GetRPCByID(context.Context, uuid.UUID) (*entities.ChainRPC, error) {
+	return nil, domainerrors.ErrNotFound
+}
 
 type cfgTokenRepoStub struct{}
 
-func (cfgTokenRepoStub) GetByID(context.Context, uuid.UUID) (*entities.Token, error)  { return nil, domainerrors.ErrNotFound }
+func (cfgTokenRepoStub) GetByID(context.Context, uuid.UUID) (*entities.Token, error) {
+	return nil, domainerrors.ErrNotFound
+}
 func (cfgTokenRepoStub) GetBySymbol(context.Context, string, uuid.UUID) (*entities.Token, error) {
 	return nil, domainerrors.ErrNotFound
 }
 func (cfgTokenRepoStub) GetByAddress(context.Context, string, uuid.UUID) (*entities.Token, error) {
 	return nil, domainerrors.ErrNotFound
 }
-func (cfgTokenRepoStub) GetAll(context.Context) ([]*entities.Token, error)               { return nil, nil }
-func (cfgTokenRepoStub) GetStablecoins(context.Context) ([]*entities.Token, error)        { return nil, nil }
-func (cfgTokenRepoStub) GetNative(context.Context, uuid.UUID) (*entities.Token, error)    { return nil, domainerrors.ErrNotFound }
+func (cfgTokenRepoStub) GetAll(context.Context) ([]*entities.Token, error)         { return nil, nil }
+func (cfgTokenRepoStub) GetStablecoins(context.Context) ([]*entities.Token, error) { return nil, nil }
+func (cfgTokenRepoStub) GetNative(context.Context, uuid.UUID) (*entities.Token, error) {
+	return nil, domainerrors.ErrNotFound
+}
 func (cfgTokenRepoStub) GetTokensByChain(context.Context, uuid.UUID, utils.PaginationParams) ([]*entities.Token, int64, error) {
 	return nil, 0, nil
 }
@@ -90,7 +100,7 @@ func (cfgContractRepoStub) GetAll(context.Context, utils.PaginationParams) ([]*e
 	return nil, 0, nil
 }
 func (cfgContractRepoStub) Update(context.Context, *entities.SmartContract) error { return nil }
-func (cfgContractRepoStub) SoftDelete(context.Context, uuid.UUID) error            { return nil }
+func (cfgContractRepoStub) SoftDelete(context.Context, uuid.UUID) error           { return nil }
 
 func TestCrosschainConfigHandler_OverviewAndValidation(t *testing.T) {
 	gin.SetMode(gin.TestMode)

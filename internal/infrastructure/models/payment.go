@@ -27,6 +27,8 @@ type Payment struct {
 	DestTxHash          *string    `gorm:"type:varchar(255);index"`
 	RefundTxHash        *string    `gorm:"type:varchar(255)"`
 	CrossChainMessageID *string    `gorm:"type:varchar(255);index"`
+	FailureReason       *string    `gorm:"type:text"`
+	RevertData          *string    `gorm:"type:text"`
 	ExpiresAt           *time.Time
 	CreatedAt           time.Time
 	UpdatedAt           time.Time

@@ -18,29 +18,34 @@ import (
 )
 
 var (
-	payChainGatewayAdminABI = mustParseABI(`[
+	FallbackPayChainGatewayABI = mustParseABI(`[
 		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"}],"name":"defaultBridgeTypes","outputs":[{"internalType":"uint8","name":"","type":"uint8"}],"stateMutability":"view","type":"function"},
-		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"},{"internalType":"uint8","name":"bridgeType","type":"uint8"}],"name":"setDefaultBridgeType","outputs":[],"stateMutability":"nonpayable","type":"function"}
+		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"},{"internalType":"uint8","name":"bridgeType","type":"uint8"}],"name":"setDefaultBridgeType","outputs":[],"stateMutability":"nonpayable","type":"function"},
+		{"inputs":[{"internalType":"uint256","name":"amount","type":"uint256"}],"name":"quoteTotalAmount","outputs":[{"internalType":"uint256","name":"totalAmount","type":"uint256"},{"internalType":"uint256","name":"platformFee","type":"uint256"}],"stateMutability":"view","type":"function"},
+		{"inputs":[],"name":"FIXED_BASE_FEE","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+		{"inputs":[],"name":"FEE_RATE_BPS","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}
 	]`)
-	payChainRouterAdminABI = mustParseABI(`[
+	FallbackPayChainRouterAdminABI = mustParseABI(`[
 		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"},{"internalType":"uint8","name":"bridgeType","type":"uint8"}],"name":"hasAdapter","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},
 		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"},{"internalType":"uint8","name":"bridgeType","type":"uint8"}],"name":"getAdapter","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},
 		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"},{"internalType":"uint8","name":"bridgeType","type":"uint8"},{"internalType":"address","name":"adapter","type":"address"}],"name":"registerAdapter","outputs":[],"stateMutability":"nonpayable","type":"function"}
 	]`)
-	hyperbridgeSenderAdminABI = mustParseABI(`[
+	FallbackHyperbridgeSenderAdminABI = mustParseABI(`[
 		{"inputs":[{"internalType":"string","name":"chainId","type":"string"},{"internalType":"bytes","name":"stateMachineId","type":"bytes"}],"name":"setStateMachineId","outputs":[],"stateMutability":"nonpayable","type":"function"},
 		{"inputs":[{"internalType":"string","name":"chainId","type":"string"},{"internalType":"bytes","name":"destination","type":"bytes"}],"name":"setDestinationContract","outputs":[],"stateMutability":"nonpayable","type":"function"},
+		{"inputs":[{"internalType":"address","name":"_router","type":"address"}],"name":"setSwapRouter","outputs":[],"stateMutability":"nonpayable","type":"function"},
 		{"inputs":[{"internalType":"string","name":"chainId","type":"string"}],"name":"stateMachineIds","outputs":[{"internalType":"bytes","name":"","type":"bytes"}],"stateMutability":"view","type":"function"},
 		{"inputs":[{"internalType":"string","name":"chainId","type":"string"}],"name":"destinationContracts","outputs":[{"internalType":"bytes","name":"","type":"bytes"}],"stateMutability":"view","type":"function"},
-		{"inputs":[{"internalType":"string","name":"chainId","type":"string"}],"name":"isChainConfigured","outputs":[{"internalType":"bool","name":"configured","type":"bool"}],"stateMutability":"view","type":"function"}
+		{"inputs":[{"internalType":"string","name":"chainId","type":"string"}],"name":"isChainConfigured","outputs":[{"internalType":"bool","name":"configured","type":"bool"}],"stateMutability":"view","type":"function"},
+		{"inputs":[],"name":"swapRouter","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"}
 	]`)
-	ccipSenderAdminABI = mustParseABI(`[
+	FallbackCCIPSenderAdminABI = mustParseABI(`[
 		{"inputs":[{"internalType":"string","name":"chainId","type":"string"},{"internalType":"uint64","name":"selector","type":"uint64"}],"name":"setChainSelector","outputs":[],"stateMutability":"nonpayable","type":"function"},
 		{"inputs":[{"internalType":"string","name":"chainId","type":"string"},{"internalType":"bytes","name":"adapter","type":"bytes"}],"name":"setDestinationAdapter","outputs":[],"stateMutability":"nonpayable","type":"function"},
 		{"inputs":[{"internalType":"string","name":"chainId","type":"string"}],"name":"chainSelectors","outputs":[{"internalType":"uint64","name":"","type":"uint64"}],"stateMutability":"view","type":"function"},
 		{"inputs":[{"internalType":"string","name":"chainId","type":"string"}],"name":"destinationAdapters","outputs":[{"internalType":"bytes","name":"","type":"bytes"}],"stateMutability":"view","type":"function"}
 	]`)
-	layerZeroSenderAdminABI = mustParseABI(`[
+	FallbackLayerZeroSenderAdminABI = mustParseABI(`[
 		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"},{"internalType":"uint32","name":"dstEid","type":"uint32"},{"internalType":"bytes32","name":"peer","type":"bytes32"}],"name":"setRoute","outputs":[],"stateMutability":"nonpayable","type":"function"},
 		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"},{"internalType":"bytes","name":"options","type":"bytes"}],"name":"setEnforcedOptions","outputs":[],"stateMutability":"nonpayable","type":"function"},
 		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"}],"name":"dstEids","outputs":[{"internalType":"uint32","name":"","type":"uint32"}],"stateMutability":"view","type":"function"},
@@ -112,6 +117,7 @@ type OnchainAdapterStatus struct {
 }
 
 type OnchainAdapterUsecase struct {
+	*ABIResolverMixin
 	chainRepo       repositories.ChainRepository
 	contractRepo    repositories.SmartContractRepository
 	clientFactory   *blockchain.ClientFactory
@@ -127,11 +133,12 @@ func NewOnchainAdapterUsecase(
 	ownerPrivateKey string,
 ) *OnchainAdapterUsecase {
 	u := &OnchainAdapterUsecase{
-		chainRepo:       chainRepo,
-		contractRepo:    contractRepo,
-		clientFactory:   clientFactory,
-		chainResolver:   NewChainResolver(chainRepo),
-		ownerPrivateKey: strings.TrimSpace(ownerPrivateKey),
+		ABIResolverMixin: NewABIResolverMixin(contractRepo),
+		chainRepo:        chainRepo,
+		contractRepo:     contractRepo,
+		clientFactory:    clientFactory,
+		chainResolver:    NewChainResolver(chainRepo),
+		ownerPrivateKey:  strings.TrimSpace(ownerPrivateKey),
 	}
 
 	u.adminOps = newEVMAdminOpsService(
@@ -164,35 +171,42 @@ func NewOnchainAdapterUsecase(
 				return "", err
 			}
 			defer evmClient.Close()
-			return u.callGetAdapter(ctx, evmClient, routerAddress, destCAIP2, bridgeType)
+			return u.callGetAdapter(ctx, evmClient, routerAddress, FallbackPayChainRouterAdminABI, destCAIP2, bridgeType)
 		},
 		func(ctx context.Context, sourceChainID uuid.UUID, contractAddress string, parsedABI abi.ABI, method string, args ...interface{}) (string, error) {
 			return u.sendTx(ctx, sourceChainID, contractAddress, parsedABI, method, args...)
 		},
+		u.ResolveABIWithFallback,
 	)
 
 	return u
 }
 
 func (u *OnchainAdapterUsecase) GetStatus(ctx context.Context, sourceChainInput, destChainInput string) (*OnchainAdapterStatus, error) {
-	sourceChain, _, destCAIP2, gateway, router, evmClient, err := u.resolveEVMContext(ctx, sourceChainInput, destChainInput)
+	sourceChain, sourceChainID, destCAIP2, gateway, router, evmClient, err := u.resolveEVMContext(ctx, sourceChainInput, destChainInput)
 	if err != nil {
 		return nil, err
 	}
 	defer evmClient.Close()
 
-	defaultType, err := u.callDefaultBridgeType(ctx, evmClient, gateway.ContractAddress, destCAIP2)
+	gatewayABI, _ := u.ResolveABIWithFallback(ctx, sourceChainID, entities.ContractTypeGateway)
+	routerABI, _ := u.ResolveABIWithFallback(ctx, sourceChainID, entities.ContractTypeRouter)
+	// We ignore errors here in happy path assuming basics work, or call* will fail if ABI mismatch
+	// Actually ResolveABIWithFallback returns error only if contract not found AND fallback unavailable? No, it returns fallback if known type.
+	// If unknown type, it errs. These are known types.
+
+	defaultType, err := u.callDefaultBridgeType(ctx, evmClient, gateway.ContractAddress, gatewayABI, destCAIP2)
 	if err != nil {
 		return nil, err
 	}
-	has0, _ := u.callHasAdapter(ctx, evmClient, router.ContractAddress, destCAIP2, 0)
-	has1, _ := u.callHasAdapter(ctx, evmClient, router.ContractAddress, destCAIP2, 1)
-	has2, _ := u.callHasAdapter(ctx, evmClient, router.ContractAddress, destCAIP2, 2)
-	adapter0, _ := u.callGetAdapter(ctx, evmClient, router.ContractAddress, destCAIP2, 0)
-	adapter1, _ := u.callGetAdapter(ctx, evmClient, router.ContractAddress, destCAIP2, 1)
-	adapter2, _ := u.callGetAdapter(ctx, evmClient, router.ContractAddress, destCAIP2, 2)
-	hasDefault, _ := u.callHasAdapter(ctx, evmClient, router.ContractAddress, destCAIP2, defaultType)
-	adapterDefault, _ := u.callGetAdapter(ctx, evmClient, router.ContractAddress, destCAIP2, defaultType)
+	has0, _ := u.callHasAdapter(ctx, evmClient, router.ContractAddress, routerABI, destCAIP2, 0)
+	has1, _ := u.callHasAdapter(ctx, evmClient, router.ContractAddress, routerABI, destCAIP2, 1)
+	has2, _ := u.callHasAdapter(ctx, evmClient, router.ContractAddress, routerABI, destCAIP2, 2)
+	adapter0, _ := u.callGetAdapter(ctx, evmClient, router.ContractAddress, routerABI, destCAIP2, 0)
+	adapter1, _ := u.callGetAdapter(ctx, evmClient, router.ContractAddress, routerABI, destCAIP2, 1)
+	adapter2, _ := u.callGetAdapter(ctx, evmClient, router.ContractAddress, routerABI, destCAIP2, 2)
+	hasDefault, _ := u.callHasAdapter(ctx, evmClient, router.ContractAddress, routerABI, destCAIP2, defaultType)
+	adapterDefault, _ := u.callGetAdapter(ctx, evmClient, router.ContractAddress, routerABI, destCAIP2, defaultType)
 	hyperConfigured := false
 	hyperStateMachine := ""
 	hyperDestination := ""
@@ -204,35 +218,38 @@ func (u *OnchainAdapterUsecase) GetStatus(ctx context.Context, sourceChainInput,
 	lzOptionsHex := ""
 
 	if has0 && adapter0 != "" && adapter0 != "0x0000000000000000000000000000000000000000" {
-		if configured, cfgErr := u.callHyperbridgeConfigured(ctx, evmClient, adapter0, destCAIP2); cfgErr == nil {
+		hyperABI, _ := u.ResolveABIWithFallback(ctx, sourceChainID, entities.ContractTypeAdapterHyperbridge)
+		if configured, cfgErr := u.callHyperbridgeConfigured(ctx, evmClient, adapter0, hyperABI, destCAIP2); cfgErr == nil {
 			hyperConfigured = configured
 		}
-		if sm, smErr := u.callHyperbridgeBytes(ctx, evmClient, adapter0, "stateMachineIds", destCAIP2); smErr == nil {
+		if sm, smErr := u.callHyperbridgeBytes(ctx, evmClient, adapter0, hyperABI, "stateMachineIds", destCAIP2); smErr == nil && len(sm) > 0 {
 			hyperStateMachine = "0x" + common.Bytes2Hex(sm)
 		}
-		if dst, dstErr := u.callHyperbridgeBytes(ctx, evmClient, adapter0, "destinationContracts", destCAIP2); dstErr == nil {
+		if dst, dstErr := u.callHyperbridgeBytes(ctx, evmClient, adapter0, hyperABI, "destinationContracts", destCAIP2); dstErr == nil && len(dst) > 0 {
 			hyperDestination = "0x" + common.Bytes2Hex(dst)
 		}
 	}
 	if has1 && adapter1 != "" && adapter1 != "0x0000000000000000000000000000000000000000" {
-		if selector, sErr := u.callCCIPSelector(ctx, evmClient, adapter1, destCAIP2); sErr == nil {
+		ccipABI, _ := u.ResolveABIWithFallback(ctx, sourceChainID, entities.ContractTypeAdapterCCIP)
+		if selector, sErr := u.callCCIPSelector(ctx, evmClient, adapter1, ccipABI, destCAIP2); sErr == nil {
 			ccipSelector = selector
 		}
-		if dst, dErr := u.callCCIPDestinationAdapter(ctx, evmClient, adapter1, destCAIP2); dErr == nil {
+		if dst, dErr := u.callCCIPDestinationAdapter(ctx, evmClient, adapter1, ccipABI, destCAIP2); dErr == nil {
 			ccipDestination = "0x" + common.Bytes2Hex(dst)
 		}
 	}
 	if has2 && adapter2 != "" && adapter2 != "0x0000000000000000000000000000000000000000" {
-		if configured, cfgErr := u.callLayerZeroConfigured(ctx, evmClient, adapter2, destCAIP2); cfgErr == nil {
+		lzABI, _ := u.ResolveABIWithFallback(ctx, sourceChainID, entities.ContractTypeAdapterLayerZero)
+		if configured, cfgErr := u.callLayerZeroConfigured(ctx, evmClient, adapter2, lzABI, destCAIP2); cfgErr == nil {
 			lzConfigured = configured
 		}
-		if dstEid, dErr := u.callLayerZeroDstEid(ctx, evmClient, adapter2, destCAIP2); dErr == nil {
+		if dstEid, dErr := u.callLayerZeroDstEid(ctx, evmClient, adapter2, lzABI, destCAIP2); dErr == nil {
 			lzDstEid = dstEid
 		}
-		if peer, pErr := u.callLayerZeroPeer(ctx, evmClient, adapter2, destCAIP2); pErr == nil {
+		if peer, pErr := u.callLayerZeroPeer(ctx, evmClient, adapter2, lzABI, destCAIP2); pErr == nil {
 			lzPeer = peer.Hex()
 		}
-		if opts, oErr := u.callLayerZeroOptions(ctx, evmClient, adapter2, destCAIP2); oErr == nil && len(opts) > 0 {
+		if opts, oErr := u.callLayerZeroOptions(ctx, evmClient, adapter2, lzABI, destCAIP2); oErr == nil && len(opts) > 0 {
 			lzOptionsHex = "0x" + common.Bytes2Hex(opts)
 		}
 	}
@@ -369,56 +386,56 @@ func (u *OnchainAdapterUsecase) sendTx(
 	return executeOnchainTx(ctx, rpcURL, u.ownerPrivateKey, contractAddress, parsedABI, method, args...)
 }
 
-func (u *OnchainAdapterUsecase) callDefaultBridgeType(ctx context.Context, client *blockchain.EVMClient, gatewayAddress, destCAIP2 string) (uint8, error) {
-	return callTypedView[uint8](ctx, client, gatewayAddress, payChainGatewayAdminABI, "defaultBridgeTypes", destCAIP2)
+func (u *OnchainAdapterUsecase) callDefaultBridgeType(ctx context.Context, client *blockchain.EVMClient, gatewayAddress string, parsedABI abi.ABI, destCAIP2 string) (uint8, error) {
+	return callTypedView[uint8](ctx, client, gatewayAddress, parsedABI, "defaultBridgeTypes", destCAIP2)
 }
 
-func (u *OnchainAdapterUsecase) callHasAdapter(ctx context.Context, client *blockchain.EVMClient, routerAddress, destCAIP2 string, bridgeType uint8) (bool, error) {
-	return callTypedView[bool](ctx, client, routerAddress, payChainRouterAdminABI, "hasAdapter", destCAIP2, bridgeType)
+func (u *OnchainAdapterUsecase) callHasAdapter(ctx context.Context, client *blockchain.EVMClient, routerAddress string, parsedABI abi.ABI, destCAIP2 string, bridgeType uint8) (bool, error) {
+	return callTypedView[bool](ctx, client, routerAddress, parsedABI, "hasAdapter", destCAIP2, bridgeType)
 }
 
-func (u *OnchainAdapterUsecase) callGetAdapter(ctx context.Context, client *blockchain.EVMClient, routerAddress, destCAIP2 string, bridgeType uint8) (string, error) {
-	value, err := callTypedView[common.Address](ctx, client, routerAddress, payChainRouterAdminABI, "getAdapter", destCAIP2, bridgeType)
+func (u *OnchainAdapterUsecase) callGetAdapter(ctx context.Context, client *blockchain.EVMClient, routerAddress string, parsedABI abi.ABI, destCAIP2 string, bridgeType uint8) (string, error) {
+	value, err := callTypedView[common.Address](ctx, client, routerAddress, parsedABI, "getAdapter", destCAIP2, bridgeType)
 	if err != nil {
 		return "", err
 	}
 	return value.Hex(), nil
 }
 
-func (u *OnchainAdapterUsecase) callHyperbridgeConfigured(ctx context.Context, client *blockchain.EVMClient, adapterAddress, destCAIP2 string) (bool, error) {
-	return callTypedView[bool](ctx, client, adapterAddress, hyperbridgeSenderAdminABI, "isChainConfigured", destCAIP2)
+func (u *OnchainAdapterUsecase) callHyperbridgeConfigured(ctx context.Context, client *blockchain.EVMClient, adapterAddress string, parsedABI abi.ABI, destCAIP2 string) (bool, error) {
+	return callTypedView[bool](ctx, client, adapterAddress, parsedABI, "isChainConfigured", destCAIP2)
 }
 
-func (u *OnchainAdapterUsecase) callHyperbridgeBytes(ctx context.Context, client *blockchain.EVMClient, adapterAddress, method, destCAIP2 string) ([]byte, error) {
-	return callTypedView[[]byte](ctx, client, adapterAddress, hyperbridgeSenderAdminABI, method, destCAIP2)
+func (u *OnchainAdapterUsecase) callHyperbridgeBytes(ctx context.Context, client *blockchain.EVMClient, adapterAddress string, parsedABI abi.ABI, method, destCAIP2 string) ([]byte, error) {
+	return callTypedView[[]byte](ctx, client, adapterAddress, parsedABI, method, destCAIP2)
 }
 
-func (u *OnchainAdapterUsecase) callCCIPSelector(ctx context.Context, client *blockchain.EVMClient, adapterAddress, destCAIP2 string) (uint64, error) {
-	return callTypedView[uint64](ctx, client, adapterAddress, ccipSenderAdminABI, "chainSelectors", destCAIP2)
+func (u *OnchainAdapterUsecase) callCCIPSelector(ctx context.Context, client *blockchain.EVMClient, adapterAddress string, parsedABI abi.ABI, destCAIP2 string) (uint64, error) {
+	return callTypedView[uint64](ctx, client, adapterAddress, parsedABI, "chainSelectors", destCAIP2)
 }
 
-func (u *OnchainAdapterUsecase) callCCIPDestinationAdapter(ctx context.Context, client *blockchain.EVMClient, adapterAddress, destCAIP2 string) ([]byte, error) {
-	return callTypedView[[]byte](ctx, client, adapterAddress, ccipSenderAdminABI, "destinationAdapters", destCAIP2)
+func (u *OnchainAdapterUsecase) callCCIPDestinationAdapter(ctx context.Context, client *blockchain.EVMClient, adapterAddress string, parsedABI abi.ABI, destCAIP2 string) ([]byte, error) {
+	return callTypedView[[]byte](ctx, client, adapterAddress, parsedABI, "destinationAdapters", destCAIP2)
 }
 
-func (u *OnchainAdapterUsecase) callLayerZeroConfigured(ctx context.Context, client *blockchain.EVMClient, adapterAddress, destCAIP2 string) (bool, error) {
-	return callTypedView[bool](ctx, client, adapterAddress, layerZeroSenderAdminABI, "isRouteConfigured", destCAIP2)
+func (u *OnchainAdapterUsecase) callLayerZeroConfigured(ctx context.Context, client *blockchain.EVMClient, adapterAddress string, parsedABI abi.ABI, destCAIP2 string) (bool, error) {
+	return callTypedView[bool](ctx, client, adapterAddress, parsedABI, "isRouteConfigured", destCAIP2)
 }
 
-func (u *OnchainAdapterUsecase) callLayerZeroDstEid(ctx context.Context, client *blockchain.EVMClient, adapterAddress, destCAIP2 string) (uint32, error) {
-	return callTypedView[uint32](ctx, client, adapterAddress, layerZeroSenderAdminABI, "dstEids", destCAIP2)
+func (u *OnchainAdapterUsecase) callLayerZeroDstEid(ctx context.Context, client *blockchain.EVMClient, adapterAddress string, parsedABI abi.ABI, destCAIP2 string) (uint32, error) {
+	return callTypedView[uint32](ctx, client, adapterAddress, parsedABI, "dstEids", destCAIP2)
 }
 
-func (u *OnchainAdapterUsecase) callLayerZeroPeer(ctx context.Context, client *blockchain.EVMClient, adapterAddress, destCAIP2 string) (common.Hash, error) {
-	value, err := callTypedView[[32]byte](ctx, client, adapterAddress, layerZeroSenderAdminABI, "peers", destCAIP2)
+func (u *OnchainAdapterUsecase) callLayerZeroPeer(ctx context.Context, client *blockchain.EVMClient, adapterAddress string, parsedABI abi.ABI, destCAIP2 string) (common.Hash, error) {
+	value, err := callTypedView[[32]byte](ctx, client, adapterAddress, parsedABI, "peers", destCAIP2)
 	if err != nil {
 		return common.Hash{}, err
 	}
 	return common.BytesToHash(value[:]), nil
 }
 
-func (u *OnchainAdapterUsecase) callLayerZeroOptions(ctx context.Context, client *blockchain.EVMClient, adapterAddress, destCAIP2 string) ([]byte, error) {
-	return callTypedView[[]byte](ctx, client, adapterAddress, layerZeroSenderAdminABI, "enforcedOptions", destCAIP2)
+func (u *OnchainAdapterUsecase) callLayerZeroOptions(ctx context.Context, client *blockchain.EVMClient, adapterAddress string, parsedABI abi.ABI, destCAIP2 string) ([]byte, error) {
+	return callTypedView[[]byte](ctx, client, adapterAddress, parsedABI, "enforcedOptions", destCAIP2)
 }
 
 func callTypedView[T any](
@@ -443,7 +460,10 @@ func callTypedView[T any](
 	if err != nil || len(vals) == 0 {
 		return zero, fmt.Errorf("failed to decode %s", method)
 	}
-	value, _ := vals[0].(T)
+	value, ok := vals[0].(T)
+	if !ok {
+		return zero, fmt.Errorf("invalid %s return type", method)
+	}
 	return value, nil
 }
 

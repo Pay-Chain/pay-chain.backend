@@ -2,6 +2,7 @@ package usecases
 
 import (
 	"errors"
+	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -48,7 +49,7 @@ func TestPaymentUsecase_BuildTransactionPayloadHelpers(t *testing.T) {
 		DestChain:          &entities.Chain{ChainID: "42161", Type: entities.ChainTypeEVM},
 	}
 
-	evmHex := u.buildEvmPaymentHex(p, "eip155:42161")
+	evmHex := u.buildEvmPaymentHex(p, "eip155:42161", big.NewInt(0))
 	assert.NotEmpty(t, evmHex)
 	assert.Contains(t, evmHex, "0x")
 
@@ -102,7 +103,7 @@ func TestPaymentUsecase_BuildHex_HookErrorBranches(t *testing.T) {
 			DestTokenAddress:   "0x2222222222222222222222222222222222222222",
 			ReceiverAddress:    "0x3333333333333333333333333333333333333333",
 			SourceAmount:       "1000",
-		}, "eip155:8453"))
+		}, "eip155:8453", big.NewInt(0)))
 	})
 
 	t.Run("evm payment hex second and third new type errors", func(t *testing.T) {
@@ -125,7 +126,7 @@ func TestPaymentUsecase_BuildHex_HookErrorBranches(t *testing.T) {
 				return origNewType("uint256", "", nil)
 			}
 		}
-		assert.Empty(t, u.buildEvmPaymentHex(basePayment, "eip155:8453"))
+		assert.Empty(t, u.buildEvmPaymentHex(basePayment, "eip155:8453", big.NewInt(0)))
 
 		call = 0
 		newABIType = func(string, string, []abi.ArgumentMarshaling) (abi.Type, error) {
@@ -141,7 +142,7 @@ func TestPaymentUsecase_BuildHex_HookErrorBranches(t *testing.T) {
 				return origNewType("bytes", "", nil)
 			}
 		}
-		assert.Empty(t, u.buildEvmPaymentHex(basePayment, "eip155:8453"))
+		assert.Empty(t, u.buildEvmPaymentHex(basePayment, "eip155:8453", big.NewInt(0)))
 	})
 
 	t.Run("evm payment hex receiver pack fail fallback and final pack fail", func(t *testing.T) {
@@ -162,12 +163,12 @@ func TestPaymentUsecase_BuildHex_HookErrorBranches(t *testing.T) {
 			}
 			return origPack(args, values...)
 		}
-		hexOut := u.buildEvmPaymentHex(basePayment, "eip155:8453")
+		hexOut := u.buildEvmPaymentHex(basePayment, "eip155:8453", big.NewInt(0))
 		assert.NotEmpty(t, hexOut)
 
 		packABIArgs = func(abi.Arguments, ...interface{}) ([]byte, error) {
 			return nil, errors.New("final pack failed")
 		}
-		assert.Empty(t, u.buildEvmPaymentHex(basePayment, "eip155:8453"))
+		assert.Empty(t, u.buildEvmPaymentHex(basePayment, "eip155:8453", big.NewInt(0)))
 	})
 }

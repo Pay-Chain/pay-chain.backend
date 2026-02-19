@@ -39,7 +39,7 @@ func (s *scRepoStub) GetAll(context.Context, utils.PaginationParams) ([]*entitie
 	return nil, 0, nil
 }
 func (s *scRepoStub) Update(context.Context, *entities.SmartContract) error { return nil }
-func (s *scRepoStub) SoftDelete(context.Context, uuid.UUID) error            { return nil }
+func (s *scRepoStub) SoftDelete(context.Context, uuid.UUID) error           { return nil }
 
 func TestPaymentUsecase_ResolveVaultAddressForApproval(t *testing.T) {
 	chainID := uuid.New()
@@ -86,10 +86,10 @@ func TestPaymentUsecase_ResolveBridgeOrder_DefaultFallback(t *testing.T) {
 func TestPaymentUsecase_QuoteBridgeFeeByType_PackError(t *testing.T) {
 	u := &PaymentUsecase{}
 	require.Panics(t, func() {
-		_, _ = u.quoteBridgeFeeByType(context.Background(), nil, "0xrouter", "eip155:42161", 0, "0x1", "0x2", nil)
+		_, _ = u.quoteBridgeFeeByType(context.Background(), nil, "0xrouter", "eip155:42161", 0, "0x1", "0x2", nil, big.NewInt(0))
 	})
 
 	require.Panics(t, func() {
-		_, _ = u.quoteBridgeFeeByType(context.Background(), nil, "0xrouter", "eip155:42161", 0, "0x1", "0x2", big.NewInt(1))
+		_, _ = u.quoteBridgeFeeByType(context.Background(), nil, "0xrouter", "eip155:42161", 0, "0x1", "0x2", big.NewInt(1), big.NewInt(0))
 	})
 }

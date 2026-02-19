@@ -3,7 +3,6 @@ package repositories
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -26,8 +25,6 @@ func NewPaymentRepository(db *gorm.DB) *PaymentRepository {
 
 // Create creates a new payment
 func (r *PaymentRepository) Create(ctx context.Context, payment *entities.Payment) error {
-	fmt.Printf("DEBUG: PaymentRepository.Create - ID: %s\n", payment.ID)
-
 	// Handle nullable fields from Entity -> Model (*type)
 	m := &models.Payment{
 		ID:            payment.ID,
@@ -79,17 +76,13 @@ func (r *PaymentRepository) Create(ctx context.Context, payment *entities.Paymen
 	m.SenderAddress = payment.SenderAddress
 	m.DestAddress = payment.ReceiverAddress
 	m.Status = string(payment.Status)
+	m.FailureReason = payment.FailureReason.Ptr()
+	m.RevertData = payment.RevertData.Ptr()
 	m.CreatedAt = payment.CreatedAt
 	m.UpdatedAt = payment.UpdatedAt
 
 	// Use the transaction-aware DB instance
 	db := GetDB(ctx, r.db)
-	isTx := false
-	if _, ok := ctx.Value(txKey).(*gorm.DB); ok {
-		isTx = true
-	}
-	fmt.Printf("DEBUG: PaymentRepository.Create - IsTX: %v\n", isTx)
-
 	if err := db.WithContext(ctx).Create(m).Error; err != nil {
 		return err
 	}
@@ -168,6 +161,36 @@ func (r *PaymentRepository) GetByMerchantID(ctx context.Context, merchantID uuid
 	return payments, int(total), nil
 }
 
+func (r *PaymentRepository) Update(ctx context.Context, payment *entities.Payment) error {
+	db := GetDB(ctx, r.db)
+
+	// Map entity update fields to map to avoid zero-value issues with structs if needed,
+	// but using struct with GORM Updates works well if we want to update all fields including zero values if we specify select,
+	// or Model arg.
+	// For now, mapping specific fields we expect to change or just generic mapping.
+	// Since we introduced FailureReason/RevertData which are nullable strings, we need to be careful.
+
+	updates := map[string]interface{}{
+		"status":         payment.Status,
+		"failure_reason": payment.FailureReason.Ptr(),
+		"revert_data":    payment.RevertData.Ptr(),
+		"dest_tx_hash":   payment.DestTxHash.Ptr(),
+		"updated_at":     time.Now(),
+	}
+
+	result := db.WithContext(ctx).Model(&models.Payment{}).
+		Where("id = ?", payment.ID).
+		Updates(updates)
+
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return domainerrors.ErrNotFound
+	}
+	return nil
+}
+
 func (r *PaymentRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status entities.PaymentStatus) error {
 	db := GetDB(ctx, r.db)
 	result := db.WithContext(ctx).Model(&models.Payment{}).
@@ -237,6 +260,8 @@ func (r *PaymentRepository) toEntity(m *models.Payment) *entities.Payment {
 		DestTxHash:          null.StringFromPtr(m.DestTxHash),
 		RefundTxHash:        null.StringFromPtr(m.RefundTxHash),
 		CrossChainMessageID: null.StringFromPtr(m.CrossChainMessageID),
+		FailureReason:       null.StringFromPtr(m.FailureReason),
+		RevertData:          null.StringFromPtr(m.RevertData),
 		ExpiresAt:           m.ExpiresAt,
 		CreatedAt:           m.CreatedAt,
 		UpdatedAt:           m.UpdatedAt,

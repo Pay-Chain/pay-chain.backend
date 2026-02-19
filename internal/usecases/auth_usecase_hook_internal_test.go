@@ -17,10 +17,10 @@ import (
 )
 
 type authUserRepoStub struct {
-	getByEmailFn       func(context.Context, string) (*entities.User, error)
-	createFn           func(context.Context, *entities.User) error
-	getByIDFn          func(context.Context, uuid.UUID) (*entities.User, error)
-	updatePasswordFn   func(context.Context, uuid.UUID, string) error
+	getByEmailFn     func(context.Context, string) (*entities.User, error)
+	createFn         func(context.Context, *entities.User) error
+	getByIDFn        func(context.Context, uuid.UUID) (*entities.User, error)
+	updatePasswordFn func(context.Context, uuid.UUID, string) error
 }
 
 func (s *authUserRepoStub) Create(ctx context.Context, user *entities.User) error {
@@ -48,13 +48,13 @@ func (s *authUserRepoStub) UpdatePassword(ctx context.Context, id uuid.UUID, pas
 	}
 	return nil
 }
-func (s *authUserRepoStub) SoftDelete(context.Context, uuid.UUID) error { return nil }
+func (s *authUserRepoStub) SoftDelete(context.Context, uuid.UUID) error            { return nil }
 func (s *authUserRepoStub) List(context.Context, string) ([]*entities.User, error) { return nil, nil }
 
 type authEmailRepoStub struct {
-	createFn       func(context.Context, uuid.UUID, string) error
-	getByTokenFn   func(context.Context, string) (*entities.User, error)
-	markVerifyFn   func(context.Context, string) error
+	createFn     func(context.Context, uuid.UUID, string) error
+	getByTokenFn func(context.Context, string) (*entities.User, error)
+	markVerifyFn func(context.Context, string) error
 }
 
 func (s *authEmailRepoStub) Create(ctx context.Context, userID uuid.UUID, token string) error {
@@ -100,17 +100,21 @@ func (s *authWalletRepoStub) GetByUserID(ctx context.Context, userID uuid.UUID) 
 	}
 	return []*entities.Wallet{}, nil
 }
-func (s *authWalletRepoStub) GetByID(context.Context, uuid.UUID) (*entities.Wallet, error) { return nil, domainerrors.ErrNotFound }
-func (s *authWalletRepoStub) Update(context.Context, *entities.Wallet) error { return nil }
-func (s *authWalletRepoStub) Delete(context.Context, uuid.UUID) error { return nil }
+func (s *authWalletRepoStub) GetByID(context.Context, uuid.UUID) (*entities.Wallet, error) {
+	return nil, domainerrors.ErrNotFound
+}
+func (s *authWalletRepoStub) Update(context.Context, *entities.Wallet) error         { return nil }
+func (s *authWalletRepoStub) Delete(context.Context, uuid.UUID) error                { return nil }
 func (s *authWalletRepoStub) SetPrimary(context.Context, uuid.UUID, uuid.UUID) error { return nil }
-func (s *authWalletRepoStub) SoftDelete(context.Context, uuid.UUID) error { return nil }
+func (s *authWalletRepoStub) SoftDelete(context.Context, uuid.UUID) error            { return nil }
 
 type authChainRepoStub struct {
 	chain *entities.Chain
 }
 
-func (s *authChainRepoStub) GetByID(context.Context, uuid.UUID) (*entities.Chain, error) { return s.chain, nil }
+func (s *authChainRepoStub) GetByID(context.Context, uuid.UUID) (*entities.Chain, error) {
+	return s.chain, nil
+}
 func (s *authChainRepoStub) GetByChainID(context.Context, string) (*entities.Chain, error) {
 	if s.chain == nil {
 		return nil, domainerrors.ErrNotFound
@@ -127,10 +131,18 @@ func (s *authChainRepoStub) GetAll(context.Context) ([]*entities.Chain, error) {
 func (s *authChainRepoStub) GetAllRPCs(context.Context, *uuid.UUID, *bool, *string, utils.PaginationParams) ([]*entities.ChainRPC, int64, error) {
 	return nil, 0, nil
 }
-func (s *authChainRepoStub) GetActive(context.Context, utils.PaginationParams) ([]*entities.Chain, int64, error) { return nil, 0, nil }
-func (s *authChainRepoStub) Create(context.Context, *entities.Chain) error { return nil }
-func (s *authChainRepoStub) Update(context.Context, *entities.Chain) error { return nil }
-func (s *authChainRepoStub) Delete(context.Context, uuid.UUID) error { return nil }
+func (s *authChainRepoStub) GetActive(context.Context, utils.PaginationParams) ([]*entities.Chain, int64, error) {
+	return nil, 0, nil
+}
+func (s *authChainRepoStub) Create(context.Context, *entities.Chain) error       { return nil }
+func (s *authChainRepoStub) Update(context.Context, *entities.Chain) error       { return nil }
+func (s *authChainRepoStub) Delete(context.Context, uuid.UUID) error             { return nil }
+func (s *authChainRepoStub) CreateRPC(context.Context, *entities.ChainRPC) error { return nil }
+func (s *authChainRepoStub) UpdateRPC(context.Context, *entities.ChainRPC) error { return nil }
+func (s *authChainRepoStub) DeleteRPC(context.Context, uuid.UUID) error          { return nil }
+func (s *authChainRepoStub) GetRPCByID(context.Context, uuid.UUID) (*entities.ChainRPC, error) {
+	return nil, domainerrors.ErrNotFound
+}
 
 func newAuthUsecaseHook(t *testing.T, userRepo *authUserRepoStub, emailRepo *authEmailRepoStub, walletRepo *authWalletRepoStub, chainRepo *authChainRepoStub) *AuthUsecase {
 	t.Helper()
@@ -150,7 +162,9 @@ func TestAuthUsecase_Hook_RegisterHashAndTokenErrors(t *testing.T) {
 		uc := newAuthUsecaseHook(t,
 			&authUserRepoStub{getByEmailFn: func(context.Context, string) (*entities.User, error) { return nil, domainerrors.ErrNotFound }},
 			&authEmailRepoStub{},
-			&authWalletRepoStub{getByAddressFn: func(context.Context, uuid.UUID, string) (*entities.Wallet, error) { return nil, domainerrors.ErrNotFound }},
+			&authWalletRepoStub{getByAddressFn: func(context.Context, uuid.UUID, string) (*entities.Wallet, error) {
+				return nil, domainerrors.ErrNotFound
+			}},
 			&authChainRepoStub{chain: chain},
 		)
 
@@ -174,8 +188,10 @@ func TestAuthUsecase_Hook_RegisterHashAndTokenErrors(t *testing.T) {
 			},
 			&authEmailRepoStub{},
 			&authWalletRepoStub{
-				getByAddressFn: func(context.Context, uuid.UUID, string) (*entities.Wallet, error) { return nil, domainerrors.ErrNotFound },
-				createFn:       func(context.Context, *entities.Wallet) error { return nil },
+				getByAddressFn: func(context.Context, uuid.UUID, string) (*entities.Wallet, error) {
+					return nil, domainerrors.ErrNotFound
+				},
+				createFn: func(context.Context, *entities.Wallet) error { return nil },
 			},
 			&authChainRepoStub{chain: chain},
 		)

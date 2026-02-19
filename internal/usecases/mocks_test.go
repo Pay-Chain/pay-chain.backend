@@ -180,6 +180,26 @@ func (m *MockChainRepository) GetAllRPCs(ctx context.Context, chainID *uuid.UUID
 	return args.Get(0).([]*entities.ChainRPC), args.Get(1).(int64), args.Error(2)
 }
 
+func (m *MockChainRepository) CreateRPC(ctx context.Context, rpc *entities.ChainRPC) error {
+	return m.Called(ctx, rpc).Error(0)
+}
+
+func (m *MockChainRepository) UpdateRPC(ctx context.Context, rpc *entities.ChainRPC) error {
+	return m.Called(ctx, rpc).Error(0)
+}
+
+func (m *MockChainRepository) DeleteRPC(ctx context.Context, id uuid.UUID) error {
+	return m.Called(ctx, id).Error(0)
+}
+
+func (m *MockChainRepository) GetRPCByID(ctx context.Context, id uuid.UUID) (*entities.ChainRPC, error) {
+	args := m.Called(ctx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*entities.ChainRPC), args.Error(1)
+}
+
 // Mock TokenRepository
 type MockTokenRepository struct {
 	mock.Mock

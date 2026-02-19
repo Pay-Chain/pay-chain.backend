@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
+	"pay-chain.backend/internal/domain/entities"
 	derrs "pay-chain.backend/internal/domain/errors"
 )
 
@@ -33,10 +34,15 @@ func TestEVMAdminOpsService_RegisterAndDefault(t *testing.T) {
 		return "0xtxhash", nil
 	}
 
+	mockResolveABI := func(_ context.Context, _ uuid.UUID, _ entities.SmartContractType) (abi.ABI, error) {
+		return abi.ABI{}, nil
+	}
+
 	svc := newEVMAdminOpsService(
 		func(context.Context, string, string) (*evmAdminContext, error) { return resolved, nil },
 		func(context.Context, uuid.UUID, string, string, uint8) (string, error) { return "", nil },
 		sendTx,
+		mockResolveABI,
 	)
 
 	_, err := svc.RegisterAdapter(ctx, "eip155:8453", "eip155:42161", 0, "not-hex")
@@ -59,6 +65,7 @@ func TestEVMAdminOpsService_RegisterAndDefault(t *testing.T) {
 		},
 		nil,
 		sendTx,
+		mockResolveABI,
 	)
 	_, err = svcResolveErr.SetDefaultBridgeType(ctx, "eip155:8453", "eip155:42161", 1)
 	require.Error(t, err)
@@ -70,6 +77,7 @@ func TestEVMAdminOpsService_RegisterAndDefault(t *testing.T) {
 		},
 		nil,
 		sendTx,
+		mockResolveABI,
 	)
 	_, err = svcRegisterResolveErr.RegisterAdapter(ctx, "eip155:8453", "eip155:42161", 1, "0x3333333333333333333333333333333333333333")
 	require.Error(t, err)
@@ -81,6 +89,7 @@ func TestEVMAdminOpsService_RegisterAndDefault(t *testing.T) {
 		func(context.Context, uuid.UUID, string, abi.ABI, string, ...interface{}) (string, error) {
 			return "", errors.New("tx failed")
 		},
+		mockResolveABI,
 	)
 	_, err = svcRegisterTxErr.RegisterAdapter(ctx, "eip155:8453", "eip155:42161", 1, "0x3333333333333333333333333333333333333333")
 	require.Error(t, err)
@@ -96,6 +105,10 @@ func TestEVMAdminOpsService_SetHyperbridgeConfig(t *testing.T) {
 		routerAddress: "0x1111111111111111111111111111111111111111",
 	}
 
+	mockResolveABI := func(_ context.Context, _ uuid.UUID, _ entities.SmartContractType) (abi.ABI, error) {
+		return abi.ABI{}, nil
+	}
+
 	t.Run("adapter not registered", func(t *testing.T) {
 		svc := newEVMAdminOpsService(
 			func(context.Context, string, string) (*evmAdminContext, error) { return resolved, nil },
@@ -103,6 +116,7 @@ func TestEVMAdminOpsService_SetHyperbridgeConfig(t *testing.T) {
 				return "0x0000000000000000000000000000000000000000", nil
 			},
 			nil,
+			mockResolveABI,
 		)
 		_, _, err := svc.SetHyperbridgeConfig(ctx, "eip155:8453", "eip155:42161", "0x01", "")
 		require.Error(t, err)
@@ -117,6 +131,7 @@ func TestEVMAdminOpsService_SetHyperbridgeConfig(t *testing.T) {
 			func(context.Context, uuid.UUID, string, abi.ABI, string, ...interface{}) (string, error) {
 				return "unused", nil
 			},
+			mockResolveABI,
 		)
 		_, _, err := svc.SetHyperbridgeConfig(ctx, "eip155:8453", "eip155:42161", "", "")
 		require.Error(t, err)
@@ -139,6 +154,7 @@ func TestEVMAdminOpsService_SetHyperbridgeConfig(t *testing.T) {
 				}
 				return "0xtx1", nil
 			},
+			mockResolveABI,
 		)
 
 		_, txs, err := svc.SetHyperbridgeConfig(ctx, "eip155:8453", "eip155:42161", "0x01", "0x02")
@@ -160,6 +176,10 @@ func TestEVMAdminOpsService_SetCCIPAndLayerZeroConfig(t *testing.T) {
 	ccipSelector := uint64(123)
 	lzEid := uint32(101)
 
+	mockResolveABI := func(_ context.Context, _ uuid.UUID, _ entities.SmartContractType) (abi.ABI, error) {
+		return abi.ABI{}, nil
+	}
+
 	t.Run("ccip success", func(t *testing.T) {
 		svc := newEVMAdminOpsService(
 			func(context.Context, string, string) (*evmAdminContext, error) { return resolved, nil },
@@ -169,6 +189,7 @@ func TestEVMAdminOpsService_SetCCIPAndLayerZeroConfig(t *testing.T) {
 			func(context.Context, uuid.UUID, string, abi.ABI, string, ...interface{}) (string, error) {
 				return "0xtx", nil
 			},
+			mockResolveABI,
 		)
 		adapter, txs, err := svc.SetCCIPConfig(ctx, "eip155:8453", "eip155:42161", &ccipSelector, "0xabcd")
 		require.NoError(t, err)
@@ -185,6 +206,7 @@ func TestEVMAdminOpsService_SetCCIPAndLayerZeroConfig(t *testing.T) {
 			func(context.Context, uuid.UUID, string, abi.ABI, string, ...interface{}) (string, error) {
 				return "0xtx", nil
 			},
+			mockResolveABI,
 		)
 
 		_, _, err := svc.SetLayerZeroConfig(ctx, "eip155:8453", "eip155:42161", &lzEid, "0x12", "")
@@ -212,6 +234,7 @@ func TestEVMAdminOpsService_SetCCIPAndLayerZeroConfig(t *testing.T) {
 			func(context.Context, uuid.UUID, string, abi.ABI, string, ...interface{}) (string, error) {
 				return "unused", nil
 			},
+			mockResolveABI,
 		)
 		_, _, err := svcMissing.SetCCIPConfig(ctx, "eip155:8453", "eip155:42161", &ccipSelector, "")
 		require.Error(t, err)
@@ -224,6 +247,7 @@ func TestEVMAdminOpsService_SetCCIPAndLayerZeroConfig(t *testing.T) {
 			func(context.Context, uuid.UUID, string, abi.ABI, string, ...interface{}) (string, error) {
 				return "unused", nil
 			},
+			mockResolveABI,
 		)
 		_, _, err = svcRequired.SetCCIPConfig(ctx, "eip155:8453", "eip155:42161", nil, "")
 		require.Error(t, err)
@@ -238,6 +262,7 @@ func TestEVMAdminOpsService_SetCCIPAndLayerZeroConfig(t *testing.T) {
 			func(context.Context, uuid.UUID, string, abi.ABI, string, ...interface{}) (string, error) {
 				return "unused", nil
 			},
+			mockResolveABI,
 		)
 		_, _, err := svcLookupErr.SetLayerZeroConfig(ctx, "eip155:8453", "eip155:42161", &lzEid, "0x"+strings.Repeat("1", 64), "")
 		require.Error(t, err)
@@ -251,6 +276,7 @@ func TestEVMAdminOpsService_SetCCIPAndLayerZeroConfig(t *testing.T) {
 			func(context.Context, uuid.UUID, string, abi.ABI, string, ...interface{}) (string, error) {
 				return "unused", nil
 			},
+			mockResolveABI,
 		)
 		_, _, err = svcPartial.SetLayerZeroConfig(ctx, "eip155:8453", "eip155:42161", &lzEid, "", "")
 		require.Error(t, err)
@@ -268,6 +294,7 @@ func TestEVMAdminOpsService_SetCCIPAndLayerZeroConfig(t *testing.T) {
 				require.Equal(t, "setEnforcedOptions", method)
 				return "0xtx-options", nil
 			},
+			mockResolveABI,
 		)
 		adapter, txs, err := svc.SetLayerZeroConfig(ctx, "eip155:8453", "eip155:42161", nil, "", "0102")
 		require.NoError(t, err)
@@ -287,10 +314,14 @@ func TestEVMAdminOpsService_SetCCIPAndLayerZeroConfig(t *testing.T) {
 				}
 				return "0xok", nil
 			},
+			mockResolveABI,
 		)
 		_, _, err := svc.SetCCIPConfig(ctx, "eip155:8453", "eip155:42161", &ccipSelector, "")
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "set selector failed")
+		var appErr *derrs.AppError
+		require.ErrorAs(t, err, &appErr)
+		require.Contains(t, appErr.Message, "setChainSelector failed")
+		require.Contains(t, appErr.Message, "set selector failed")
 	})
 
 	t.Run("ccip destination tx error", func(t *testing.T) {
@@ -305,10 +336,14 @@ func TestEVMAdminOpsService_SetCCIPAndLayerZeroConfig(t *testing.T) {
 				}
 				return "0xok", nil
 			},
+			mockResolveABI,
 		)
 		_, _, err := svc.SetCCIPConfig(ctx, "eip155:8453", "eip155:42161", nil, "0xabcd")
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "set destination failed")
+		var appErr *derrs.AppError
+		require.ErrorAs(t, err, &appErr)
+		require.Contains(t, appErr.Message, "setDestinationAdapter failed")
+		require.Contains(t, appErr.Message, "set destination failed")
 	})
 
 	t.Run("layerzero adapter missing", func(t *testing.T) {
@@ -320,6 +355,7 @@ func TestEVMAdminOpsService_SetCCIPAndLayerZeroConfig(t *testing.T) {
 			func(context.Context, uuid.UUID, string, abi.ABI, string, ...interface{}) (string, error) {
 				return "unused", nil
 			},
+			mockResolveABI,
 		)
 		_, _, err := svc.SetLayerZeroConfig(ctx, "eip155:8453", "eip155:42161", &lzEid, "0x"+strings.Repeat("1", 64), "")
 		require.Error(t, err)
@@ -337,10 +373,14 @@ func TestEVMAdminOpsService_SetCCIPAndLayerZeroConfig(t *testing.T) {
 				}
 				return "0xok", nil
 			},
+			mockResolveABI,
 		)
 		_, _, err := svc.SetLayerZeroConfig(ctx, "eip155:8453", "eip155:42161", &lzEid, "0x"+strings.Repeat("1", 64), "")
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "set route failed")
+		var appErr *derrs.AppError
+		require.ErrorAs(t, err, &appErr)
+		require.Contains(t, appErr.Message, "setRoute failed")
+		require.Contains(t, appErr.Message, "set route failed")
 	})
 
 	t.Run("layerzero options tx error", func(t *testing.T) {
@@ -355,10 +395,14 @@ func TestEVMAdminOpsService_SetCCIPAndLayerZeroConfig(t *testing.T) {
 				}
 				return "0xok", nil
 			},
+			mockResolveABI,
 		)
 		_, _, err := svc.SetLayerZeroConfig(ctx, "eip155:8453", "eip155:42161", nil, "", "0x0102")
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "set options failed")
+		var appErr *derrs.AppError
+		require.ErrorAs(t, err, &appErr)
+		require.Contains(t, appErr.Message, "setEnforcedOptions failed")
+		require.Contains(t, appErr.Message, "set options failed")
 	})
 
 	t.Run("layerzero payload required", func(t *testing.T) {
@@ -370,6 +414,7 @@ func TestEVMAdminOpsService_SetCCIPAndLayerZeroConfig(t *testing.T) {
 			func(context.Context, uuid.UUID, string, abi.ABI, string, ...interface{}) (string, error) {
 				return "unused", nil
 			},
+			mockResolveABI,
 		)
 		_, _, err := svc.SetLayerZeroConfig(ctx, "eip155:8453", "eip155:42161", nil, "", "")
 		require.Error(t, err)
@@ -388,6 +433,10 @@ func TestEVMAdminOpsService_SetHyperbridgeConfig_MoreBranches(t *testing.T) {
 		routerAddress: "0x1111111111111111111111111111111111111111",
 	}
 
+	mockResolveABI := func(_ context.Context, _ uuid.UUID, _ entities.SmartContractType) (abi.ABI, error) {
+		return abi.ABI{}, nil
+	}
+
 	t.Run("setStateMachine tx error", func(t *testing.T) {
 		svc := newEVMAdminOpsService(
 			func(context.Context, string, string) (*evmAdminContext, error) { return resolved, nil },
@@ -400,10 +449,14 @@ func TestEVMAdminOpsService_SetHyperbridgeConfig_MoreBranches(t *testing.T) {
 				}
 				return "0xok", nil
 			},
+			mockResolveABI,
 		)
 		_, _, err := svc.SetHyperbridgeConfig(ctx, "eip155:8453", "eip155:42161", "0x01", "")
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "set state machine failed")
+		var appErr *derrs.AppError
+		require.ErrorAs(t, err, &appErr)
+		require.Contains(t, appErr.Message, "setStateMachineId failed")
+		require.Contains(t, appErr.Message, "set state machine failed")
 	})
 
 	t.Run("destination only success", func(t *testing.T) {
@@ -415,6 +468,7 @@ func TestEVMAdminOpsService_SetHyperbridgeConfig_MoreBranches(t *testing.T) {
 			func(context.Context, uuid.UUID, string, abi.ABI, string, ...interface{}) (string, error) {
 				return "0xtx-dest", nil
 			},
+			mockResolveABI,
 		)
 		adapter, txs, err := svc.SetHyperbridgeConfig(ctx, "eip155:8453", "eip155:42161", "", "0x02")
 		require.NoError(t, err)

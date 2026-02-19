@@ -1,17 +1,29 @@
 package usecases
 
-import "time"
+import (
+	"encoding/hex"
+	"time"
 
-// EVM Function Selectors
-// These are the first 4 bytes of the Keccak-256 hash of the function signature.
+	"github.com/ethereum/go-ethereum/crypto"
+)
 
-// CreatePaymentSelector is for createPayment(bytes destChainId, bytes receiver, address sourceToken, address destToken, uint256 amount)
-// keccak256("createPayment(bytes,bytes,address,address,uint256)") -> 0x83f7cae3
-const CreatePaymentSelector = "0x83f7cae3"
+// computeSelectorHex computes the 4-byte EVM function selector from a canonical
+// function signature and returns it as a "0x"-prefixed hex string.
+func computeSelectorHex(sig string) string {
+	return "0x" + hex.EncodeToString(crypto.Keccak256([]byte(sig))[:4])
+}
 
-// PayRequestSelector is for payRequest(bytes32 requestId)
-// keccak256("payRequest(bytes32)") -> 0x87b13db6
-const PayRequestSelector = "0x87b13db6"
+// EVM Function Selectors — computed at init from canonical signatures.
+var (
+	// createPayment(bytes,bytes,address,address,uint256) -> 0x83f7cae3
+	CreatePaymentSelector = computeSelectorHex("createPayment(bytes,bytes,address,address,uint256)")
+
+	// createPaymentWithSlippage(bytes,bytes,address,address,uint256,uint256) — for Fix #3
+	CreatePaymentWithSlippageSelector = computeSelectorHex("createPaymentWithSlippage(bytes,bytes,address,address,uint256,uint256)")
+
+	// payRequest(bytes32) -> 0x87b13db6
+	PayRequestSelector = computeSelectorHex("payRequest(bytes32)")
+)
 
 // Fee configuration
 const DefaultPercentageFee = 0.003 // 0.3%

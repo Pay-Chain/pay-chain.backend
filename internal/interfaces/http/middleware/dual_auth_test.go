@@ -145,6 +145,7 @@ func TestDualAuthMiddleware_ApiKey(t *testing.T) {
 
 func TestDualAuthMiddleware_JWT(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	t.Setenv("INTERNAL_PROXY_SECRET", "")
 
 	jwtService := jwt.NewJWTService("secret", time.Hour, time.Hour*24)
 
@@ -173,6 +174,7 @@ func TestDualAuthMiddleware_JWT(t *testing.T) {
 
 func TestDualAuthMiddleware_JWTWithSignature(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	t.Setenv("INTERNAL_PROXY_SECRET", "")
 
 	mockApiKeyRepo := new(MockApiKeyRepository)
 	mockUserRepo := new(MockUserRepository)
@@ -273,6 +275,8 @@ func TestDualAuthMiddleware_ApiKeyInvalid(t *testing.T) {
 
 func TestDualAuthMiddleware_JWTInvalidToken_AndNoAuth(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	t.Setenv("INTERNAL_PROXY_SECRET", "")
+
 	jwtService := jwt.NewJWTService("secret", time.Hour, time.Hour*24)
 
 	r := gin.New()

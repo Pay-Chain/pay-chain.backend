@@ -38,12 +38,24 @@ func (r *chainRepo) GetByID(ctx context.Context, id uuid.UUID) (*entities.Chain,
 
 // GetByChainID gets a chain by external ChainID (NetworkID)
 func (r *chainRepo) GetByChainID(ctx context.Context, chainID string) (*entities.Chain, error) {
+	value := strings.TrimSpace(chainID)
+	if value == "" {
+		return nil, domainerrors.ErrInvalidInput
+	}
+	normalized := entities.NormalizeChainID(value)
+
+	candidates := []string{normalized}
+	if normalized != value {
+		candidates = append(candidates, value)
+	}
+
 	var m models.Chain
-	if err := r.db.WithContext(ctx).Preload("RPCs").Where("chain_id = ?", chainID).First(&m).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, domainerrors.ErrNotFound
-		}
-		return nil, err
+	tx := r.db.WithContext(ctx).Preload("RPCs").Where("chain_id IN ?", candidates).Limit(1).Find(&m)
+	if tx.Error != nil {
+		return nil, tx.Error
+	}
+	if tx.RowsAffected == 0 {
+		return nil, domainerrors.ErrNotFound
 	}
 	return r.toEntity(&m), nil
 }
@@ -56,24 +68,33 @@ func (r *chainRepo) GetByCAIP2(ctx context.Context, caip2 string) (*entities.Cha
 	}
 
 	var m models.Chain
-	// 1) Direct match when chain_id is stored as full CAIP-2.
-	if err := r.db.WithContext(ctx).Preload("RPCs").Where("chain_id = ?", value).First(&m).Error; err == nil {
-		return r.toEntity(&m), nil
-	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, err
-	}
-
-	// 2) Fallback match by reference part (e.g. "eip155:8453" -> "8453").
+	// 1) Match by reference part first (e.g. "eip155:8453" -> "8453").
+	// In this project DB mostly stores chain_id as reference/network id.
 	parts := strings.SplitN(value, ":", 2)
 	if len(parts) != 2 || strings.TrimSpace(parts[1]) == "" {
-		return nil, domainerrors.ErrNotFound
+		// Non-CAIP2 input: try direct match only.
+		if err := r.db.WithContext(ctx).Preload("RPCs").Where("chain_id = ?", value).First(&m).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, domainerrors.ErrNotFound
+			}
+			return nil, err
+		}
+		return r.toEntity(&m), nil
 	}
 	reference := strings.TrimSpace(parts[1])
-	if err := r.db.WithContext(ctx).Preload("RPCs").Where("chain_id = ?", reference).First(&m).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
+	tx := r.db.WithContext(ctx).Preload("RPCs").Where("chain_id = ?", reference).Limit(1).Find(&m)
+	if tx.Error != nil {
+		return nil, tx.Error
+	}
+	if tx.RowsAffected == 0 {
+		// 2) Fallback direct match when chain_id is stored as full CAIP-2.
+		txDirect := r.db.WithContext(ctx).Preload("RPCs").Where("chain_id = ?", value).Limit(1).Find(&m)
+		if txDirect.Error != nil {
+			return nil, txDirect.Error
+		}
+		if txDirect.RowsAffected == 0 {
 			return nil, domainerrors.ErrNotFound
 		}
-		return nil, err
 	}
 	return r.toEntity(&m), nil
 }
@@ -169,19 +190,22 @@ func (r *chainRepo) GetActive(ctx context.Context, pagination utils.PaginationPa
 
 // Create creates a new chain
 func (r *chainRepo) Create(ctx context.Context, chain *entities.Chain) error {
+	networkID := entities.NormalizeChainID(chain.ChainID)
 	m := &models.Chain{
 		ID:        chain.ID,
-		NetworkID: chain.ChainID,
+		NetworkID: networkID,
 		// Namespace:      r.getNamespace(chain.Type), // Deprecated/Derived
-		Name:           chain.Name,
-		ChainType:      string(chain.Type),
-		RPCURL:         chain.RPCURL,
-		ExplorerURL:    chain.ExplorerURL,
-		Symbol:         chain.CurrencySymbol,
-		LogoURL:        chain.ImageURL,
-		IsActive:       chain.IsActive,
-		StateMachineID: "", // Entity doesn't have this field
-		CreatedAt:      chain.CreatedAt,
+		Name:              chain.Name,
+		ChainType:         string(chain.Type),
+		RPCURL:            chain.RPCURL,
+		ExplorerURL:       chain.ExplorerURL,
+		Symbol:            chain.CurrencySymbol,
+		LogoURL:           chain.ImageURL,
+		IsActive:          chain.IsActive,
+		StateMachineID:    "", // Entity doesn't have this field
+		CCIPChainSelector: chain.CCIPChainSelector,
+		LayerZeroEID:      chain.LayerZeroEID,
+		CreatedAt:         chain.CreatedAt,
 	}
 
 	if err := r.db.WithContext(ctx).Create(m).Error; err != nil {
@@ -192,16 +216,19 @@ func (r *chainRepo) Create(ctx context.Context, chain *entities.Chain) error {
 
 // Update updates a chain
 func (r *chainRepo) Update(ctx context.Context, chain *entities.Chain) error {
+	normalizedChainID := entities.NormalizeChainID(chain.ChainID)
 	updates := map[string]interface{}{
-		"chain_id": chain.ChainID,
+		"chain_id": normalizedChainID,
 		"name":     chain.Name,
 		// "namespace":       r.getNamespace(chain.Type), // Removed
-		"type":            string(chain.Type),
-		"rpc_url":         chain.RPCURL,
-		"explorer_url":    chain.ExplorerURL,
-		"currency_symbol": chain.CurrencySymbol,
-		"image_url":       chain.ImageURL,
-		"is_active":       chain.IsActive,
+		"type":                string(chain.Type),
+		"rpc_url":             chain.RPCURL,
+		"explorer_url":        chain.ExplorerURL,
+		"currency_symbol":     chain.CurrencySymbol,
+		"image_url":           chain.ImageURL,
+		"is_active":           chain.IsActive,
+		"ccip_chain_selector": chain.CCIPChainSelector,
+		"layerzero_eid":       chain.LayerZeroEID,
 		// "state_machine_id": chain.StateMachineID, // Removed
 	}
 
@@ -241,17 +268,19 @@ func (r *chainRepo) toEntity(m *models.Chain) *entities.Chain {
 	}
 
 	return &entities.Chain{
-		ID:             m.ID,
-		ChainID:        m.NetworkID,
-		Name:           m.Name,
-		Type:           entities.ChainType(strings.ToUpper(m.ChainType)),
-		RPCURL:         m.RPCURL,
-		ExplorerURL:    m.ExplorerURL,
-		CurrencySymbol: m.Symbol,
-		ImageURL:       m.LogoURL,
-		IsActive:       m.IsActive,
-		CreatedAt:      m.CreatedAt,
-		UpdatedAt:      m.UpdatedAt,
+		ID:                m.ID,
+		ChainID:           m.NetworkID,
+		Name:              m.Name,
+		Type:              entities.ChainType(strings.ToUpper(m.ChainType)),
+		RPCURL:            m.RPCURL,
+		ExplorerURL:       m.ExplorerURL,
+		CurrencySymbol:    m.Symbol,
+		ImageURL:          m.LogoURL,
+		IsActive:          m.IsActive,
+		CCIPChainSelector: m.CCIPChainSelector,
+		LayerZeroEID:      m.LayerZeroEID,
+		CreatedAt:         m.CreatedAt,
+		UpdatedAt:         m.UpdatedAt,
 		// DeletedAt:      &m.DeletedAt.Time, // GORM DeletedAt is struct?
 		RPCs: rpcs,
 	}
@@ -290,4 +319,67 @@ func (r *chainRepo) toRpcEntity(m *models.ChainRPC) *entities.ChainRPC {
 	}
 
 	return e
+}
+
+// CreateRPC creates a new chain RPC
+func (r *chainRepo) CreateRPC(ctx context.Context, rpc *entities.ChainRPC) error {
+	m := &models.ChainRPC{
+		ID:          rpc.ID,
+		ChainID:     rpc.ChainID,
+		URL:         rpc.URL,
+		Priority:    rpc.Priority,
+		IsActive:    rpc.IsActive,
+		LastErrorAt: rpc.LastErrorAt,
+		ErrorCount:  rpc.ErrorCount,
+		CreatedAt:   rpc.CreatedAt,
+	}
+
+	if err := r.db.WithContext(ctx).Create(m).Error; err != nil {
+		return err
+	}
+	return nil
+}
+
+// UpdateRPC updates a chain RPC
+func (r *chainRepo) UpdateRPC(ctx context.Context, rpc *entities.ChainRPC) error {
+	updates := map[string]interface{}{
+		"url":           rpc.URL,
+		"priority":      rpc.Priority,
+		"is_active":     rpc.IsActive,
+		"last_error_at": rpc.LastErrorAt,
+		"error_count":   rpc.ErrorCount,
+	}
+
+	result := r.db.WithContext(ctx).Model(&models.ChainRPC{}).Where("id = ?", rpc.ID).Updates(updates)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return domainerrors.ErrNotFound
+	}
+	return nil
+}
+
+// DeleteRPC deletes a chain RPC
+func (r *chainRepo) DeleteRPC(ctx context.Context, id uuid.UUID) error {
+	result := r.db.WithContext(ctx).Delete(&models.ChainRPC{}, "id = ?", id)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return domainerrors.ErrNotFound
+	}
+	return nil
+}
+
+// GetRPCByID gets a chain RPC by ID
+func (r *chainRepo) GetRPCByID(ctx context.Context, id uuid.UUID) (*entities.ChainRPC, error) {
+	var m models.ChainRPC
+	if err := r.db.WithContext(ctx).First(&m, "id = ?", id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, domainerrors.ErrNotFound
+		}
+		return nil, err
+	}
+	return r.toRpcEntity(&m), nil
 }

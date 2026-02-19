@@ -146,6 +146,7 @@ func runMainProcess() error {
 	onchainAdapterUsecase := usecases.NewOnchainAdapterUsecase(chainRepo, smartContractRepo, clientFactory, cfg.Blockchain.OwnerPrivateKey)
 	contractConfigAuditUsecase := usecases.NewContractConfigAuditUsecase(chainRepo, smartContractRepo, clientFactory)
 	crosschainConfigUsecase := usecases.NewCrosschainConfigUsecase(chainRepo, tokenRepo, smartContractRepo, clientFactory, onchainAdapterUsecase)
+	routeErrorUsecase := usecases.NewRouteErrorUsecase(chainRepo, smartContractRepo, clientFactory)
 
 	// Initialize handlers
 	authHandler := handlers.NewAuthHandler(authUsecase, sessionStore)
@@ -166,6 +167,7 @@ func runMainProcess() error {
 	contractConfigAuditHandler := handlers.NewContractConfigAuditHandler(contractConfigAuditUsecase)
 	crosschainConfigHandler := handlers.NewCrosschainConfigHandler(crosschainConfigUsecase)
 	crosschainPolicyHandler := handlers.NewCrosschainPolicyHandler(routePolicyRepo, layerZeroConfigRepo, chainRepo)
+	routeErrorHandler := handlers.NewRouteErrorHandler(routeErrorUsecase)
 	rpcHandler := handlers.NewRpcHandler(chainRepo)
 
 	// Create dual auth middleware
@@ -206,6 +208,7 @@ func runMainProcess() error {
 		contractConfigAuditHandler: contractConfigAuditHandler,
 		crosschainConfigHandler:    crosschainConfigHandler,
 		crosschainPolicyHandler:    crosschainPolicyHandler,
+		routeErrorHandler:          routeErrorHandler,
 		rpcHandler:                 rpcHandler,
 		dualAuthMiddleware:         dualAuthMiddleware,
 	})

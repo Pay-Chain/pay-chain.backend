@@ -26,7 +26,8 @@ func newCrosschainFeeRPCServer(t *testing.T) *httptest.Server {
 		case "eth_chainId":
 			resp["result"] = "0x2105"
 		case "eth_call":
-			resp["result"] = "0x01"
+			// Return 32 bytes (padded uint256/address) to satisfy length checks
+			resp["result"] = "0x0000000000000000000000000000000000000000000000000000000000000001"
 		default:
 			resp["result"] = "0x0"
 		}
@@ -150,12 +151,12 @@ func TestCrosschainConfigUsecase_GapBranches(t *testing.T) {
 		rpcServer := newCrosschainFeeRPCServer(t)
 		defer rpcServer.Close()
 		sourceWithRPC := &entities.Chain{
-			ID:      sourceID,
-			ChainID: "8453",
-			Name:    "Base",
-			Type:    entities.ChainTypeEVM,
+			ID:       sourceID,
+			ChainID:  "8453",
+			Name:     "Base",
+			Type:     entities.ChainTypeEVM,
 			IsActive: true,
-			RPCURL:  rpcServer.URL,
+			RPCURL:   rpcServer.URL,
 		}
 		chainRepo := &ccChainRepoStub{
 			byID: map[uuid.UUID]*entities.Chain{sourceID: sourceWithRPC, destID: dest},
@@ -176,6 +177,12 @@ func TestCrosschainConfigUsecase_GapBranches(t *testing.T) {
 					ChainUUID:       sourceID,
 					Type:            entities.ContractTypeRouter,
 					ContractAddress: "0x9999999999999999999999999999999999999999",
+					IsActive:        true,
+				},
+				contractKey(sourceID, entities.ContractTypeGateway): {
+					ChainUUID:       sourceID,
+					Type:            entities.ContractTypeGateway,
+					ContractAddress: "0x8888888888888888888888888888888888888888",
 					IsActive:        true,
 				},
 			},

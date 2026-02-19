@@ -275,6 +275,7 @@ func TestCrosschainConfigUsecase_AutoFix_LayerZero_AllSkipped(t *testing.T) {
 	tokenRepo.On("GetTokensByChain", mock.Anything, mock.Anything, mock.Anything).Return([]*entities.Token{}, int64(0), nil)
 	contractRepo.On("GetActiveContract", mock.Anything, sourceID, entities.ContractTypeGateway).Return(gateway, nil)
 	contractRepo.On("GetActiveContract", mock.Anything, sourceID, entities.ContractTypeRouter).Return(router, nil)
+	contractRepo.On("GetActiveContract", mock.Anything, sourceID, entities.ContractTypeAdapterLayerZero).Return((*entities.SmartContract)(nil), errors.New("not found"))
 
 	factory := blockchain.NewClientFactory()
 	adapterUsecase := uc.NewOnchainAdapterUsecase(chainRepo, contractRepo, factory, "")
@@ -323,6 +324,14 @@ func TestCrosschainConfigUsecase_AutoFix_Hyperbridge_DestinationMissing(t *testi
 	contractRepo.On("GetActiveContract", mock.Anything, sourceID, entities.ContractTypeRouter).Return(router, nil)
 	contractRepo.On("GetActiveContract", mock.Anything, destID, entities.ContractTypeAdapterHyperbridge).
 		Return((*entities.SmartContract)(nil), errors.New("not found"))
+	contractRepo.On("GetActiveContract", mock.Anything, sourceID, entities.ContractTypeAdapterHyperbridge).
+		Return(&entities.SmartContract{
+			ID:              uuid.New(),
+			ChainUUID:       sourceID,
+			Type:            entities.ContractTypeAdapterHyperbridge,
+			ContractAddress: "0x4444444444444444444444444444444444444444",
+			IsActive:        true,
+		}, nil)
 
 	factory := blockchain.NewClientFactory()
 	adapterUsecase := uc.NewOnchainAdapterUsecase(chainRepo, contractRepo, factory, "")
@@ -368,6 +377,7 @@ func TestCrosschainConfigUsecase_Preflight_CcipNotConfigured(t *testing.T) {
 	tokenRepo.On("GetTokensByChain", mock.Anything, mock.Anything, mock.Anything).Return([]*entities.Token{}, int64(0), nil)
 	contractRepo.On("GetActiveContract", mock.Anything, sourceID, entities.ContractTypeGateway).Return(gateway, nil)
 	contractRepo.On("GetActiveContract", mock.Anything, sourceID, entities.ContractTypeRouter).Return(router, nil)
+	contractRepo.On("GetActiveContract", mock.Anything, sourceID, entities.ContractTypeAdapterCCIP).Return((*entities.SmartContract)(nil), errors.New("not found"))
 
 	factory := blockchain.NewClientFactory()
 	adapterUsecase := uc.NewOnchainAdapterUsecase(chainRepo, contractRepo, factory, "")
@@ -469,6 +479,7 @@ func TestCrosschainConfigUsecase_AutoFix_SetDefaultBridgeFailed(t *testing.T) {
 	chainRepo.On("GetByID", mock.Anything, destID).Return(dest, nil)
 	contractRepo.On("GetActiveContract", mock.Anything, sourceID, entities.ContractTypeGateway).Return(gateway, nil)
 	contractRepo.On("GetActiveContract", mock.Anything, sourceID, entities.ContractTypeRouter).Return(router, nil)
+	contractRepo.On("GetActiveContract", mock.Anything, sourceID, entities.ContractTypeAdapterHyperbridge).Return((*entities.SmartContract)(nil), errors.New("not found"))
 
 	factory := blockchain.NewClientFactory()
 	adapterUsecase := uc.NewOnchainAdapterUsecase(chainRepo, contractRepo, factory, "")
@@ -514,12 +525,20 @@ func TestCrosschainConfigUsecase_AutoFix_SetHyperbridgeConfigFailed(t *testing.T
 	chainRepo.On("GetByID", mock.Anything, destID).Return(dest, nil)
 	contractRepo.On("GetActiveContract", mock.Anything, sourceID, entities.ContractTypeGateway).Return(gateway, nil)
 	contractRepo.On("GetActiveContract", mock.Anything, sourceID, entities.ContractTypeRouter).Return(router, nil)
+	contractRepo.On("GetActiveContract", mock.Anything, sourceID, entities.ContractTypeAdapterHyperbridge).
+		Return(&entities.SmartContract{
+			ID:              uuid.New(),
+			ChainUUID:       sourceID,
+			Type:            entities.ContractTypeAdapterHyperbridge,
+			ContractAddress: "0x7777777777777777777777777777777777777777",
+			IsActive:        true,
+		}, nil)
 	contractRepo.On("GetActiveContract", mock.Anything, destID, entities.ContractTypeAdapterHyperbridge).
 		Return(&entities.SmartContract{
 			ID:              uuid.New(),
 			ChainUUID:       destID,
 			Type:            entities.ContractTypeAdapterHyperbridge,
-			ContractAddress: "0x7777777777777777777777777777777777777777",
+			ContractAddress: "0x8888888888888888888888888888888888888888",
 			IsActive:        true,
 		}, nil)
 

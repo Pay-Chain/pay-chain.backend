@@ -1,0 +1,1186 @@
+=== RUN   TestApiKeyHelpers_GenerateRandomHex_Error
+--- PASS: TestApiKeyHelpers_GenerateRandomHex_Error (0.00s)
+=== RUN   TestApiKeyHelpers_Encrypt_ReadNonceError
+--- PASS: TestApiKeyHelpers_Encrypt_ReadNonceError (0.00s)
+=== RUN   TestApiKeyHelpers_Decrypt_MalformedCiphertext
+--- PASS: TestApiKeyHelpers_Decrypt_MalformedCiphertext (0.00s)
+=== RUN   TestApiKeyHelpers_DecryptBranches
+--- PASS: TestApiKeyHelpers_DecryptBranches (0.00s)
+=== RUN   TestApiKeyUsecase_CreateApiKey_RandomFailureBranches
+=== RUN   TestApiKeyUsecase_CreateApiKey_RandomFailureBranches/first_random_call_failed
+=== RUN   TestApiKeyUsecase_CreateApiKey_RandomFailureBranches/second_random_call_failed
+--- PASS: TestApiKeyUsecase_CreateApiKey_RandomFailureBranches (0.00s)
+    --- PASS: TestApiKeyUsecase_CreateApiKey_RandomFailureBranches/first_random_call_failed (0.00s)
+    --- PASS: TestApiKeyUsecase_CreateApiKey_RandomFailureBranches/second_random_call_failed (0.00s)
+=== RUN   TestApiKeyUsecase_ValidateApiKey_DecryptInvalidCipherKeyBranch
+--- PASS: TestApiKeyUsecase_ValidateApiKey_DecryptInvalidCipherKeyBranch (0.00s)
+=== RUN   TestApiKeyUsecase_EncryptDecrypt_ErrorBranches
+=== RUN   TestApiKeyUsecase_EncryptDecrypt_ErrorBranches/encrypt_nonce_read_error
+=== RUN   TestApiKeyUsecase_EncryptDecrypt_ErrorBranches/decrypt_malformed_ciphertext
+=== RUN   TestApiKeyUsecase_EncryptDecrypt_ErrorBranches/decrypt_auth_open_error
+=== RUN   TestApiKeyUsecase_EncryptDecrypt_ErrorBranches/decrypt_success
+=== RUN   TestApiKeyUsecase_EncryptDecrypt_ErrorBranches/encrypt_invalid_key_size
+=== RUN   TestApiKeyUsecase_EncryptDecrypt_ErrorBranches/encrypt_gcm_construction_error
+=== RUN   TestApiKeyUsecase_EncryptDecrypt_ErrorBranches/decrypt_invalid_hex
+=== RUN   TestApiKeyUsecase_EncryptDecrypt_ErrorBranches/decrypt_invalid_key_size
+=== RUN   TestApiKeyUsecase_EncryptDecrypt_ErrorBranches/decrypt_gcm_construction_error
+--- PASS: TestApiKeyUsecase_EncryptDecrypt_ErrorBranches (0.00s)
+    --- PASS: TestApiKeyUsecase_EncryptDecrypt_ErrorBranches/encrypt_nonce_read_error (0.00s)
+    --- PASS: TestApiKeyUsecase_EncryptDecrypt_ErrorBranches/decrypt_malformed_ciphertext (0.00s)
+    --- PASS: TestApiKeyUsecase_EncryptDecrypt_ErrorBranches/decrypt_auth_open_error (0.00s)
+    --- PASS: TestApiKeyUsecase_EncryptDecrypt_ErrorBranches/decrypt_success (0.00s)
+    --- PASS: TestApiKeyUsecase_EncryptDecrypt_ErrorBranches/encrypt_invalid_key_size (0.00s)
+    --- PASS: TestApiKeyUsecase_EncryptDecrypt_ErrorBranches/encrypt_gcm_construction_error (0.00s)
+    --- PASS: TestApiKeyUsecase_EncryptDecrypt_ErrorBranches/decrypt_invalid_hex (0.00s)
+    --- PASS: TestApiKeyUsecase_EncryptDecrypt_ErrorBranches/decrypt_invalid_key_size (0.00s)
+    --- PASS: TestApiKeyUsecase_EncryptDecrypt_ErrorBranches/decrypt_gcm_construction_error (0.00s)
+=== RUN   TestAuthUsecase_Hook_RegisterHashAndTokenErrors
+=== RUN   TestAuthUsecase_Hook_RegisterHashAndTokenErrors/hash_password_error
+=== RUN   TestAuthUsecase_Hook_RegisterHashAndTokenErrors/generate_verification_token_error
+--- PASS: TestAuthUsecase_Hook_RegisterHashAndTokenErrors (0.27s)
+    --- PASS: TestAuthUsecase_Hook_RegisterHashAndTokenErrors/hash_password_error (0.00s)
+    --- PASS: TestAuthUsecase_Hook_RegisterHashAndTokenErrors/generate_verification_token_error (0.27s)
+=== RUN   TestAuthUsecase_Hook_LoginBranches
+=== RUN   TestAuthUsecase_Hook_LoginBranches/generate_token_pair_error
+=== RUN   TestAuthUsecase_Hook_LoginBranches/session_json_marshal_error
+=== RUN   TestAuthUsecase_Hook_LoginBranches/session_success_branch_without_redis_server
+--- PASS: TestAuthUsecase_Hook_LoginBranches (1.38s)
+    --- PASS: TestAuthUsecase_Hook_LoginBranches/generate_token_pair_error (0.39s)
+    --- PASS: TestAuthUsecase_Hook_LoginBranches/session_json_marshal_error (0.28s)
+    --- PASS: TestAuthUsecase_Hook_LoginBranches/session_success_branch_without_redis_server (0.37s)
+=== RUN   TestCallUint8View_ErrorAndSuccessBranches
+--- PASS: TestCallUint8View_ErrorAndSuccessBranches (0.00s)
+=== RUN   TestContractConfigAudit_CallViewHelpers_WithInjectedClient
+--- PASS: TestContractConfigAudit_CallViewHelpers_WithInjectedClient (0.00s)
+=== RUN   TestContractConfigAudit_CallViewHelpers_ErrorBranches_WithInjectedClient
+--- PASS: TestContractConfigAudit_CallViewHelpers_ErrorBranches_WithInjectedClient (0.00s)
+=== RUN   TestCallViewHelpers_Success
+--- PASS: TestCallViewHelpers_Success (0.00s)
+=== RUN   TestCallViewHelpers_ParseAndDecodeError
+--- PASS: TestCallViewHelpers_ParseAndDecodeError (0.00s)
+=== RUN   TestCallViewHelpers_PackAndClientErrorBranches
+--- PASS: TestCallViewHelpers_PackAndClientErrorBranches (0.00s)
+=== RUN   TestCallViewHelpers_TypeAssertionBranches
+--- PASS: TestCallViewHelpers_TypeAssertionBranches (0.00s)
+=== RUN   TestCallUint64View_DecodeErrorBranch
+--- PASS: TestCallUint64View_DecodeErrorBranch (0.00s)
+=== RUN   TestCallViewHelpers_AddressAndBytesSuccess
+--- PASS: TestCallViewHelpers_AddressAndBytesSuccess (0.00s)
+=== RUN   TestCallViewHelpers_AddressAndBytes_ErrorBranches
+--- PASS: TestCallViewHelpers_AddressAndBytes_ErrorBranches (0.00s)
+=== RUN   TestContractConfigAuditUsecase_CheckByContractID_EvmDestinationSortingAndOnchainBranch
+--- PASS: TestContractConfigAuditUsecase_CheckByContractID_EvmDestinationSortingAndOnchainBranch (0.00s)
+=== RUN   TestRunEVMOnchainChecks_CoreAndReadFailureBranches
+--- PASS: TestRunEVMOnchainChecks_CoreAndReadFailureBranches (0.00s)
+=== RUN   TestRunEVMOnchainChecks_HyperbridgeBranches
+=== RUN   TestRunEVMOnchainChecks_HyperbridgeBranches/adapter_zero
+=== RUN   TestRunEVMOnchainChecks_HyperbridgeBranches/configured_false
+=== RUN   TestRunEVMOnchainChecks_HyperbridgeBranches/fallback_configured_from_bytes
+--- PASS: TestRunEVMOnchainChecks_HyperbridgeBranches (0.00s)
+    --- PASS: TestRunEVMOnchainChecks_HyperbridgeBranches/adapter_zero (0.00s)
+    --- PASS: TestRunEVMOnchainChecks_HyperbridgeBranches/configured_false (0.00s)
+    --- PASS: TestRunEVMOnchainChecks_HyperbridgeBranches/fallback_configured_from_bytes (0.00s)
+=== RUN   TestRunEVMOnchainChecks_CCIPBranches
+=== RUN   TestRunEVMOnchainChecks_CCIPBranches/adapter_zero
+=== RUN   TestRunEVMOnchainChecks_CCIPBranches/selector_and_destination_missing
+--- PASS: TestRunEVMOnchainChecks_CCIPBranches (0.00s)
+    --- PASS: TestRunEVMOnchainChecks_CCIPBranches/adapter_zero (0.00s)
+    --- PASS: TestRunEVMOnchainChecks_CCIPBranches/selector_and_destination_missing (0.00s)
+=== RUN   TestRunEVMOnchainChecks_GatewayOrRouterMissingBranches
+=== RUN   TestRunEVMOnchainChecks_GatewayOrRouterMissingBranches/gateway_missing_only
+=== RUN   TestRunEVMOnchainChecks_GatewayOrRouterMissingBranches/router_missing_only
+--- PASS: TestRunEVMOnchainChecks_GatewayOrRouterMissingBranches (0.00s)
+    --- PASS: TestRunEVMOnchainChecks_GatewayOrRouterMissingBranches/gateway_missing_only (0.00s)
+    --- PASS: TestRunEVMOnchainChecks_GatewayOrRouterMissingBranches/router_missing_only (0.00s)
+=== RUN   TestRunEVMOnchainChecks_AdapterAndBridgeBranches
+=== RUN   TestRunEVMOnchainChecks_AdapterAndBridgeBranches/adapter_not_registered
+=== RUN   TestRunEVMOnchainChecks_AdapterAndBridgeBranches/hyperbridge_fallback_not_configured_due_empty_bytes
+=== RUN   TestRunEVMOnchainChecks_AdapterAndBridgeBranches/hyperbridge_fallback_read_failed
+=== RUN   TestRunEVMOnchainChecks_AdapterAndBridgeBranches/hyperbridge_configured
+=== RUN   TestRunEVMOnchainChecks_AdapterAndBridgeBranches/ccip_selector+destination_configured
+--- PASS: TestRunEVMOnchainChecks_AdapterAndBridgeBranches (0.00s)
+    --- PASS: TestRunEVMOnchainChecks_AdapterAndBridgeBranches/adapter_not_registered (0.00s)
+    --- PASS: TestRunEVMOnchainChecks_AdapterAndBridgeBranches/hyperbridge_fallback_not_configured_due_empty_bytes (0.00s)
+    --- PASS: TestRunEVMOnchainChecks_AdapterAndBridgeBranches/hyperbridge_fallback_read_failed (0.00s)
+    --- PASS: TestRunEVMOnchainChecks_AdapterAndBridgeBranches/hyperbridge_configured (0.00s)
+    --- PASS: TestRunEVMOnchainChecks_AdapterAndBridgeBranches/ccip_selector+destination_configured (0.00s)
+=== RUN   TestContractConfigAudit_HelperGapBranches
+=== RUN   TestContractConfigAudit_HelperGapBranches/extract_function_names_non-map_and_empty_name
+=== RUN   TestContractConfigAudit_HelperGapBranches/callBoolView_pack_error
+=== RUN   TestContractConfigAudit_HelperGapBranches/callBoolView_type_assertion_error
+=== RUN   TestContractConfigAudit_HelperGapBranches/callAddressView_client_error
+=== RUN   TestContractConfigAudit_HelperGapBranches/callBytesView_client_error
+--- PASS: TestContractConfigAudit_HelperGapBranches (0.00s)
+    --- PASS: TestContractConfigAudit_HelperGapBranches/extract_function_names_non-map_and_empty_name (0.00s)
+    --- PASS: TestContractConfigAudit_HelperGapBranches/callBoolView_pack_error (0.00s)
+    --- PASS: TestContractConfigAudit_HelperGapBranches/callBoolView_type_assertion_error (0.00s)
+    --- PASS: TestContractConfigAudit_HelperGapBranches/callAddressView_client_error (0.00s)
+    --- PASS: TestContractConfigAudit_HelperGapBranches/callBytesView_client_error (0.00s)
+=== RUN   TestParseABI_Invalid
+--- PASS: TestParseABI_Invalid (0.00s)
+=== RUN   TestCallViewHelpers_InvalidABI
+--- PASS: TestCallViewHelpers_InvalidABI (0.00s)
+=== RUN   TestRequiredFunctions
+=== RUN   TestRequiredFunctions/gateway
+=== RUN   TestRequiredFunctions/router
+=== RUN   TestRequiredFunctions/vault
+=== RUN   TestRequiredFunctions/token_registry
+=== RUN   TestRequiredFunctions/token_swapper
+=== RUN   TestRequiredFunctions/ccip_adapter
+=== RUN   TestRequiredFunctions/hyperbridge_adapter
+=== RUN   TestRequiredFunctions/layerzero_adapter
+=== RUN   TestRequiredFunctions/unknown
+--- PASS: TestRequiredFunctions (0.00s)
+    --- PASS: TestRequiredFunctions/gateway (0.00s)
+    --- PASS: TestRequiredFunctions/router (0.00s)
+    --- PASS: TestRequiredFunctions/vault (0.00s)
+    --- PASS: TestRequiredFunctions/token_registry (0.00s)
+    --- PASS: TestRequiredFunctions/token_swapper (0.00s)
+    --- PASS: TestRequiredFunctions/ccip_adapter (0.00s)
+    --- PASS: TestRequiredFunctions/hyperbridge_adapter (0.00s)
+    --- PASS: TestRequiredFunctions/layerzero_adapter (0.00s)
+    --- PASS: TestRequiredFunctions/unknown (0.00s)
+=== RUN   TestExtractFunctionNames
+--- PASS: TestExtractFunctionNames (0.00s)
+=== RUN   TestGenerateFieldsFromFunctions
+--- PASS: TestGenerateFieldsFromFunctions (0.00s)
+=== RUN   TestFindActiveContractByType
+--- PASS: TestFindActiveContractByType (0.00s)
+=== RUN   TestMergeSummaryAndDeriveOverallStatus
+--- PASS: TestMergeSummaryAndDeriveOverallStatus (0.00s)
+=== RUN   TestBuildContractReport
+--- PASS: TestBuildContractReport (0.00s)
+=== RUN   TestRunEVMOnchainChecks_RPCMissing
+--- PASS: TestRunEVMOnchainChecks_RPCMissing (0.00s)
+=== RUN   TestRunEVMOnchainChecks_RPCConnectFailed
+--- PASS: TestRunEVMOnchainChecks_RPCConnectFailed (0.00s)
+=== RUN   TestRunEVMOnchainChecks_GatewayRouterMissing
+--- PASS: TestRunEVMOnchainChecks_GatewayRouterMissing (0.00s)
+=== RUN   TestRunEVMOnchainChecks_DefaultBridgeReadFailed
+--- PASS: TestRunEVMOnchainChecks_DefaultBridgeReadFailed (0.00s)
+=== RUN   TestRunEVMOnchainChecks_HyperbridgeConfiguredPath
+--- PASS: TestRunEVMOnchainChecks_HyperbridgeConfiguredPath (0.00s)
+=== RUN   TestRunEVMOnchainChecks_CcipConfiguredPath
+--- PASS: TestRunEVMOnchainChecks_CcipConfiguredPath (0.00s)
+=== RUN   TestCrosschainConfigUsecase_AutoFix_MoreBranches
+=== RUN   TestCrosschainConfigUsecase_AutoFix_MoreBranches/status_error
+=== RUN   TestCrosschainConfigUsecase_AutoFix_MoreBranches/missing_adapter_and_invalid_source_chain_input
+=== RUN   TestCrosschainConfigUsecase_AutoFix_MoreBranches/ccip_bridge_with_existing_adapter_only_two_skipped_steps
+=== RUN   TestCrosschainConfigUsecase_AutoFix_MoreBranches/hyperbridge_destination_contract_derive_failure
+=== RUN   TestCrosschainConfigUsecase_AutoFix_MoreBranches/ccip_missing_adapter_contract_in_db
+=== RUN   TestCrosschainConfigUsecase_AutoFix_MoreBranches/layerzero_missing_adapter_contract_in_db
+=== RUN   TestCrosschainConfigUsecase_AutoFix_MoreBranches/hyperbridge_set_config_error
+--- PASS: TestCrosschainConfigUsecase_AutoFix_MoreBranches (0.00s)
+    --- PASS: TestCrosschainConfigUsecase_AutoFix_MoreBranches/status_error (0.00s)
+    --- PASS: TestCrosschainConfigUsecase_AutoFix_MoreBranches/missing_adapter_and_invalid_source_chain_input (0.00s)
+    --- PASS: TestCrosschainConfigUsecase_AutoFix_MoreBranches/ccip_bridge_with_existing_adapter_only_two_skipped_steps (0.00s)
+    --- PASS: TestCrosschainConfigUsecase_AutoFix_MoreBranches/hyperbridge_destination_contract_derive_failure (0.00s)
+    --- PASS: TestCrosschainConfigUsecase_AutoFix_MoreBranches/ccip_missing_adapter_contract_in_db (0.00s)
+    --- PASS: TestCrosschainConfigUsecase_AutoFix_MoreBranches/layerzero_missing_adapter_contract_in_db (0.00s)
+    --- PASS: TestCrosschainConfigUsecase_AutoFix_MoreBranches/hyperbridge_set_config_error (0.00s)
+=== RUN   TestCrosschainConfigUsecase_CheckFeeQuoteHealth_Matrix
+--- PASS: TestCrosschainConfigUsecase_CheckFeeQuoteHealth_Matrix (0.00s)
+=== RUN   TestCrosschainConfigUsecase_GapBranches
+=== RUN   TestCrosschainConfigUsecase_GapBranches/overview_with_explicit_dest_and_invalid_inputs
+=== RUN   TestCrosschainConfigUsecase_GapBranches/recheck_route_invalid_source_and_chain_fetch_failures
+=== RUN   TestCrosschainConfigUsecase_GapBranches/preflight_route_error_and_per-bridge_route_config_errors
+=== RUN   TestCrosschainConfigUsecase_GapBranches/preflight_ready_row_and_policy_executable
+=== RUN   TestCrosschainConfigUsecase_GapBranches/check_fee_quote_health_client_create_error
+--- PASS: TestCrosschainConfigUsecase_GapBranches (0.00s)
+    --- PASS: TestCrosschainConfigUsecase_GapBranches/overview_with_explicit_dest_and_invalid_inputs (0.00s)
+    --- PASS: TestCrosschainConfigUsecase_GapBranches/recheck_route_invalid_source_and_chain_fetch_failures (0.00s)
+    --- PASS: TestCrosschainConfigUsecase_GapBranches/preflight_route_error_and_per-bridge_route_config_errors (0.00s)
+    --- PASS: TestCrosschainConfigUsecase_GapBranches/preflight_ready_row_and_policy_executable (0.00s)
+    --- PASS: TestCrosschainConfigUsecase_GapBranches/check_fee_quote_health_client_create_error (0.00s)
+=== RUN   TestCrosschainConfigUsecase_DeriveDestinationContractHex
+--- PASS: TestCrosschainConfigUsecase_DeriveDestinationContractHex (0.00s)
+=== RUN   TestCrosschainConfigUsecase_DeriveDestinationContractHex_NotFound
+--- PASS: TestCrosschainConfigUsecase_DeriveDestinationContractHex_NotFound (0.00s)
+=== RUN   TestCrosschainConfigUsecase_DeriveDestinationContractHex_InvalidDestInput
+--- PASS: TestCrosschainConfigUsecase_DeriveDestinationContractHex_InvalidDestInput (0.00s)
+=== RUN   TestCrosschainConfigUsecase_DeriveDestinationContractHex_InvalidContractAddress
+--- PASS: TestCrosschainConfigUsecase_DeriveDestinationContractHex_InvalidContractAddress (0.00s)
+=== RUN   TestCrosschainConfigUsecase_CheckFeeQuoteHealth_Guards
+--- PASS: TestCrosschainConfigUsecase_CheckFeeQuoteHealth_Guards (0.00s)
+=== RUN   TestCrosschainConfigUsecase_EvaluateFeeQuoteHealth_Override
+--- PASS: TestCrosschainConfigUsecase_EvaluateFeeQuoteHealth_Override (0.00s)
+=== RUN   TestCrosschainConfigUsecase_BuildPreflightRow_Ready
+--- PASS: TestCrosschainConfigUsecase_BuildPreflightRow_Ready (0.00s)
+=== RUN   TestCrosschainConfigUsecase_InternalHappyAndAutoFixBranch
+--- PASS: TestCrosschainConfigUsecase_InternalHappyAndAutoFixBranch (0.02s)
+=== RUN   TestBridgeName
+--- PASS: TestBridgeName (0.00s)
+=== RUN   TestAddressToPaddedBytesHex
+--- PASS: TestAddressToPaddedBytesHex (0.00s)
+=== RUN   TestDeriveEvmStateMachineHex
+--- PASS: TestDeriveEvmStateMachineHex (0.00s)
+=== RUN   TestCrosschainConfigUsecase_Overview_GetByIDErrorBranches
+--- PASS: TestCrosschainConfigUsecase_Overview_GetByIDErrorBranches (0.00s)
+=== RUN   TestCrosschainConfigUsecase_Overview_RecheckErrorRowBranch
+--- PASS: TestCrosschainConfigUsecase_Overview_RecheckErrorRowBranch (0.00s)
+=== RUN   TestCrosschainConfigUsecase_Overview_Paths
+--- PASS: TestCrosschainConfigUsecase_Overview_Paths (0.00s)
+=== RUN   TestCrosschainConfigUsecase_Preflight_WithAdapterStub
+--- PASS: TestCrosschainConfigUsecase_Preflight_WithAdapterStub (0.00s)
+=== RUN   TestCrosschainConfigUsecase_AutoFix_WithAdapterStub
+--- PASS: TestCrosschainConfigUsecase_AutoFix_WithAdapterStub (0.00s)
+=== RUN   TestCrosschainConfigUsecase_AutoFix_BranchMatrix
+=== RUN   TestCrosschainConfigUsecase_AutoFix_BranchMatrix/register_adapter_fail
+=== RUN   TestCrosschainConfigUsecase_AutoFix_BranchMatrix/set_default_fail
+=== RUN   TestCrosschainConfigUsecase_AutoFix_BranchMatrix/bridge_type_two_skip_route_config
+--- PASS: TestCrosschainConfigUsecase_AutoFix_BranchMatrix (0.00s)
+    --- PASS: TestCrosschainConfigUsecase_AutoFix_BranchMatrix/register_adapter_fail (0.00s)
+    --- PASS: TestCrosschainConfigUsecase_AutoFix_BranchMatrix/set_default_fail (0.00s)
+    --- PASS: TestCrosschainConfigUsecase_AutoFix_BranchMatrix/bridge_type_two_skip_route_config (0.00s)
+=== RUN   TestCrosschainConfigUsecase_Preflight_ErrorBranches
+=== RUN   TestCrosschainConfigUsecase_Preflight_ErrorBranches/invalid_destination_input
+=== RUN   TestCrosschainConfigUsecase_Preflight_ErrorBranches/source_chain_load_by_id_error
+=== RUN   TestCrosschainConfigUsecase_Preflight_ErrorBranches/destination_chain_load_by_id_error
+=== RUN   TestCrosschainConfigUsecase_Preflight_ErrorBranches/adapter_status_fails_on_second_call
+--- PASS: TestCrosschainConfigUsecase_Preflight_ErrorBranches (0.00s)
+    --- PASS: TestCrosschainConfigUsecase_Preflight_ErrorBranches/invalid_destination_input (0.00s)
+    --- PASS: TestCrosschainConfigUsecase_Preflight_ErrorBranches/source_chain_load_by_id_error (0.00s)
+    --- PASS: TestCrosschainConfigUsecase_Preflight_ErrorBranches/destination_chain_load_by_id_error (0.00s)
+    --- PASS: TestCrosschainConfigUsecase_Preflight_ErrorBranches/adapter_status_fails_on_second_call (0.00s)
+=== RUN   TestCrosschainConfigUsecase_RecheckRoute_IssueMatrix
+=== RUN   TestCrosschainConfigUsecase_RecheckRoute_IssueMatrix/default_hyperbridge_but_not_configured
+=== RUN   TestCrosschainConfigUsecase_RecheckRoute_IssueMatrix/default_ccip_but_not_configured
+=== RUN   TestCrosschainConfigUsecase_RecheckRoute_IssueMatrix/default_layerzero_but_not_configured
+=== RUN   TestCrosschainConfigUsecase_RecheckRoute_IssueMatrix/adapter_not_registered
+--- PASS: TestCrosschainConfigUsecase_RecheckRoute_IssueMatrix (0.00s)
+    --- PASS: TestCrosschainConfigUsecase_RecheckRoute_IssueMatrix/default_hyperbridge_but_not_configured (0.00s)
+    --- PASS: TestCrosschainConfigUsecase_RecheckRoute_IssueMatrix/default_ccip_but_not_configured (0.00s)
+    --- PASS: TestCrosschainConfigUsecase_RecheckRoute_IssueMatrix/default_layerzero_but_not_configured (0.00s)
+    --- PASS: TestCrosschainConfigUsecase_RecheckRoute_IssueMatrix/adapter_not_registered (0.00s)
+=== RUN   TestCrosschainConfigUsecase_Preflight_FeeQuoteFailedBranch
+--- PASS: TestCrosschainConfigUsecase_Preflight_FeeQuoteFailedBranch (0.00s)
+=== RUN   TestCrosschainConfigUsecase_Preflight_DefaultLayerZeroPolicyExecutable
+--- PASS: TestCrosschainConfigUsecase_Preflight_DefaultLayerZeroPolicyExecutable (0.00s)
+=== RUN   TestCrosschainConfigUsecase_Preflight_DefaultCCIPPolicyExecutable
+--- PASS: TestCrosschainConfigUsecase_Preflight_DefaultCCIPPolicyExecutable (0.00s)
+=== RUN   TestCrosschainConfigUsecase_Preflight_DefaultHyperbridgePolicyExecutable
+--- PASS: TestCrosschainConfigUsecase_Preflight_DefaultHyperbridgePolicyExecutable (0.00s)
+=== RUN   TestCrosschainConfigUsecase_Preflight_DefaultReadySetsPolicyExecutable
+--- PASS: TestCrosschainConfigUsecase_Preflight_DefaultReadySetsPolicyExecutable (0.00s)
+=== RUN   TestFormatDecodedRouteErrorForPreflight
+=== PAUSE TestFormatDecodedRouteErrorForPreflight
+=== RUN   TestEVMAdminOpsService_RegisterAndDefault
+--- PASS: TestEVMAdminOpsService_RegisterAndDefault (0.00s)
+=== RUN   TestEVMAdminOpsService_SetHyperbridgeConfig
+=== RUN   TestEVMAdminOpsService_SetHyperbridgeConfig/adapter_not_registered
+=== RUN   TestEVMAdminOpsService_SetHyperbridgeConfig/payload_required
+=== RUN   TestEVMAdminOpsService_SetHyperbridgeConfig/success_and_tx_failure
+--- PASS: TestEVMAdminOpsService_SetHyperbridgeConfig (0.00s)
+    --- PASS: TestEVMAdminOpsService_SetHyperbridgeConfig/adapter_not_registered (0.00s)
+    --- PASS: TestEVMAdminOpsService_SetHyperbridgeConfig/payload_required (0.00s)
+    --- PASS: TestEVMAdminOpsService_SetHyperbridgeConfig/success_and_tx_failure (0.00s)
+=== RUN   TestEVMAdminOpsService_SetCCIPAndLayerZeroConfig
+=== RUN   TestEVMAdminOpsService_SetCCIPAndLayerZeroConfig/ccip_success
+=== RUN   TestEVMAdminOpsService_SetCCIPAndLayerZeroConfig/layerzero_invalid_peer_and_success
+=== RUN   TestEVMAdminOpsService_SetCCIPAndLayerZeroConfig/ccip_adapter_missing_and_payload_required
+=== RUN   TestEVMAdminOpsService_SetCCIPAndLayerZeroConfig/layerzero_adapter_lookup_error_and_partial_payload_error
+=== RUN   TestEVMAdminOpsService_SetCCIPAndLayerZeroConfig/layerzero_options_only_success
+=== RUN   TestEVMAdminOpsService_SetCCIPAndLayerZeroConfig/ccip_selector_tx_error
+=== RUN   TestEVMAdminOpsService_SetCCIPAndLayerZeroConfig/ccip_destination_tx_error
+=== RUN   TestEVMAdminOpsService_SetCCIPAndLayerZeroConfig/layerzero_adapter_missing
+=== RUN   TestEVMAdminOpsService_SetCCIPAndLayerZeroConfig/layerzero_setRoute_tx_error
+=== RUN   TestEVMAdminOpsService_SetCCIPAndLayerZeroConfig/layerzero_options_tx_error
+=== RUN   TestEVMAdminOpsService_SetCCIPAndLayerZeroConfig/layerzero_payload_required
+--- PASS: TestEVMAdminOpsService_SetCCIPAndLayerZeroConfig (0.00s)
+    --- PASS: TestEVMAdminOpsService_SetCCIPAndLayerZeroConfig/ccip_success (0.00s)
+    --- PASS: TestEVMAdminOpsService_SetCCIPAndLayerZeroConfig/layerzero_invalid_peer_and_success (0.00s)
+    --- PASS: TestEVMAdminOpsService_SetCCIPAndLayerZeroConfig/ccip_adapter_missing_and_payload_required (0.00s)
+    --- PASS: TestEVMAdminOpsService_SetCCIPAndLayerZeroConfig/layerzero_adapter_lookup_error_and_partial_payload_error (0.00s)
+    --- PASS: TestEVMAdminOpsService_SetCCIPAndLayerZeroConfig/layerzero_options_only_success (0.00s)
+    --- PASS: TestEVMAdminOpsService_SetCCIPAndLayerZeroConfig/ccip_selector_tx_error (0.00s)
+    --- PASS: TestEVMAdminOpsService_SetCCIPAndLayerZeroConfig/ccip_destination_tx_error (0.00s)
+    --- PASS: TestEVMAdminOpsService_SetCCIPAndLayerZeroConfig/layerzero_adapter_missing (0.00s)
+    --- PASS: TestEVMAdminOpsService_SetCCIPAndLayerZeroConfig/layerzero_setRoute_tx_error (0.00s)
+    --- PASS: TestEVMAdminOpsService_SetCCIPAndLayerZeroConfig/layerzero_options_tx_error (0.00s)
+    --- PASS: TestEVMAdminOpsService_SetCCIPAndLayerZeroConfig/layerzero_payload_required (0.00s)
+=== RUN   TestEVMAdminOpsService_SetHyperbridgeConfig_MoreBranches
+=== RUN   TestEVMAdminOpsService_SetHyperbridgeConfig_MoreBranches/setStateMachine_tx_error
+=== RUN   TestEVMAdminOpsService_SetHyperbridgeConfig_MoreBranches/destination_only_success
+--- PASS: TestEVMAdminOpsService_SetHyperbridgeConfig_MoreBranches (0.00s)
+    --- PASS: TestEVMAdminOpsService_SetHyperbridgeConfig_MoreBranches/setStateMachine_tx_error (0.00s)
+    --- PASS: TestEVMAdminOpsService_SetHyperbridgeConfig_MoreBranches/destination_only_success (0.00s)
+=== RUN   TestOnchainAdapterUsecase_CallHelpers_CallViewErrorBranches
+--- PASS: TestOnchainAdapterUsecase_CallHelpers_CallViewErrorBranches (0.00s)
+=== RUN   TestOnchainAdapterUsecase_CallHelpers_DecodeErrorMatrix
+--- PASS: TestOnchainAdapterUsecase_CallHelpers_DecodeErrorMatrix (0.01s)
+=== RUN   TestOnchainAdapterUsecase_CallHelpers_PackError
+--- PASS: TestOnchainAdapterUsecase_CallHelpers_PackError (0.00s)
+=== RUN   TestOnchainAdapterUsecase_CallHelpers_PackErrorByEmptyABI
+--- PASS: TestOnchainAdapterUsecase_CallHelpers_PackErrorByEmptyABI (0.00s)
+=== RUN   TestOnchainAdapterUsecase_CallHelpers_Success
+--- PASS: TestOnchainAdapterUsecase_CallHelpers_Success (0.00s)
+=== RUN   TestOnchainAdapterUsecase_CallHelpers_DecodeError
+--- PASS: TestOnchainAdapterUsecase_CallHelpers_DecodeError (0.00s)
+=== RUN   TestOnchainAdapterUsecase_CallHelpers_InvalidReturnTypeBranches
+--- PASS: TestOnchainAdapterUsecase_CallHelpers_InvalidReturnTypeBranches (0.00s)
+=== RUN   TestOnchainAdapterUsecase_CallHelpers_UnpackErrorBranches
+--- PASS: TestOnchainAdapterUsecase_CallHelpers_UnpackErrorBranches (0.01s)
+=== RUN   TestCallTypedView_MoreSuccessTypes
+=== RUN   TestCallTypedView_MoreSuccessTypes/uint8_success
+=== RUN   TestCallTypedView_MoreSuccessTypes/address_success
+=== RUN   TestCallTypedView_MoreSuccessTypes/bytes_success
+--- PASS: TestCallTypedView_MoreSuccessTypes (0.00s)
+    --- PASS: TestCallTypedView_MoreSuccessTypes/uint8_success (0.00s)
+    --- PASS: TestCallTypedView_MoreSuccessTypes/address_success (0.00s)
+    --- PASS: TestCallTypedView_MoreSuccessTypes/bytes_success (0.00s)
+=== RUN   TestCallTypedView_TypeMismatchError
+--- PASS: TestCallTypedView_TypeMismatchError (0.00s)
+=== RUN   TestOnchainAdapterUsecase_ResolveEVMContextCore_SourceChainGetByIDError
+--- PASS: TestOnchainAdapterUsecase_ResolveEVMContextCore_SourceChainGetByIDError (0.00s)
+=== RUN   TestOnchainAdapterUsecase_CallTypedView_InvalidReturnTypeDirect
+--- PASS: TestOnchainAdapterUsecase_CallTypedView_InvalidReturnTypeDirect (0.00s)
+=== RUN   TestOnchainAdapterUsecase_CallTypedView_PackAndDecodeError
+=== RUN   TestOnchainAdapterUsecase_CallTypedView_PackAndDecodeError/pack_error
+=== RUN   TestOnchainAdapterUsecase_CallTypedView_PackAndDecodeError/decode_error
+=== RUN   TestOnchainAdapterUsecase_CallTypedView_PackAndDecodeError/unpack_error_with_non-empty_payload
+=== RUN   TestOnchainAdapterUsecase_CallTypedView_PackAndDecodeError/call_error
+--- PASS: TestOnchainAdapterUsecase_CallTypedView_PackAndDecodeError (0.00s)
+    --- PASS: TestOnchainAdapterUsecase_CallTypedView_PackAndDecodeError/pack_error (0.00s)
+    --- PASS: TestOnchainAdapterUsecase_CallTypedView_PackAndDecodeError/decode_error (0.00s)
+    --- PASS: TestOnchainAdapterUsecase_CallTypedView_PackAndDecodeError/unpack_error_with_non-empty_payload (0.00s)
+    --- PASS: TestOnchainAdapterUsecase_CallTypedView_PackAndDecodeError/call_error (0.00s)
+=== RUN   TestOnchainAdapterUsecase_CallTypedView_Success
+--- PASS: TestOnchainAdapterUsecase_CallTypedView_Success (0.00s)
+=== RUN   TestOnchainAdapterUsecase_CallTypedView_EmptyOutputsBranch
+--- PASS: TestOnchainAdapterUsecase_CallTypedView_EmptyOutputsBranch (0.00s)
+=== RUN   TestOnchainAdapterUsecase_ParseHexToBytes32_WithoutPrefix
+--- PASS: TestOnchainAdapterUsecase_ParseHexToBytes32_WithoutPrefix (0.00s)
+=== RUN   TestOnchainAdapterUsecase_ExecuteOnchainTx_Errors
+=== RUN   TestOnchainAdapterUsecase_ExecuteOnchainTx_Errors/dial_error
+=== RUN   TestOnchainAdapterUsecase_ExecuteOnchainTx_Errors/invalid_owner_private_key
+=== RUN   TestOnchainAdapterUsecase_ExecuteOnchainTx_Errors/chain_id_rpc_error
+--- PASS: TestOnchainAdapterUsecase_ExecuteOnchainTx_Errors (0.00s)
+    --- PASS: TestOnchainAdapterUsecase_ExecuteOnchainTx_Errors/dial_error (0.00s)
+    --- PASS: TestOnchainAdapterUsecase_ExecuteOnchainTx_Errors/invalid_owner_private_key (0.00s)
+    --- PASS: TestOnchainAdapterUsecase_ExecuteOnchainTx_Errors/chain_id_rpc_error (0.00s)
+=== RUN   TestOnchainAdapterUsecase_GetStatus_WithInjectedClient
+--- PASS: TestOnchainAdapterUsecase_GetStatus_WithInjectedClient (0.00s)
+=== RUN   TestOnchainAdapterUsecase_GetStatus_DefaultBridgeError
+--- PASS: TestOnchainAdapterUsecase_GetStatus_DefaultBridgeError (0.00s)
+=== RUN   TestResolveRPCURL
+--- PASS: TestResolveRPCURL (0.00s)
+=== RUN   TestParseHexToBytes32
+--- PASS: TestParseHexToBytes32 (0.00s)
+=== RUN   TestMustParseABI
+--- PASS: TestMustParseABI (0.00s)
+=== RUN   TestOnchainAdapterUsecase_RegisterAdapter_InvalidAddress
+--- PASS: TestOnchainAdapterUsecase_RegisterAdapter_InvalidAddress (0.00s)
+=== RUN   TestOnchainAdapterUsecase_SendTx_OwnerKeyMissing
+--- PASS: TestOnchainAdapterUsecase_SendTx_OwnerKeyMissing (0.00s)
+=== RUN   TestOnchainAdapterUsecase_New
+--- PASS: TestOnchainAdapterUsecase_New (0.00s)
+=== RUN   TestOnchainAdapterUsecase_SendTx_Branches
+=== RUN   TestOnchainAdapterUsecase_SendTx_Branches/source_chain_not_found
+=== RUN   TestOnchainAdapterUsecase_SendTx_Branches/no_active_rpc
+=== RUN   TestOnchainAdapterUsecase_SendTx_Branches/invalid_owner_private_key
+=== RUN   TestOnchainAdapterUsecase_SendTx_Branches/chain_id_rpc_error
+=== RUN   TestOnchainAdapterUsecase_SendTx_Branches/transact_method_missing
+=== RUN   TestOnchainAdapterUsecase_SendTx_Branches/transact_hook_success
+=== RUN   TestOnchainAdapterUsecase_SendTx_Branches/executeOnchainTx_hook_branches
+--- PASS: TestOnchainAdapterUsecase_SendTx_Branches (0.00s)
+    --- PASS: TestOnchainAdapterUsecase_SendTx_Branches/source_chain_not_found (0.00s)
+    --- PASS: TestOnchainAdapterUsecase_SendTx_Branches/no_active_rpc (0.00s)
+    --- PASS: TestOnchainAdapterUsecase_SendTx_Branches/invalid_owner_private_key (0.00s)
+    --- PASS: TestOnchainAdapterUsecase_SendTx_Branches/chain_id_rpc_error (0.00s)
+    --- PASS: TestOnchainAdapterUsecase_SendTx_Branches/transact_method_missing (0.00s)
+    --- PASS: TestOnchainAdapterUsecase_SendTx_Branches/transact_hook_success (0.00s)
+    --- PASS: TestOnchainAdapterUsecase_SendTx_Branches/executeOnchainTx_hook_branches (0.00s)
+=== RUN   TestOnchainAdapterUsecase_AdminGetAdapterClosureBranches
+=== RUN   TestOnchainAdapterUsecase_AdminGetAdapterClosureBranches/client_factory_missing
+=== RUN   TestOnchainAdapterUsecase_AdminGetAdapterClosureBranches/source_chain_not_found
+=== RUN   TestOnchainAdapterUsecase_AdminGetAdapterClosureBranches/no_active_rpc
+=== RUN   TestOnchainAdapterUsecase_AdminGetAdapterClosureBranches/get_evm_client_failed
+=== RUN   TestOnchainAdapterUsecase_AdminGetAdapterClosureBranches/callGetAdapter_decode_failed
+=== RUN   TestOnchainAdapterUsecase_AdminGetAdapterClosureBranches/success
+--- PASS: TestOnchainAdapterUsecase_AdminGetAdapterClosureBranches (0.00s)
+    --- PASS: TestOnchainAdapterUsecase_AdminGetAdapterClosureBranches/client_factory_missing (0.00s)
+    --- PASS: TestOnchainAdapterUsecase_AdminGetAdapterClosureBranches/source_chain_not_found (0.00s)
+    --- PASS: TestOnchainAdapterUsecase_AdminGetAdapterClosureBranches/no_active_rpc (0.00s)
+    --- PASS: TestOnchainAdapterUsecase_AdminGetAdapterClosureBranches/get_evm_client_failed (0.00s)
+    --- PASS: TestOnchainAdapterUsecase_AdminGetAdapterClosureBranches/callGetAdapter_decode_failed (0.00s)
+    --- PASS: TestOnchainAdapterUsecase_AdminGetAdapterClosureBranches/success (0.00s)
+=== RUN   TestPaymentRequestUsecase_BuildTransactionData_Branches
+=== RUN   TestPaymentRequestUsecase_BuildTransactionData_Branches/unknown_chain_type_keeps_hex_and_base58_empty
+=== RUN   TestPaymentRequestUsecase_BuildTransactionData_Branches/solana_chain_with_contract_fills_base58_and_program_fields
+--- PASS: TestPaymentRequestUsecase_BuildTransactionData_Branches (0.00s)
+    --- PASS: TestPaymentRequestUsecase_BuildTransactionData_Branches/unknown_chain_type_keeps_hex_and_base58_empty (0.00s)
+    --- PASS: TestPaymentRequestUsecase_BuildTransactionData_Branches/solana_chain_with_contract_fills_base58_and_program_fields (0.00s)
+=== RUN   TestPaymentRequestUsecase_BuildSvmTransactionBase58
+--- PASS: TestPaymentRequestUsecase_BuildSvmTransactionBase58 (0.00s)
+=== RUN   TestPaymentUsecase_GetBridgeFeeQuote_ErrorBranches
+=== RUN   TestPaymentUsecase_GetBridgeFeeQuote_ErrorBranches/invalid_source
+=== RUN   TestPaymentUsecase_GetBridgeFeeQuote_ErrorBranches/invalid_destination
+=== RUN   TestPaymentUsecase_GetBridgeFeeQuote_ErrorBranches/router_missing
+=== RUN   TestPaymentUsecase_GetBridgeFeeQuote_ErrorBranches/no_rpc_available
+=== RUN   TestPaymentUsecase_GetBridgeFeeQuote_ErrorBranches/all_rpc_failed
+=== RUN   TestPaymentUsecase_GetBridgeFeeQuote_ErrorBranches/source_chain_lookup_by_id_failed
+=== RUN   TestPaymentUsecase_GetBridgeFeeQuote_ErrorBranches/all_bridge_quote_invalid
+--- PASS: TestPaymentUsecase_GetBridgeFeeQuote_ErrorBranches (0.00s)
+    --- PASS: TestPaymentUsecase_GetBridgeFeeQuote_ErrorBranches/invalid_source (0.00s)
+    --- PASS: TestPaymentUsecase_GetBridgeFeeQuote_ErrorBranches/invalid_destination (0.00s)
+    --- PASS: TestPaymentUsecase_GetBridgeFeeQuote_ErrorBranches/router_missing (0.00s)
+    --- PASS: TestPaymentUsecase_GetBridgeFeeQuote_ErrorBranches/no_rpc_available (0.00s)
+    --- PASS: TestPaymentUsecase_GetBridgeFeeQuote_ErrorBranches/all_rpc_failed (0.00s)
+    --- PASS: TestPaymentUsecase_GetBridgeFeeQuote_ErrorBranches/source_chain_lookup_by_id_failed (0.00s)
+    --- PASS: TestPaymentUsecase_GetBridgeFeeQuote_ErrorBranches/all_bridge_quote_invalid (0.00s)
+=== RUN   TestPaymentUsecase_CalculateFees_ConfigAndFallback
+=== RUN   TestPaymentUsecase_CalculateFees_ConfigAndFallback/apply_min_fee_after_discount
+=== RUN   TestPaymentUsecase_CalculateFees_ConfigAndFallback/cross-chain_quote_failure_uses_flat_bridge_fee_fallback
+=== RUN   TestPaymentUsecase_CalculateFees_ConfigAndFallback/max_fee_clamp_is_applied
+=== RUN   TestPaymentUsecase_CalculateFees_ConfigAndFallback/invalid_config_numbers_fallback_to_defaults
+=== RUN   TestPaymentUsecase_CalculateFees_ConfigAndFallback/cross-chain_quote_success_uses_quoted_bridge_fee
+--- PASS: TestPaymentUsecase_CalculateFees_ConfigAndFallback (0.00s)
+    --- PASS: TestPaymentUsecase_CalculateFees_ConfigAndFallback/apply_min_fee_after_discount (0.00s)
+    --- PASS: TestPaymentUsecase_CalculateFees_ConfigAndFallback/cross-chain_quote_failure_uses_flat_bridge_fee_fallback (0.00s)
+    --- PASS: TestPaymentUsecase_CalculateFees_ConfigAndFallback/max_fee_clamp_is_applied (0.00s)
+    --- PASS: TestPaymentUsecase_CalculateFees_ConfigAndFallback/invalid_config_numbers_fallback_to_defaults (0.00s)
+    --- PASS: TestPaymentUsecase_CalculateFees_ConfigAndFallback/cross-chain_quote_success_uses_quoted_bridge_fee (0.00s)
+=== RUN   TestPaymentUsecase_CreatePayment_ValidationAndResolutionErrors
+--- PASS: TestPaymentUsecase_CreatePayment_ValidationAndResolutionErrors (0.00s)
+=== RUN   TestPaymentUsecase_CreatePayment_TokenAndAmountErrors
+Warning: Active Gateway contract not found for chain eip155:8453: resource not found
+Warning: Active Gateway contract not found for chain eip155:8453: resource not found
+Warning: Active Gateway contract not found for chain eip155:8453: resource not found
+Warning: Active Gateway contract not found for chain eip155:8453: resource not found
+--- PASS: TestPaymentUsecase_CreatePayment_TokenAndAmountErrors (0.00s)
+=== RUN   TestPaymentUsecase_CreatePayment_UOWAndEventBranches
+Warning: Active Gateway contract not found for chain eip155:8453: resource not found
+Warning: Active Gateway contract not found for chain eip155:8453: resource not found
+Warning: failed to create payment event for payment 019c6e4e-e5cf-7138-9e3f-16518fc46692: event insert failed
+--- PASS: TestPaymentUsecase_CreatePayment_UOWAndEventBranches (0.00s)
+=== RUN   TestPaymentUsecase_CreatePayment_ChainLookupAndPersistenceBranches
+=== RUN   TestPaymentUsecase_CreatePayment_ChainLookupAndPersistenceBranches/invalid_dest_chain_resolve
+=== RUN   TestPaymentUsecase_CreatePayment_ChainLookupAndPersistenceBranches/error_fetching_source_chain_by_id
+=== RUN   TestPaymentUsecase_CreatePayment_ChainLookupAndPersistenceBranches/error_fetching_dest_chain_by_id
+=== RUN   TestPaymentUsecase_CreatePayment_ChainLookupAndPersistenceBranches/payment_repo_create_error_inside_uow
+Warning: Active Gateway contract not found for chain eip155:8453: resource not found
+=== RUN   TestPaymentUsecase_CreatePayment_ChainLookupAndPersistenceBranches/build_transaction_data_error_after_persistence
+--- PASS: TestPaymentUsecase_CreatePayment_ChainLookupAndPersistenceBranches (0.00s)
+    --- PASS: TestPaymentUsecase_CreatePayment_ChainLookupAndPersistenceBranches/invalid_dest_chain_resolve (0.00s)
+    --- PASS: TestPaymentUsecase_CreatePayment_ChainLookupAndPersistenceBranches/error_fetching_source_chain_by_id (0.00s)
+    --- PASS: TestPaymentUsecase_CreatePayment_ChainLookupAndPersistenceBranches/error_fetching_dest_chain_by_id (0.00s)
+    --- PASS: TestPaymentUsecase_CreatePayment_ChainLookupAndPersistenceBranches/payment_repo_create_error_inside_uow (0.00s)
+    --- PASS: TestPaymentUsecase_CreatePayment_ChainLookupAndPersistenceBranches/build_transaction_data_error_after_persistence (0.00s)
+=== RUN   TestPaymentUsecase_Helpers
+--- PASS: TestPaymentUsecase_Helpers (0.00s)
+=== RUN   TestPaymentUsecase_BuildTransactionPayloadHelpers
+--- PASS: TestPaymentUsecase_BuildTransactionPayloadHelpers (0.00s)
+=== RUN   TestPaymentUsecase_BuildHex_HookErrorBranches
+=== RUN   TestPaymentUsecase_BuildHex_HookErrorBranches/approve_hex_new_type_error
+=== RUN   TestPaymentUsecase_BuildHex_HookErrorBranches/approve_hex_pack_error
+=== RUN   TestPaymentUsecase_BuildHex_HookErrorBranches/approve_hex_second_new_type_error
+=== RUN   TestPaymentUsecase_BuildHex_HookErrorBranches/evm_payment_hex_new_type_error
+=== RUN   TestPaymentUsecase_BuildHex_HookErrorBranches/evm_payment_hex_second_and_third_new_type_errors
+=== RUN   TestPaymentUsecase_BuildHex_HookErrorBranches/evm_payment_hex_receiver_pack_fail_fallback_and_final_pack_fail
+--- PASS: TestPaymentUsecase_BuildHex_HookErrorBranches (0.00s)
+    --- PASS: TestPaymentUsecase_BuildHex_HookErrorBranches/approve_hex_new_type_error (0.00s)
+    --- PASS: TestPaymentUsecase_BuildHex_HookErrorBranches/approve_hex_pack_error (0.00s)
+    --- PASS: TestPaymentUsecase_BuildHex_HookErrorBranches/approve_hex_second_new_type_error (0.00s)
+    --- PASS: TestPaymentUsecase_BuildHex_HookErrorBranches/evm_payment_hex_new_type_error (0.00s)
+    --- PASS: TestPaymentUsecase_BuildHex_HookErrorBranches/evm_payment_hex_second_and_third_new_type_errors (0.00s)
+    --- PASS: TestPaymentUsecase_BuildHex_HookErrorBranches/evm_payment_hex_receiver_pack_fail_fallback_and_final_pack_fail (0.00s)
+=== RUN   TestBuildBridgeOrderFromPolicy_Strict
+--- PASS: TestBuildBridgeOrderFromPolicy_Strict (0.00s)
+=== RUN   TestBuildBridgeOrderFromPolicy_AutoFallbackDedupAndFilter
+--- PASS: TestBuildBridgeOrderFromPolicy_AutoFallbackDedupAndFilter (0.00s)
+=== RUN   TestBuildBridgeOrderFromPolicy_DefaultFallbackCases
+--- PASS: TestBuildBridgeOrderFromPolicy_DefaultFallbackCases (0.00s)
+=== RUN   TestPaymentUsecase_ResolveVaultAddress_EmptyGatewayBranch
+--- PASS: TestPaymentUsecase_ResolveVaultAddress_EmptyGatewayBranch (0.00s)
+=== RUN   TestPaymentUsecase_CalculateOnchainApprovalAmount_MoreErrorBranches
+=== RUN   TestPaymentUsecase_CalculateOnchainApprovalAmount_MoreErrorBranches/fixed_fee_call_error
+=== RUN   TestPaymentUsecase_CalculateOnchainApprovalAmount_MoreErrorBranches/fee_bps_call_error
+--- PASS: TestPaymentUsecase_CalculateOnchainApprovalAmount_MoreErrorBranches (0.00s)
+    --- PASS: TestPaymentUsecase_CalculateOnchainApprovalAmount_MoreErrorBranches/fixed_fee_call_error (0.00s)
+    --- PASS: TestPaymentUsecase_CalculateOnchainApprovalAmount_MoreErrorBranches/fee_bps_call_error (0.00s)
+=== RUN   TestPaymentUsecase_GetBridgeFeeQuote_FirstConnectedRPCCallError
+--- PASS: TestPaymentUsecase_GetBridgeFeeQuote_FirstConnectedRPCCallError (0.00s)
+=== RUN   TestPaymentUsecase_CalculateOnchainApprovalAmount_QuoteSuccess
+--- PASS: TestPaymentUsecase_CalculateOnchainApprovalAmount_QuoteSuccess (0.00s)
+=== RUN   TestPaymentUsecase_CalculateOnchainApprovalAmount_FallbackFeePath
+--- PASS: TestPaymentUsecase_CalculateOnchainApprovalAmount_FallbackFeePath (0.00s)
+=== RUN   TestPaymentUsecase_ResolveVaultAddressForApproval_FromGatewayView
+--- PASS: TestPaymentUsecase_ResolveVaultAddressForApproval_FromGatewayView (0.00s)
+=== RUN   TestPaymentUsecase_ResolveVaultAddressForApproval_FallbackBranches
+=== RUN   TestPaymentUsecase_ResolveVaultAddressForApproval_FallbackBranches/chain_repo_miss
+=== RUN   TestPaymentUsecase_ResolveVaultAddressForApproval_FallbackBranches/fallback_to_active_rpc_list_with_bad_url
+=== RUN   TestPaymentUsecase_ResolveVaultAddressForApproval_FallbackBranches/short_call_output
+--- PASS: TestPaymentUsecase_ResolveVaultAddressForApproval_FallbackBranches (0.00s)
+    --- PASS: TestPaymentUsecase_ResolveVaultAddressForApproval_FallbackBranches/chain_repo_miss (0.00s)
+    --- PASS: TestPaymentUsecase_ResolveVaultAddressForApproval_FallbackBranches/fallback_to_active_rpc_list_with_bad_url (0.00s)
+    --- PASS: TestPaymentUsecase_ResolveVaultAddressForApproval_FallbackBranches/short_call_output (0.00s)
+=== RUN   TestPaymentUsecase_CalculateOnchainApprovalAmount_ErrorBranches
+=== RUN   TestPaymentUsecase_CalculateOnchainApprovalAmount_ErrorBranches/invalid_payment_input
+=== RUN   TestPaymentUsecase_CalculateOnchainApprovalAmount_ErrorBranches/invalid_source_amount
+=== RUN   TestPaymentUsecase_CalculateOnchainApprovalAmount_ErrorBranches/source_chain_missing
+=== RUN   TestPaymentUsecase_CalculateOnchainApprovalAmount_ErrorBranches/no_active_rpc
+=== RUN   TestPaymentUsecase_CalculateOnchainApprovalAmount_ErrorBranches/invalid_fixed_fee_decode
+=== RUN   TestPaymentUsecase_CalculateOnchainApprovalAmount_ErrorBranches/invalid_fee_bps_decode
+=== RUN   TestPaymentUsecase_CalculateOnchainApprovalAmount_ErrorBranches/fallback_on_invalid_total_charged_keeps_amount
+--- PASS: TestPaymentUsecase_CalculateOnchainApprovalAmount_ErrorBranches (0.00s)
+    --- PASS: TestPaymentUsecase_CalculateOnchainApprovalAmount_ErrorBranches/invalid_payment_input (0.00s)
+    --- PASS: TestPaymentUsecase_CalculateOnchainApprovalAmount_ErrorBranches/invalid_source_amount (0.00s)
+    --- PASS: TestPaymentUsecase_CalculateOnchainApprovalAmount_ErrorBranches/source_chain_missing (0.00s)
+    --- PASS: TestPaymentUsecase_CalculateOnchainApprovalAmount_ErrorBranches/no_active_rpc (0.00s)
+    --- PASS: TestPaymentUsecase_CalculateOnchainApprovalAmount_ErrorBranches/invalid_fixed_fee_decode (0.00s)
+    --- PASS: TestPaymentUsecase_CalculateOnchainApprovalAmount_ErrorBranches/invalid_fee_bps_decode (0.00s)
+    --- PASS: TestPaymentUsecase_CalculateOnchainApprovalAmount_ErrorBranches/fallback_on_invalid_total_charged_keeps_amount (0.00s)
+=== RUN   TestPaymentUsecase_CalculateOnchainApprovalAmount_MockClientBranches
+=== RUN   TestPaymentUsecase_CalculateOnchainApprovalAmount_MockClientBranches/quote_lower_than_totalCharged_uses_totalCharged
+=== RUN   TestPaymentUsecase_CalculateOnchainApprovalAmount_MockClientBranches/fixed_fee_call_error
+=== RUN   TestPaymentUsecase_CalculateOnchainApprovalAmount_MockClientBranches/fee_bps_call_error
+=== RUN   TestPaymentUsecase_CalculateOnchainApprovalAmount_MockClientBranches/fallback_success_percentage_path
+=== RUN   TestPaymentUsecase_CalculateOnchainApprovalAmount_MockClientBranches/quote_call_error_then_fallback_succeeds
+=== RUN   TestPaymentUsecase_CalculateOnchainApprovalAmount_MockClientBranches/totalCharged_parse_fallback_and_RPC_list_resolution
+=== RUN   TestPaymentUsecase_CalculateOnchainApprovalAmount_MockClientBranches/decode_FIXED_BASE_FEE_failed
+=== RUN   TestPaymentUsecase_CalculateOnchainApprovalAmount_MockClientBranches/decode_FEE_RATE_BPS_failed
+--- PASS: TestPaymentUsecase_CalculateOnchainApprovalAmount_MockClientBranches (0.00s)
+    --- PASS: TestPaymentUsecase_CalculateOnchainApprovalAmount_MockClientBranches/quote_lower_than_totalCharged_uses_totalCharged (0.00s)
+    --- PASS: TestPaymentUsecase_CalculateOnchainApprovalAmount_MockClientBranches/fixed_fee_call_error (0.00s)
+    --- PASS: TestPaymentUsecase_CalculateOnchainApprovalAmount_MockClientBranches/fee_bps_call_error (0.00s)
+    --- PASS: TestPaymentUsecase_CalculateOnchainApprovalAmount_MockClientBranches/fallback_success_percentage_path (0.00s)
+    --- PASS: TestPaymentUsecase_CalculateOnchainApprovalAmount_MockClientBranches/quote_call_error_then_fallback_succeeds (0.00s)
+    --- PASS: TestPaymentUsecase_CalculateOnchainApprovalAmount_MockClientBranches/totalCharged_parse_fallback_and_RPC_list_resolution (0.00s)
+    --- PASS: TestPaymentUsecase_CalculateOnchainApprovalAmount_MockClientBranches/decode_FIXED_BASE_FEE_failed (0.00s)
+    --- PASS: TestPaymentUsecase_CalculateOnchainApprovalAmount_MockClientBranches/decode_FEE_RATE_BPS_failed (0.00s)
+=== RUN   TestPaymentUsecase_QuoteBridgeFeeByType_SuccessAndEmpty
+=== RUN   TestPaymentUsecase_QuoteBridgeFeeByType_SuccessAndEmpty/success
+=== RUN   TestPaymentUsecase_QuoteBridgeFeeByType_SuccessAndEmpty/empty_result
+--- PASS: TestPaymentUsecase_QuoteBridgeFeeByType_SuccessAndEmpty (0.00s)
+    --- PASS: TestPaymentUsecase_QuoteBridgeFeeByType_SuccessAndEmpty/success (0.00s)
+    --- PASS: TestPaymentUsecase_QuoteBridgeFeeByType_SuccessAndEmpty/empty_result (0.00s)
+=== RUN   TestPaymentUsecase_QuoteBridgeFeeByType_CallErrorRPCResponse
+--- PASS: TestPaymentUsecase_QuoteBridgeFeeByType_CallErrorRPCResponse (0.00s)
+=== RUN   TestPaymentUsecase_QuoteBridgeFeeByType_CallErrorRPCResponse_DecodedRevert
+--- PASS: TestPaymentUsecase_QuoteBridgeFeeByType_CallErrorRPCResponse_DecodedRevert (0.00s)
+=== RUN   TestPaymentUsecase_QuoteBridgeFeeByType_PackErrorAndExplicitEmptyResult
+=== RUN   TestPaymentUsecase_QuoteBridgeFeeByType_PackErrorAndExplicitEmptyResult/nil_amount_panics_in_abi_pack_path
+=== RUN   TestPaymentUsecase_QuoteBridgeFeeByType_PackErrorAndExplicitEmptyResult/empty_result_from_callview_hook
+=== RUN   TestPaymentUsecase_QuoteBridgeFeeByType_PackErrorAndExplicitEmptyResult/abi_type_construction_error
+=== RUN   TestPaymentUsecase_QuoteBridgeFeeByType_PackErrorAndExplicitEmptyResult/abi_string_type_construction_error
+=== RUN   TestPaymentUsecase_QuoteBridgeFeeByType_PackErrorAndExplicitEmptyResult/abi_uint8_type_construction_error
+=== RUN   TestPaymentUsecase_QuoteBridgeFeeByType_PackErrorAndExplicitEmptyResult/pack_error
+--- PASS: TestPaymentUsecase_QuoteBridgeFeeByType_PackErrorAndExplicitEmptyResult (0.00s)
+    --- PASS: TestPaymentUsecase_QuoteBridgeFeeByType_PackErrorAndExplicitEmptyResult/nil_amount_panics_in_abi_pack_path (0.00s)
+    --- PASS: TestPaymentUsecase_QuoteBridgeFeeByType_PackErrorAndExplicitEmptyResult/empty_result_from_callview_hook (0.00s)
+    --- PASS: TestPaymentUsecase_QuoteBridgeFeeByType_PackErrorAndExplicitEmptyResult/abi_type_construction_error (0.00s)
+    --- PASS: TestPaymentUsecase_QuoteBridgeFeeByType_PackErrorAndExplicitEmptyResult/abi_string_type_construction_error (0.00s)
+    --- PASS: TestPaymentUsecase_QuoteBridgeFeeByType_PackErrorAndExplicitEmptyResult/abi_uint8_type_construction_error (0.00s)
+    --- PASS: TestPaymentUsecase_QuoteBridgeFeeByType_PackErrorAndExplicitEmptyResult/pack_error (0.00s)
+=== RUN   TestPaymentUsecase_GetBridgeFeeQuote_UsesFallbackOrder
+    payment_usecase_quote_success_internal_test.go:415: 
+        	Error Trace:	/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/usecases/payment_usecase_quote_success_internal_test.go:415
+        	Error:      	Received unexpected error:
+        	            	empty result from quotePaymentFee
+        	Test:       	TestPaymentUsecase_GetBridgeFeeQuote_UsesFallbackOrder
+--- FAIL: TestPaymentUsecase_GetBridgeFeeQuote_UsesFallbackOrder (0.00s)
+=== RUN   TestPaymentUsecase_ResolveVaultAddressForApproval_MoreBranches
+=== RUN   TestPaymentUsecase_ResolveVaultAddressForApproval_MoreBranches/contract_repo_returns_nil,nil_then_chain_nil
+=== RUN   TestPaymentUsecase_ResolveVaultAddressForApproval_MoreBranches/no_active_rpc_but_fallback_any_rpc_url_works_path
+=== RUN   TestPaymentUsecase_ResolveVaultAddressForApproval_MoreBranches/active_rpc_mock_client_returns_padded_vault_address
+=== RUN   TestPaymentUsecase_ResolveVaultAddressForApproval_MoreBranches/gateway_empty_short-circuit_when_no_vault_configured
+=== RUN   TestPaymentUsecase_ResolveVaultAddressForApproval_MoreBranches/call_view_error_returns_empty
+=== RUN   TestPaymentUsecase_ResolveVaultAddressForApproval_MoreBranches/no_rpc_available_returns_empty
+--- PASS: TestPaymentUsecase_ResolveVaultAddressForApproval_MoreBranches (0.00s)
+    --- PASS: TestPaymentUsecase_ResolveVaultAddressForApproval_MoreBranches/contract_repo_returns_nil,nil_then_chain_nil (0.00s)
+    --- PASS: TestPaymentUsecase_ResolveVaultAddressForApproval_MoreBranches/no_active_rpc_but_fallback_any_rpc_url_works_path (0.00s)
+    --- PASS: TestPaymentUsecase_ResolveVaultAddressForApproval_MoreBranches/active_rpc_mock_client_returns_padded_vault_address (0.00s)
+    --- PASS: TestPaymentUsecase_ResolveVaultAddressForApproval_MoreBranches/gateway_empty_short-circuit_when_no_vault_configured (0.00s)
+    --- PASS: TestPaymentUsecase_ResolveVaultAddressForApproval_MoreBranches/call_view_error_returns_empty (0.00s)
+    --- PASS: TestPaymentUsecase_ResolveVaultAddressForApproval_MoreBranches/no_rpc_available_returns_empty (0.00s)
+=== RUN   TestPaymentUsecase_DecideBridge_Priority
+=== RUN   TestPaymentUsecase_DecideBridge_Priority/route_policy_has_highest_priority
+=== RUN   TestPaymentUsecase_DecideBridge_Priority/bridge_config_used_when_policy_missing
+=== RUN   TestPaymentUsecase_DecideBridge_Priority/fallback_deterministic_selection
+--- PASS: TestPaymentUsecase_DecideBridge_Priority (0.00s)
+    --- PASS: TestPaymentUsecase_DecideBridge_Priority/route_policy_has_highest_priority (0.00s)
+    --- PASS: TestPaymentUsecase_DecideBridge_Priority/bridge_config_used_when_policy_missing (0.00s)
+    --- PASS: TestPaymentUsecase_DecideBridge_Priority/fallback_deterministic_selection (0.00s)
+=== RUN   TestPaymentUsecase_ResolveBridgeOrder_WithPolicy
+--- PASS: TestPaymentUsecase_ResolveBridgeOrder_WithPolicy (0.00s)
+=== RUN   TestPaymentUsecase_ResolveToken_Branches
+=== RUN   TestPaymentUsecase_ResolveToken_Branches/native_token_success
+=== RUN   TestPaymentUsecase_ResolveToken_Branches/native_token_not_found
+=== RUN   TestPaymentUsecase_ResolveToken_Branches/erc20_address_success
+=== RUN   TestPaymentUsecase_ResolveToken_Branches/erc20_address_not_found
+--- PASS: TestPaymentUsecase_ResolveToken_Branches (0.00s)
+    --- PASS: TestPaymentUsecase_ResolveToken_Branches/native_token_success (0.00s)
+    --- PASS: TestPaymentUsecase_ResolveToken_Branches/native_token_not_found (0.00s)
+    --- PASS: TestPaymentUsecase_ResolveToken_Branches/erc20_address_success (0.00s)
+    --- PASS: TestPaymentUsecase_ResolveToken_Branches/erc20_address_not_found (0.00s)
+=== RUN   TestPaymentUsecase_SelectBridge_Branches
+=== RUN   TestPaymentUsecase_SelectBridge_Branches/evm_to_evm_selects_ccip
+=== RUN   TestPaymentUsecase_SelectBridge_Branches/solana_to_evm_selects_hyperlane
+=== RUN   TestPaymentUsecase_SelectBridge_Branches/evm_to_solana_selects_hyperlane
+=== RUN   TestPaymentUsecase_SelectBridge_Branches/non-evm_non-solana_falls_back_to_hyperbridge
+--- PASS: TestPaymentUsecase_SelectBridge_Branches (0.00s)
+    --- PASS: TestPaymentUsecase_SelectBridge_Branches/evm_to_evm_selects_ccip (0.00s)
+    --- PASS: TestPaymentUsecase_SelectBridge_Branches/solana_to_evm_selects_hyperlane (0.00s)
+    --- PASS: TestPaymentUsecase_SelectBridge_Branches/evm_to_solana_selects_hyperlane (0.00s)
+    --- PASS: TestPaymentUsecase_SelectBridge_Branches/non-evm_non-solana_falls_back_to_hyperbridge (0.00s)
+=== RUN   TestPaymentUsecase_BuildTransactionData_Branches
+=== RUN   TestPaymentUsecase_BuildTransactionData_Branches/contract_nil
+=== RUN   TestPaymentUsecase_BuildTransactionData_Branches/evm_same_chain_no_approval
+=== RUN   TestPaymentUsecase_BuildTransactionData_Branches/evm_approval_required_but_vault_missing
+=== RUN   TestPaymentUsecase_BuildTransactionData_Branches/solana_chain
+=== RUN   TestPaymentUsecase_BuildTransactionData_Branches/evm_cross_chain_fee_quote_failed
+=== RUN   TestPaymentUsecase_BuildTransactionData_Branches/evm_cross_chain_invalid_source_amount
+=== RUN   TestPaymentUsecase_BuildTransactionData_Branches/evm_chain_with_unknown_network_still_returns_payload
+=== RUN   TestPaymentUsecase_BuildTransactionData_Branches/unknown_chain_type_returns_nil_payload
+=== RUN   TestPaymentUsecase_BuildTransactionData_Branches/evm_same-chain_with_source/dest_resolved_from_repo
+=== RUN   TestPaymentUsecase_BuildTransactionData_Branches/evm_approval_path_includes_approve_+_createPayment_txs
+--- PASS: TestPaymentUsecase_BuildTransactionData_Branches (0.00s)
+    --- PASS: TestPaymentUsecase_BuildTransactionData_Branches/contract_nil (0.00s)
+    --- PASS: TestPaymentUsecase_BuildTransactionData_Branches/evm_same_chain_no_approval (0.00s)
+    --- PASS: TestPaymentUsecase_BuildTransactionData_Branches/evm_approval_required_but_vault_missing (0.00s)
+    --- PASS: TestPaymentUsecase_BuildTransactionData_Branches/solana_chain (0.00s)
+    --- PASS: TestPaymentUsecase_BuildTransactionData_Branches/evm_cross_chain_fee_quote_failed (0.00s)
+    --- PASS: TestPaymentUsecase_BuildTransactionData_Branches/evm_cross_chain_invalid_source_amount (0.00s)
+    --- PASS: TestPaymentUsecase_BuildTransactionData_Branches/evm_chain_with_unknown_network_still_returns_payload (0.00s)
+    --- PASS: TestPaymentUsecase_BuildTransactionData_Branches/unknown_chain_type_returns_nil_payload (0.00s)
+    --- PASS: TestPaymentUsecase_BuildTransactionData_Branches/evm_same-chain_with_source/dest_resolved_from_repo (0.00s)
+    --- PASS: TestPaymentUsecase_BuildTransactionData_Branches/evm_approval_path_includes_approve_+_createPayment_txs (0.00s)
+=== RUN   TestPaymentUsecase_BuildTransactionData_MoreBranches
+=== RUN   TestPaymentUsecase_BuildTransactionData_MoreBranches/cross-chain_fee_quote_success_sets_tx_value
+=== RUN   TestPaymentUsecase_BuildTransactionData_MoreBranches/cross-chain_fee_quote_zero_returns_invalid_quote_error
+=== RUN   TestPaymentUsecase_BuildTransactionData_MoreBranches/source_and_dest_chain_resolved_from_repo_when_relation_missing
+=== RUN   TestPaymentUsecase_BuildTransactionData_MoreBranches/source_chain_unresolved_returns_nil_payload
+=== RUN   TestPaymentUsecase_BuildTransactionData_MoreBranches/approval_path_propagates_calculateOnchainApprovalAmount_error
+=== RUN   TestPaymentUsecase_BuildTransactionData_MoreBranches/cross-chain_with_approval_success_includes_tx_value_and_approval
+--- PASS: TestPaymentUsecase_BuildTransactionData_MoreBranches (0.00s)
+    --- PASS: TestPaymentUsecase_BuildTransactionData_MoreBranches/cross-chain_fee_quote_success_sets_tx_value (0.00s)
+    --- PASS: TestPaymentUsecase_BuildTransactionData_MoreBranches/cross-chain_fee_quote_zero_returns_invalid_quote_error (0.00s)
+    --- PASS: TestPaymentUsecase_BuildTransactionData_MoreBranches/source_and_dest_chain_resolved_from_repo_when_relation_missing (0.00s)
+    --- PASS: TestPaymentUsecase_BuildTransactionData_MoreBranches/source_chain_unresolved_returns_nil_payload (0.00s)
+    --- PASS: TestPaymentUsecase_BuildTransactionData_MoreBranches/approval_path_propagates_calculateOnchainApprovalAmount_error (0.00s)
+    --- PASS: TestPaymentUsecase_BuildTransactionData_MoreBranches/cross-chain_with_approval_success_includes_tx_value_and_approval (0.00s)
+=== RUN   TestPaymentUsecase_ResolveVaultAddressForApproval_UsesActiveRPCList
+--- PASS: TestPaymentUsecase_ResolveVaultAddressForApproval_UsesActiveRPCList (0.00s)
+=== RUN   TestPaymentUsecase_CalculateOnchainApprovalAmount_ClientCreateError
+--- PASS: TestPaymentUsecase_CalculateOnchainApprovalAmount_ClientCreateError (0.00s)
+=== RUN   TestPaymentUsecase_QuoteBridgeFeeByType_CallError
+--- PASS: TestPaymentUsecase_QuoteBridgeFeeByType_CallError (0.00s)
+=== RUN   TestPaymentUsecase_ResolveVaultAddressForApproval
+--- PASS: TestPaymentUsecase_ResolveVaultAddressForApproval (0.00s)
+=== RUN   TestPaymentUsecase_CalculateOnchainApprovalAmount_Guards
+--- PASS: TestPaymentUsecase_CalculateOnchainApprovalAmount_Guards (0.00s)
+=== RUN   TestPaymentUsecase_ResolveBridgeOrder_DefaultFallback
+--- PASS: TestPaymentUsecase_ResolveBridgeOrder_DefaultFallback (0.00s)
+=== RUN   TestPaymentUsecase_QuoteBridgeFeeByType_PackError
+--- PASS: TestPaymentUsecase_QuoteBridgeFeeByType_PackError (0.00s)
+=== RUN   TestDecodeRevertDataFromError_DataErrorString
+--- PASS: TestDecodeRevertDataFromError_DataErrorString (0.00s)
+=== RUN   TestDecodeRevertDataFromError_StringFallback
+--- PASS: TestDecodeRevertDataFromError_StringFallback (0.00s)
+=== RUN   TestDecodeRevertDataFromError_NoData
+--- PASS: TestDecodeRevertDataFromError_NoData (0.00s)
+=== RUN   TestNormalizeBytes32Hex
+=== PAUSE TestNormalizeBytes32Hex
+=== RUN   TestDecodeRouteErrorData_NoErrorRecorded
+=== PAUSE TestDecodeRouteErrorData_NoErrorRecorded
+=== RUN   TestDecodeRouteErrorData_ErrorString
+=== PAUSE TestDecodeRouteErrorData_ErrorString
+=== RUN   TestDecodeRouteErrorData_Panic
+=== PAUSE TestDecodeRouteErrorData_Panic
+=== RUN   TestDecodeRouteErrorData_KnownCustomSelector
+=== PAUSE TestDecodeRouteErrorData_KnownCustomSelector
+=== RUN   TestDecodeRouteErrorData_KnownCustomSelectorWithPayload
+=== PAUSE TestDecodeRouteErrorData_KnownCustomSelectorWithPayload
+=== RUN   TestDecodeRouteErrorData_InsufficientNativeFeePayload
+=== PAUSE TestDecodeRouteErrorData_InsufficientNativeFeePayload
+=== RUN   TestDecodeRouteErrorData_UnknownSelector
+=== PAUSE TestDecodeRouteErrorData_UnknownSelector
+=== RUN   TestConvertToSmallestUnit_AdditionalBranches
+=== RUN   TestConvertToSmallestUnit_AdditionalBranches/leading_dot_normalizes_whole_part
+=== RUN   TestConvertToSmallestUnit_AdditionalBranches/multiple_dots_invalid_format
+=== RUN   TestConvertToSmallestUnit_AdditionalBranches/trim_spaces_and_plus_with_zero_result
+--- PASS: TestConvertToSmallestUnit_AdditionalBranches (0.00s)
+    --- PASS: TestConvertToSmallestUnit_AdditionalBranches/leading_dot_normalizes_whole_part (0.00s)
+    --- PASS: TestConvertToSmallestUnit_AdditionalBranches/multiple_dots_invalid_format (0.00s)
+    --- PASS: TestConvertToSmallestUnit_AdditionalBranches/trim_spaces_and_plus_with_zero_result (0.00s)
+=== RUN   TestAddressToBytes32_HexAndAsciiBranches
+=== RUN   TestAddressToBytes32_HexAndAsciiBranches/hex_shorter_than_32_bytes_is_left_padded
+=== RUN   TestAddressToBytes32_HexAndAsciiBranches/invalid_hex_prefix_falls_back_to_ascii_bytes
+=== RUN   TestAddressToBytes32_HexAndAsciiBranches/non-base58_long_ascii_is_right-trimmed
+--- PASS: TestAddressToBytes32_HexAndAsciiBranches (0.00s)
+    --- PASS: TestAddressToBytes32_HexAndAsciiBranches/hex_shorter_than_32_bytes_is_left_padded (0.00s)
+    --- PASS: TestAddressToBytes32_HexAndAsciiBranches/invalid_hex_prefix_falls_back_to_ascii_bytes (0.00s)
+    --- PASS: TestAddressToBytes32_HexAndAsciiBranches/non-base58_long_ascii_is_right-trimmed (0.00s)
+=== RUN   TestBase58Decode_EmptyStringBranch
+--- PASS: TestBase58Decode_EmptyStringBranch (0.00s)
+=== RUN   TestPadHelpers
+--- PASS: TestPadHelpers (0.00s)
+=== RUN   TestChainTypeHelpers
+--- PASS: TestChainTypeHelpers (0.00s)
+=== RUN   TestConvertToSmallestUnit
+=== RUN   TestConvertToSmallestUnit/integer
+=== RUN   TestConvertToSmallestUnit/fraction
+=== RUN   TestConvertToSmallestUnit/leading_plus
+=== RUN   TestConvertToSmallestUnit/zero
+=== RUN   TestConvertToSmallestUnit/blank
+=== RUN   TestConvertToSmallestUnit/negative
+=== RUN   TestConvertToSmallestUnit/non_numeric
+=== RUN   TestConvertToSmallestUnit/too_many_decimals
+=== RUN   TestConvertToSmallestUnit/bad_decimals
+--- PASS: TestConvertToSmallestUnit (0.00s)
+    --- PASS: TestConvertToSmallestUnit/integer (0.00s)
+    --- PASS: TestConvertToSmallestUnit/fraction (0.00s)
+    --- PASS: TestConvertToSmallestUnit/leading_plus (0.00s)
+    --- PASS: TestConvertToSmallestUnit/zero (0.00s)
+    --- PASS: TestConvertToSmallestUnit/blank (0.00s)
+    --- PASS: TestConvertToSmallestUnit/negative (0.00s)
+    --- PASS: TestConvertToSmallestUnit/non_numeric (0.00s)
+    --- PASS: TestConvertToSmallestUnit/too_many_decimals (0.00s)
+    --- PASS: TestConvertToSmallestUnit/bad_decimals (0.00s)
+=== RUN   TestAddDecimalStrings
+--- PASS: TestAddDecimalStrings (0.00s)
+=== RUN   TestBase58EncodeDecode
+--- PASS: TestBase58EncodeDecode (0.00s)
+=== RUN   TestNormalizeEvmAddress
+--- PASS: TestNormalizeEvmAddress (0.00s)
+=== RUN   TestBinaryHelpers
+--- PASS: TestBinaryHelpers (0.00s)
+=== RUN   TestDecimalStringToUint64
+--- PASS: TestDecimalStringToUint64 (0.00s)
+=== RUN   TestAddressToBytes32
+--- PASS: TestAddressToBytes32 (0.00s)
+=== RUN   TestUUIDAndAnchorHelpers
+--- PASS: TestUUIDAndAnchorHelpers (0.00s)
+=== RUN   TestMapStatus_AllBranches
+--- PASS: TestMapStatus_AllBranches (0.00s)
+=== RUN   TestApiKeyUsecase_NewAndCreate_Branches
+=== RUN   TestApiKeyUsecase_NewAndCreate_Branches/constructor_supports_raw_32-byte_key_fallback
+=== RUN   TestApiKeyUsecase_NewAndCreate_Branches/create_fails_when_encryption_key_invalid
+--- PASS: TestApiKeyUsecase_NewAndCreate_Branches (0.00s)
+    --- PASS: TestApiKeyUsecase_NewAndCreate_Branches/constructor_supports_raw_32-byte_key_fallback (0.00s)
+    --- PASS: TestApiKeyUsecase_NewAndCreate_Branches/create_fails_when_encryption_key_invalid (0.00s)
+=== RUN   TestApiKeyUsecase_ValidateApiKey_ErrorBranches
+=== RUN   TestApiKeyUsecase_ValidateApiKey_ErrorBranches/invalid_timestamp
+=== RUN   TestApiKeyUsecase_ValidateApiKey_ErrorBranches/expired_timestamp
+=== RUN   TestApiKeyUsecase_ValidateApiKey_ErrorBranches/key_not_found
+=== RUN   TestApiKeyUsecase_ValidateApiKey_ErrorBranches/inactive_key
+=== RUN   TestApiKeyUsecase_ValidateApiKey_ErrorBranches/decrypt_failure
+=== RUN   TestApiKeyUsecase_ValidateApiKey_ErrorBranches/invalid_signature
+=== RUN   TestApiKeyUsecase_ValidateApiKey_ErrorBranches/user_preload_missing_and_fetch_user_failed
+=== RUN   TestApiKeyUsecase_ValidateApiKey_ErrorBranches/user_preload_missing_and_fetch_user_success
+--- PASS: TestApiKeyUsecase_ValidateApiKey_ErrorBranches (0.00s)
+    --- PASS: TestApiKeyUsecase_ValidateApiKey_ErrorBranches/invalid_timestamp (0.00s)
+    --- PASS: TestApiKeyUsecase_ValidateApiKey_ErrorBranches/expired_timestamp (0.00s)
+    --- PASS: TestApiKeyUsecase_ValidateApiKey_ErrorBranches/key_not_found (0.00s)
+    --- PASS: TestApiKeyUsecase_ValidateApiKey_ErrorBranches/inactive_key (0.00s)
+    --- PASS: TestApiKeyUsecase_ValidateApiKey_ErrorBranches/decrypt_failure (0.00s)
+    --- PASS: TestApiKeyUsecase_ValidateApiKey_ErrorBranches/invalid_signature (0.00s)
+    --- PASS: TestApiKeyUsecase_ValidateApiKey_ErrorBranches/user_preload_missing_and_fetch_user_failed (0.00s)
+    --- PASS: TestApiKeyUsecase_ValidateApiKey_ErrorBranches/user_preload_missing_and_fetch_user_success (0.00s)
+=== RUN   TestApiKeyUsecase_ValidateSignatureForJWT_ErrorBranches
+--- PASS: TestApiKeyUsecase_ValidateSignatureForJWT_ErrorBranches (0.00s)
+=== RUN   TestApiKeyUsecase_RevokeApiKey_Branches
+--- PASS: TestApiKeyUsecase_RevokeApiKey_Branches (0.00s)
+=== RUN   TestApiKeyUsecase_CreateApiKey
+--- PASS: TestApiKeyUsecase_CreateApiKey (0.00s)
+=== RUN   TestApiKeyUsecase_ValidateApiKey
+--- PASS: TestApiKeyUsecase_ValidateApiKey (0.00s)
+=== RUN   TestApiKeyUsecase_ValidateSignatureForJWT
+--- PASS: TestApiKeyUsecase_ValidateSignatureForJWT (0.00s)
+=== RUN   TestApiKeyUsecase_ListApiKeys
+--- PASS: TestApiKeyUsecase_ListApiKeys (0.00s)
+=== RUN   TestApiKeyUsecase_RevokeApiKey
+--- PASS: TestApiKeyUsecase_RevokeApiKey (0.00s)
+=== RUN   TestApiKeyUsecase_CreateApiKey_CreateError
+--- PASS: TestApiKeyUsecase_CreateApiKey_CreateError (0.00s)
+=== RUN   TestApiKeyUsecase_CreateApiKey_InvalidEncryptionKey
+--- PASS: TestApiKeyUsecase_CreateApiKey_InvalidEncryptionKey (0.00s)
+=== RUN   TestApiKeyUsecase_ValidateApiKey_InvalidTimestamp
+--- PASS: TestApiKeyUsecase_ValidateApiKey_InvalidTimestamp (0.00s)
+=== RUN   TestApiKeyUsecase_ValidateApiKey_ExpiredTimestamp
+--- PASS: TestApiKeyUsecase_ValidateApiKey_ExpiredTimestamp (0.00s)
+=== RUN   TestApiKeyUsecase_ValidateApiKey_KeyInactive
+--- PASS: TestApiKeyUsecase_ValidateApiKey_KeyInactive (0.00s)
+=== RUN   TestApiKeyUsecase_ValidateApiKey_UserFallbackError
+--- PASS: TestApiKeyUsecase_ValidateApiKey_UserFallbackError (0.00s)
+=== RUN   TestApiKeyUsecase_ValidateSignatureForJWT_NoKeys
+--- PASS: TestApiKeyUsecase_ValidateSignatureForJWT_NoKeys (0.00s)
+=== RUN   TestApiKeyUsecase_ValidateSignatureForJWT_RepoError
+--- PASS: TestApiKeyUsecase_ValidateSignatureForJWT_RepoError (0.00s)
+=== RUN   TestApiKeyUsecase_RevokeApiKey_NotOwner
+--- PASS: TestApiKeyUsecase_RevokeApiKey_NotOwner (0.00s)
+=== RUN   TestApiKeyUsecase_RevokeApiKey_FindError
+--- PASS: TestApiKeyUsecase_RevokeApiKey_FindError (0.00s)
+=== RUN   TestAuthUsecase_Register_ErrorBranches_GapExtra
+=== RUN   TestAuthUsecase_Register_ErrorBranches_GapExtra/get_by_email_unexpected_error
+=== RUN   TestAuthUsecase_Register_ErrorBranches_GapExtra/wallet_chain_resolve_failed
+=== RUN   TestAuthUsecase_Register_ErrorBranches_GapExtra/wallet_lookup_unexpected_error
+=== RUN   TestAuthUsecase_Register_ErrorBranches_GapExtra/wallet_already_linked_to_another_user
+=== RUN   TestAuthUsecase_Register_ErrorBranches_GapExtra/create_user_failed
+=== RUN   TestAuthUsecase_Register_ErrorBranches_GapExtra/create_wallet_failed
+=== RUN   TestAuthUsecase_Register_ErrorBranches_GapExtra/create_email_verification_failed
+--- PASS: TestAuthUsecase_Register_ErrorBranches_GapExtra (0.85s)
+    --- PASS: TestAuthUsecase_Register_ErrorBranches_GapExtra/get_by_email_unexpected_error (0.00s)
+    --- PASS: TestAuthUsecase_Register_ErrorBranches_GapExtra/wallet_chain_resolve_failed (0.00s)
+    --- PASS: TestAuthUsecase_Register_ErrorBranches_GapExtra/wallet_lookup_unexpected_error (0.00s)
+    --- PASS: TestAuthUsecase_Register_ErrorBranches_GapExtra/wallet_already_linked_to_another_user (0.00s)
+    --- PASS: TestAuthUsecase_Register_ErrorBranches_GapExtra/create_user_failed (0.27s)
+    --- PASS: TestAuthUsecase_Register_ErrorBranches_GapExtra/create_wallet_failed (0.32s)
+    --- PASS: TestAuthUsecase_Register_ErrorBranches_GapExtra/create_email_verification_failed (0.26s)
+=== RUN   TestAuthUsecase_VerifyEmail_MarkVerifiedError_GapExtra
+--- PASS: TestAuthUsecase_VerifyEmail_MarkVerifiedError_GapExtra (0.00s)
+=== RUN   TestAuthUsecase_RefreshToken_GetUserFailed
+--- PASS: TestAuthUsecase_RefreshToken_GetUserFailed (0.00s)
+=== RUN   TestAuthUsecase_Register_BadWalletInput
+--- PASS: TestAuthUsecase_Register_BadWalletInput (0.00s)
+=== RUN   TestAuthUsecase_Register_EmailAlreadyExists
+--- PASS: TestAuthUsecase_Register_EmailAlreadyExists (0.00s)
+=== RUN   TestAuthUsecase_Register_Success
+--- PASS: TestAuthUsecase_Register_Success (0.26s)
+=== RUN   TestAuthUsecase_Login_InvalidCredentialCases
+--- PASS: TestAuthUsecase_Login_InvalidCredentialCases (0.53s)
+=== RUN   TestAuthUsecase_Login_SuccessNoSession
+--- PASS: TestAuthUsecase_Login_SuccessNoSession (0.53s)
+=== RUN   TestAuthUsecase_VerifyEmail
+--- PASS: TestAuthUsecase_VerifyEmail (0.00s)
+=== RUN   TestAuthUsecase_RefreshToken
+--- PASS: TestAuthUsecase_RefreshToken (0.00s)
+=== RUN   TestAuthUsecase_GetTokenExpiry
+--- PASS: TestAuthUsecase_GetTokenExpiry (0.00s)
+=== RUN   TestAuthUsecase_GetTokenExpiry_MissingExpClaim
+--- PASS: TestAuthUsecase_GetTokenExpiry_MissingExpClaim (0.00s)
+=== RUN   TestAuthUsecase_ChangePassword
+--- PASS: TestAuthUsecase_ChangePassword (1.22s)
+=== RUN   TestAuthUsecase_ChangePassword_ErrorBranches
+--- PASS: TestAuthUsecase_ChangePassword_ErrorBranches (1.11s)
+=== RUN   TestAuthUsecase_ChangePassword_NewPasswordTooLong
+--- PASS: TestAuthUsecase_ChangePassword_NewPasswordTooLong (0.55s)
+=== RUN   TestAuthUsecase_GetUserByID
+--- PASS: TestAuthUsecase_GetUserByID (0.00s)
+=== RUN   TestAuthUsecase_Login_UserRepoError
+--- PASS: TestAuthUsecase_Login_UserRepoError (0.00s)
+=== RUN   TestAuthUsecase_Login_UseSessionRedisError
+redis: 2026/02/18 08:13:16 pool.go:426: redis: connection pool: failed to dial after 1 attempts: dial tcp 127.0.0.1:0: connect: can't assign requested address
+redis: 2026/02/18 08:13:16 pool.go:426: redis: connection pool: failed to dial after 1 attempts: dial tcp 127.0.0.1:0: connect: can't assign requested address
+redis: 2026/02/18 08:13:16 pool.go:426: redis: connection pool: failed to dial after 1 attempts: dial tcp 127.0.0.1:0: connect: can't assign requested address
+redis: 2026/02/18 08:13:16 pool.go:426: redis: connection pool: failed to dial after 1 attempts: dial tcp 127.0.0.1:0: connect: can't assign requested address
+--- PASS: TestAuthUsecase_Login_UseSessionRedisError (0.87s)
+=== RUN   TestAuthUsecase_Login_UseSessionSuccess
+--- PASS: TestAuthUsecase_Login_UseSessionSuccess (1.10s)
+=== RUN   TestAuthUsecase_Register_ErrorBranches
+=== RUN   TestAuthUsecase_Register_ErrorBranches/user_repo_email_lookup_error
+=== RUN   TestAuthUsecase_Register_ErrorBranches/invalid_chain_input
+=== RUN   TestAuthUsecase_Register_ErrorBranches/wallet_lookup_unexpected_error
+=== RUN   TestAuthUsecase_Register_ErrorBranches/wallet_already_linked_to_another_user
+=== RUN   TestAuthUsecase_Register_ErrorBranches/existing_wallet_without_user_continues_and_then_user_create_fails
+=== RUN   TestAuthUsecase_Register_ErrorBranches/wallet_create_fails_after_user_create
+=== RUN   TestAuthUsecase_Register_ErrorBranches/email_verification_create_fails
+--- PASS: TestAuthUsecase_Register_ErrorBranches (0.93s)
+    --- PASS: TestAuthUsecase_Register_ErrorBranches/user_repo_email_lookup_error (0.00s)
+    --- PASS: TestAuthUsecase_Register_ErrorBranches/invalid_chain_input (0.00s)
+    --- PASS: TestAuthUsecase_Register_ErrorBranches/wallet_lookup_unexpected_error (0.00s)
+    --- PASS: TestAuthUsecase_Register_ErrorBranches/wallet_already_linked_to_another_user (0.00s)
+    --- PASS: TestAuthUsecase_Register_ErrorBranches/existing_wallet_without_user_continues_and_then_user_create_fails (0.30s)
+    --- PASS: TestAuthUsecase_Register_ErrorBranches/wallet_create_fails_after_user_create (0.31s)
+    --- PASS: TestAuthUsecase_Register_ErrorBranches/email_verification_create_fails (0.32s)
+=== RUN   TestAuthUsecase_VerifyEmail_MarkVerifiedError
+--- PASS: TestAuthUsecase_VerifyEmail_MarkVerifiedError (0.00s)
+=== RUN   TestAuthUsecase_RefreshToken_UserLookupError
+--- PASS: TestAuthUsecase_RefreshToken_UserLookupError (0.00s)
+=== RUN   TestChainResolver_ResolveFromAny_EmptyInput
+--- PASS: TestChainResolver_ResolveFromAny_EmptyInput (0.00s)
+=== RUN   TestChainResolver_ResolveFromAny_UUIDSuccess
+--- PASS: TestChainResolver_ResolveFromAny_UUIDSuccess (0.00s)
+=== RUN   TestChainResolver_ResolveFromAny_CAIP2LookupSuccess
+--- PASS: TestChainResolver_ResolveFromAny_CAIP2LookupSuccess (0.00s)
+=== RUN   TestChainResolver_ResolveFromAny_RawChainIDSuccess
+--- PASS: TestChainResolver_ResolveFromAny_RawChainIDSuccess (0.00s)
+=== RUN   TestChainResolver_ResolveFromAny_CAIP2FallbackToRawID
+--- PASS: TestChainResolver_ResolveFromAny_CAIP2FallbackToRawID (0.00s)
+=== RUN   TestChainResolver_ResolveFromAny_Failure
+--- PASS: TestChainResolver_ResolveFromAny_Failure (0.00s)
+=== RUN   TestChainResolver_ResolveFromAny_UUIDLookupError
+--- PASS: TestChainResolver_ResolveFromAny_UUIDLookupError (0.00s)
+=== RUN   TestChainResolver_ResolveFromAny_TrimmedInputAndSolanaFallback
+--- PASS: TestChainResolver_ResolveFromAny_TrimmedInputAndSolanaFallback (0.00s)
+=== RUN   TestContractConfigAuditUsecase_Check_DestinationInvalidStillReturnsReport
+--- PASS: TestContractConfigAuditUsecase_Check_DestinationInvalidStillReturnsReport (0.00s)
+=== RUN   TestContractConfigAuditUsecase_Check_ContractListError
+--- PASS: TestContractConfigAuditUsecase_Check_ContractListError (0.00s)
+=== RUN   TestContractConfigAuditUsecase_Check_EvmDestRunsOnchainChecksWithRpcMissing
+--- PASS: TestContractConfigAuditUsecase_Check_EvmDestRunsOnchainChecksWithRpcMissing (0.00s)
+=== RUN   TestContractConfigAuditUsecase_Check_InvalidSource
+--- PASS: TestContractConfigAuditUsecase_Check_InvalidSource (0.00s)
+=== RUN   TestContractConfigAuditUsecase_Check_SourceChainLoadError
+--- PASS: TestContractConfigAuditUsecase_Check_SourceChainLoadError (0.00s)
+=== RUN   TestContractConfigAuditUsecase_Check_NoActiveContractWarn
+--- PASS: TestContractConfigAuditUsecase_Check_NoActiveContractWarn (0.00s)
+=== RUN   TestContractConfigAuditUsecase_CheckByContractID_NonEvmSkipsOnchain
+--- PASS: TestContractConfigAuditUsecase_CheckByContractID_NonEvmSkipsOnchain (0.00s)
+=== RUN   TestContractConfigAuditUsecase_CheckByContractID_ErrorBranches
+=== RUN   TestContractConfigAuditUsecase_CheckByContractID_ErrorBranches/get_contract_failed
+=== RUN   TestContractConfigAuditUsecase_CheckByContractID_ErrorBranches/nil_contract_returned
+=== RUN   TestContractConfigAuditUsecase_CheckByContractID_ErrorBranches/get_source_chain_failed
+=== RUN   TestContractConfigAuditUsecase_CheckByContractID_ErrorBranches/get_all_chains_failed
+--- PASS: TestContractConfigAuditUsecase_CheckByContractID_ErrorBranches (0.00s)
+    --- PASS: TestContractConfigAuditUsecase_CheckByContractID_ErrorBranches/get_contract_failed (0.00s)
+    --- PASS: TestContractConfigAuditUsecase_CheckByContractID_ErrorBranches/nil_contract_returned (0.00s)
+    --- PASS: TestContractConfigAuditUsecase_CheckByContractID_ErrorBranches/get_source_chain_failed (0.00s)
+    --- PASS: TestContractConfigAuditUsecase_CheckByContractID_ErrorBranches/get_all_chains_failed (0.00s)
+=== RUN   TestCrosschainConfigUsecase_Preflight_NoAdapters
+--- PASS: TestCrosschainConfigUsecase_Preflight_NoAdapters (0.01s)
+=== RUN   TestCrosschainConfigUsecase_AutoFix_NoActiveAdapterContract
+--- PASS: TestCrosschainConfigUsecase_AutoFix_NoActiveAdapterContract (0.02s)
+=== RUN   TestCrosschainConfigUsecase_AutoFix_LayerZero_AllSkipped
+--- PASS: TestCrosschainConfigUsecase_AutoFix_LayerZero_AllSkipped (0.04s)
+=== RUN   TestCrosschainConfigUsecase_AutoFix_Hyperbridge_DestinationMissing
+--- PASS: TestCrosschainConfigUsecase_AutoFix_Hyperbridge_DestinationMissing (0.02s)
+=== RUN   TestCrosschainConfigUsecase_Preflight_CcipNotConfigured
+--- PASS: TestCrosschainConfigUsecase_Preflight_CcipNotConfigured (0.01s)
+=== RUN   TestCrosschainConfigUsecase_Overview_RecheckFailurePath
+--- PASS: TestCrosschainConfigUsecase_Overview_RecheckFailurePath (0.00s)
+=== RUN   TestCrosschainConfigUsecase_AutoFix_RegisterAdapterFailed
+--- PASS: TestCrosschainConfigUsecase_AutoFix_RegisterAdapterFailed (0.01s)
+=== RUN   TestCrosschainConfigUsecase_AutoFix_SetDefaultBridgeFailed
+--- PASS: TestCrosschainConfigUsecase_AutoFix_SetDefaultBridgeFailed (0.01s)
+=== RUN   TestCrosschainConfigUsecase_AutoFix_SetHyperbridgeConfigFailed
+--- PASS: TestCrosschainConfigUsecase_AutoFix_SetHyperbridgeConfigFailed (0.01s)
+=== RUN   TestCrosschainConfigUsecase_RecheckRoute_StatusAndFeeQuoteIssue
+--- PASS: TestCrosschainConfigUsecase_RecheckRoute_StatusAndFeeQuoteIssue (0.06s)
+=== RUN   TestCrosschainConfigUsecase_Overview_GetAllError
+--- PASS: TestCrosschainConfigUsecase_Overview_GetAllError (0.00s)
+=== RUN   TestCrosschainConfigUsecase_Overview_InvalidSource
+--- PASS: TestCrosschainConfigUsecase_Overview_InvalidSource (0.00s)
+=== RUN   TestCrosschainConfigUsecase_RecheckRoute_InvalidInput
+--- PASS: TestCrosschainConfigUsecase_RecheckRoute_InvalidInput (0.00s)
+=== RUN   TestCrosschainConfigUsecase_Preflight_InvalidInput
+--- PASS: TestCrosschainConfigUsecase_Preflight_InvalidInput (0.00s)
+=== RUN   TestCrosschainConfigUsecase_AutoFix_InvalidSourceInput
+--- PASS: TestCrosschainConfigUsecase_AutoFix_InvalidSourceInput (0.00s)
+=== RUN   TestMerchantUsecase_ApplyMerchant_ExistingApplication
+--- PASS: TestMerchantUsecase_ApplyMerchant_ExistingApplication (0.00s)
+=== RUN   TestMerchantUsecase_ApplyMerchant_InvalidType
+--- PASS: TestMerchantUsecase_ApplyMerchant_InvalidType (0.00s)
+=== RUN   TestMerchantUsecase_GetMerchantStatus_NotFound
+--- PASS: TestMerchantUsecase_GetMerchantStatus_NotFound (0.00s)
+=== RUN   TestMerchantUsecase_GetMerchantStatus_Active
+--- PASS: TestMerchantUsecase_GetMerchantStatus_Active (0.00s)
+=== RUN   TestMerchantUsecase_AdminStatusActions
+--- PASS: TestMerchantUsecase_AdminStatusActions (0.00s)
+=== RUN   TestMerchantUsecase_ApplyMerchant_SuccessCreate
+--- PASS: TestMerchantUsecase_ApplyMerchant_SuccessCreate (0.00s)
+=== RUN   TestMerchantUsecase_ApplyMerchant_UserLookupError
+--- PASS: TestMerchantUsecase_ApplyMerchant_UserLookupError (0.00s)
+=== RUN   TestMerchantUsecase_ApplyMerchant_GetByUserError
+--- PASS: TestMerchantUsecase_ApplyMerchant_GetByUserError (0.00s)
+=== RUN   TestMerchantUsecase_GetMerchantStatus_RepoError
+--- PASS: TestMerchantUsecase_GetMerchantStatus_RepoError (0.00s)
+=== RUN   TestMerchantUsecase_GetMerchantStatus_MessageVariants
+--- PASS: TestMerchantUsecase_GetMerchantStatus_MessageVariants (0.00s)
+=== RUN   TestMerchantUsecase_GetMerchantStatus_UnknownStatusFallsBackEmptyMessage
+--- PASS: TestMerchantUsecase_GetMerchantStatus_UnknownStatusFallsBackEmptyMessage (0.00s)
+=== RUN   TestMerchantUsecase_ApplyMerchant_CreateError
+--- PASS: TestMerchantUsecase_ApplyMerchant_CreateError (0.00s)
+=== RUN   TestOnchainAdapterUsecase_Setters_InvalidSourceChain
+--- PASS: TestOnchainAdapterUsecase_Setters_InvalidSourceChain (0.00s)
+=== RUN   TestOnchainAdapterUsecase_Setters_InvalidDestChain
+--- PASS: TestOnchainAdapterUsecase_Setters_InvalidDestChain (0.00s)
+=== RUN   TestOnchainAdapterUsecase_SetHyperbridgeConfig_ClientFactoryNotConfigured
+--- PASS: TestOnchainAdapterUsecase_SetHyperbridgeConfig_ClientFactoryNotConfigured (0.00s)
+=== RUN   TestOnchainAdapterUsecase_SetCCIPConfig_ClientFactoryNotConfigured
+--- PASS: TestOnchainAdapterUsecase_SetCCIPConfig_ClientFactoryNotConfigured (0.00s)
+=== RUN   TestOnchainAdapterUsecase_RegisterAndDefaultBridge_OwnerKeyMissing
+--- PASS: TestOnchainAdapterUsecase_RegisterAndDefaultBridge_OwnerKeyMissing (0.00s)
+=== RUN   TestOnchainAdapterUsecase_SetLayerZeroConfig_ClientFactoryNotConfigured
+--- PASS: TestOnchainAdapterUsecase_SetLayerZeroConfig_ClientFactoryNotConfigured (0.00s)
+=== RUN   TestOnchainAdapterUsecase_GetStatus_Success
+--- PASS: TestOnchainAdapterUsecase_GetStatus_Success (0.00s)
+=== RUN   TestOnchainAdapterUsecase_GetStatus_AllBridgeAdapters
+--- PASS: TestOnchainAdapterUsecase_GetStatus_AllBridgeAdapters (0.01s)
+=== RUN   TestOnchainAdapterUsecase_GetStatus_InvalidSource
+--- PASS: TestOnchainAdapterUsecase_GetStatus_InvalidSource (0.00s)
+=== RUN   TestOnchainAdapterUsecase_GetStatus_InvalidDest
+--- PASS: TestOnchainAdapterUsecase_GetStatus_InvalidDest (0.00s)
+=== RUN   TestOnchainAdapterUsecase_GetStatus_SourceNonEVM
+--- PASS: TestOnchainAdapterUsecase_GetStatus_SourceNonEVM (0.00s)
+=== RUN   TestOnchainAdapterUsecase_GetStatus_GatewayMissing
+--- PASS: TestOnchainAdapterUsecase_GetStatus_GatewayMissing (0.00s)
+=== RUN   TestOnchainAdapterUsecase_GetStatus_RouterMissing
+--- PASS: TestOnchainAdapterUsecase_GetStatus_RouterMissing (0.00s)
+=== RUN   TestOnchainAdapterUsecase_GetStatus_NoRPC
+--- PASS: TestOnchainAdapterUsecase_GetStatus_NoRPC (0.00s)
+=== RUN   TestOnchainAdapterUsecase_GetStatus_RPCConnectError
+--- PASS: TestOnchainAdapterUsecase_GetStatus_RPCConnectError (0.00s)
+=== RUN   TestPaymentAppUsecase_CreatePaymentApp_InvalidSourceChain
+--- PASS: TestPaymentAppUsecase_CreatePaymentApp_InvalidSourceChain (0.00s)
+=== RUN   TestPaymentAppUsecase_CreatePaymentApp_InvalidDestChain
+--- PASS: TestPaymentAppUsecase_CreatePaymentApp_InvalidDestChain (0.00s)
+=== RUN   TestPaymentAppUsecase_CreatePaymentApp_AutoCreateUserFails
+--- PASS: TestPaymentAppUsecase_CreatePaymentApp_AutoCreateUserFails (0.00s)
+=== RUN   TestPaymentAppUsecase_CreatePaymentApp_AutoCreateWalletFails
+--- PASS: TestPaymentAppUsecase_CreatePaymentApp_AutoCreateWalletFails (0.00s)
+=== RUN   TestPaymentAppUsecase_CreatePaymentApp_ExistingWalletPath_ExecutesDelegation
+--- PASS: TestPaymentAppUsecase_CreatePaymentApp_ExistingWalletPath_ExecutesDelegation (0.00s)
+=== RUN   TestPaymentRequestUsecase_GetPaymentRequest_ChainResolutionBranches
+=== RUN   TestPaymentRequestUsecase_GetPaymentRequest_ChainResolutionBranches/resolve_chain_id_from_network_id_when_chain_uuid_is_empty
+=== RUN   TestPaymentRequestUsecase_GetPaymentRequest_ChainResolutionBranches/resolve_network_id_from_chain_id_when_network_is_empty
+--- PASS: TestPaymentRequestUsecase_GetPaymentRequest_ChainResolutionBranches (0.00s)
+    --- PASS: TestPaymentRequestUsecase_GetPaymentRequest_ChainResolutionBranches/resolve_chain_id_from_network_id_when_chain_uuid_is_empty (0.00s)
+    --- PASS: TestPaymentRequestUsecase_GetPaymentRequest_ChainResolutionBranches/resolve_network_id_from_chain_id_when_network_is_empty (0.00s)
+=== RUN   TestPaymentRequestUsecase_CreatePaymentRequest_MerchantNotFound
+--- PASS: TestPaymentRequestUsecase_CreatePaymentRequest_MerchantNotFound (0.00s)
+=== RUN   TestPaymentRequestUsecase_CreatePaymentRequest_MerchantInactive
+--- PASS: TestPaymentRequestUsecase_CreatePaymentRequest_MerchantInactive (0.00s)
+=== RUN   TestPaymentRequestUsecase_CreatePaymentRequest_SuccessEVM
+--- PASS: TestPaymentRequestUsecase_CreatePaymentRequest_SuccessEVM (0.00s)
+=== RUN   TestPaymentRequestUsecase_CreatePaymentRequest_DecimalsMismatch
+--- PASS: TestPaymentRequestUsecase_CreatePaymentRequest_DecimalsMismatch (0.00s)
+=== RUN   TestPaymentRequestUsecase_CreatePaymentRequest_NoPrimaryWallet_UsesFirstWallet
+--- PASS: TestPaymentRequestUsecase_CreatePaymentRequest_NoPrimaryWallet_UsesFirstWallet (0.00s)
+=== RUN   TestPaymentRequestUsecase_GetPaymentRequest_ExpirePending
+--- PASS: TestPaymentRequestUsecase_GetPaymentRequest_ExpirePending (0.00s)
+=== RUN   TestPaymentRequestUsecase_ListAndMarkCompleted
+--- PASS: TestPaymentRequestUsecase_ListAndMarkCompleted (0.00s)
+=== RUN   TestPaymentRequestUsecase_CreatePaymentRequest_ErrorBranches
+=== RUN   TestPaymentRequestUsecase_CreatePaymentRequest_ErrorBranches/wallet_repository_error
+=== RUN   TestPaymentRequestUsecase_CreatePaymentRequest_ErrorBranches/no_wallet_found
+=== RUN   TestPaymentRequestUsecase_CreatePaymentRequest_ErrorBranches/invalid_chain_id
+=== RUN   TestPaymentRequestUsecase_CreatePaymentRequest_ErrorBranches/token_fallback_to_native_failed
+=== RUN   TestPaymentRequestUsecase_CreatePaymentRequest_ErrorBranches/amount_conversion_invalid
+=== RUN   TestPaymentRequestUsecase_CreatePaymentRequest_ErrorBranches/create_payment_request_repository_error
+--- PASS: TestPaymentRequestUsecase_CreatePaymentRequest_ErrorBranches (0.00s)
+    --- PASS: TestPaymentRequestUsecase_CreatePaymentRequest_ErrorBranches/wallet_repository_error (0.00s)
+    --- PASS: TestPaymentRequestUsecase_CreatePaymentRequest_ErrorBranches/no_wallet_found (0.00s)
+    --- PASS: TestPaymentRequestUsecase_CreatePaymentRequest_ErrorBranches/invalid_chain_id (0.00s)
+    --- PASS: TestPaymentRequestUsecase_CreatePaymentRequest_ErrorBranches/token_fallback_to_native_failed (0.00s)
+    --- PASS: TestPaymentRequestUsecase_CreatePaymentRequest_ErrorBranches/amount_conversion_invalid (0.00s)
+    --- PASS: TestPaymentRequestUsecase_CreatePaymentRequest_ErrorBranches/create_payment_request_repository_error (0.00s)
+=== RUN   TestPaymentRequestUsecase_GetAndList_ErrorBranches
+=== RUN   TestPaymentRequestUsecase_GetAndList_ErrorBranches/get_payment_request_not_found
+=== RUN   TestPaymentRequestUsecase_GetAndList_ErrorBranches/list_payment_requests_merchant_not_found
+--- PASS: TestPaymentRequestUsecase_GetAndList_ErrorBranches (0.00s)
+    --- PASS: TestPaymentRequestUsecase_GetAndList_ErrorBranches/get_payment_request_not_found (0.00s)
+    --- PASS: TestPaymentRequestUsecase_GetAndList_ErrorBranches/list_payment_requests_merchant_not_found (0.00s)
+=== RUN   TestCreatePayment_Success
+--- PASS: TestCreatePayment_Success (0.00s)
+=== RUN   TestProcessIndexerWebhook_Locking
+2026/02/18 08:13:18 Processing indexer event: PAYMENT_COMPLETED
+--- PASS: TestProcessIndexerWebhook_Locking (0.00s)
+=== RUN   TestPaymentUsecase_ReadWrappers
+--- PASS: TestPaymentUsecase_ReadWrappers (0.00s)
+=== RUN   TestWalletUsecase_ConnectWallet_BadInput
+--- PASS: TestWalletUsecase_ConnectWallet_BadInput (0.00s)
+=== RUN   TestWalletUsecase_ConnectWallet_ExistingWalletSameUser
+--- PASS: TestWalletUsecase_ConnectWallet_ExistingWalletSameUser (0.00s)
+=== RUN   TestWalletUsecase_ConnectWallet_KYCRequiredForAdditionalWallet
+--- PASS: TestWalletUsecase_ConnectWallet_KYCRequiredForAdditionalWallet (0.00s)
+=== RUN   TestWalletUsecase_DisconnectWallet_Forbidden
+--- PASS: TestWalletUsecase_DisconnectWallet_Forbidden (0.00s)
+=== RUN   TestWalletUsecase_DisconnectWallet_Success
+--- PASS: TestWalletUsecase_DisconnectWallet_Success (0.00s)
+=== RUN   TestWalletUsecase_ConnectWallet_ErrorBranches
+=== RUN   TestWalletUsecase_ConnectWallet_ErrorBranches/user_lookup_error
+=== RUN   TestWalletUsecase_ConnectWallet_ErrorBranches/get_wallets_error
+=== RUN   TestWalletUsecase_ConnectWallet_ErrorBranches/invalid_chain_id_resolver
+=== RUN   TestWalletUsecase_ConnectWallet_ErrorBranches/wallet_exists_for_another_user
+--- PASS: TestWalletUsecase_ConnectWallet_ErrorBranches (0.00s)
+    --- PASS: TestWalletUsecase_ConnectWallet_ErrorBranches/user_lookup_error (0.00s)
+    --- PASS: TestWalletUsecase_ConnectWallet_ErrorBranches/get_wallets_error (0.00s)
+    --- PASS: TestWalletUsecase_ConnectWallet_ErrorBranches/invalid_chain_id_resolver (0.00s)
+    --- PASS: TestWalletUsecase_ConnectWallet_ErrorBranches/wallet_exists_for_another_user (0.00s)
+=== RUN   TestWalletUsecase_ConnectWallet_CreateBranches
+=== RUN   TestWalletUsecase_ConnectWallet_CreateBranches/create_error
+=== RUN   TestWalletUsecase_ConnectWallet_CreateBranches/admin_additional_wallet_bypass_kyc_and_success
+--- PASS: TestWalletUsecase_ConnectWallet_CreateBranches (0.00s)
+    --- PASS: TestWalletUsecase_ConnectWallet_CreateBranches/create_error (0.00s)
+    --- PASS: TestWalletUsecase_ConnectWallet_CreateBranches/admin_additional_wallet_bypass_kyc_and_success (0.00s)
+=== RUN   TestWalletUsecase_DisconnectWallet_GetByIDError
+--- PASS: TestWalletUsecase_DisconnectWallet_GetByIDError (0.00s)
+=== RUN   TestWalletUsecase_GetWallets_And_SetPrimary
+--- PASS: TestWalletUsecase_GetWallets_And_SetPrimary (0.00s)
+=== RUN   TestWalletUsecase_ConnectWallet_GetByAddressErrorAndSecondResolveFail
+=== RUN   TestWalletUsecase_ConnectWallet_GetByAddressErrorAndSecondResolveFail/get_by_address_returns_unexpected_error
+=== RUN   TestWalletUsecase_ConnectWallet_GetByAddressErrorAndSecondResolveFail/second_resolver_call_fails_after_first_success
+--- PASS: TestWalletUsecase_ConnectWallet_GetByAddressErrorAndSecondResolveFail (0.00s)
+    --- PASS: TestWalletUsecase_ConnectWallet_GetByAddressErrorAndSecondResolveFail/get_by_address_returns_unexpected_error (0.00s)
+    --- PASS: TestWalletUsecase_ConnectWallet_GetByAddressErrorAndSecondResolveFail/second_resolver_call_fails_after_first_success (0.00s)
+=== RUN   TestWebhookUsecase_ProcessIndexerWebhook_InvalidJSON
+2026/02/18 08:13:18 Processing indexer event: PAYMENT_COMPLETED
+--- PASS: TestWebhookUsecase_ProcessIndexerWebhook_InvalidJSON (0.00s)
+=== RUN   TestWebhookUsecase_ProcessIndexerWebhook_PaymentCompletedSuccess
+2026/02/18 08:13:18 Processing indexer event: PAYMENT_COMPLETED
+--- PASS: TestWebhookUsecase_ProcessIndexerWebhook_PaymentCompletedSuccess (0.00s)
+=== RUN   TestWebhookUsecase_ProcessIndexerWebhook_PaymentUpdateFails
+2026/02/18 08:13:18 Processing indexer event: PAYMENT_EXECUTED
+2026/02/18 08:13:18 Error processing payment update: db error
+--- PASS: TestWebhookUsecase_ProcessIndexerWebhook_PaymentUpdateFails (0.00s)
+=== RUN   TestWebhookUsecase_ProcessIndexerWebhook_RequestPaymentReceived
+2026/02/18 08:13:18 Processing indexer event: REQUEST_PAYMENT_RECEIVED
+--- PASS: TestWebhookUsecase_ProcessIndexerWebhook_RequestPaymentReceived (0.00s)
+=== RUN   TestWebhookUsecase_ProcessIndexerWebhook_RequestPaymentReceived_InvalidJSON
+2026/02/18 08:13:18 Processing indexer event: REQUEST_PAYMENT_RECEIVED
+--- PASS: TestWebhookUsecase_ProcessIndexerWebhook_RequestPaymentReceived_InvalidJSON (0.00s)
+=== RUN   TestWebhookUsecase_ProcessIndexerWebhook_RequestPaymentReceived_MarkCompletedErrorStillNil
+2026/02/18 08:13:18 Processing indexer event: REQUEST_PAYMENT_RECEIVED
+2026/02/18 08:13:18 Error marking payment request as completed: update failed
+--- PASS: TestWebhookUsecase_ProcessIndexerWebhook_RequestPaymentReceived_MarkCompletedErrorStillNil (0.00s)
+=== RUN   TestWebhookUsecase_ProcessIndexerWebhook_PaymentCompleted_UOWDoError
+2026/02/18 08:13:18 Processing indexer event: PAYMENT_COMPLETED
+2026/02/18 08:13:18 Error processing payment update: tx begin failed
+--- PASS: TestWebhookUsecase_ProcessIndexerWebhook_PaymentCompleted_UOWDoError (0.00s)
+=== RUN   TestWebhookUsecase_ProcessIndexerWebhook_UnhandledEvent
+2026/02/18 08:13:18 Processing indexer event: SOME_UNKNOWN_EVENT
+2026/02/18 08:13:18 Unhandled event type: SOME_UNKNOWN_EVENT
+--- PASS: TestWebhookUsecase_ProcessIndexerWebhook_UnhandledEvent (0.00s)
+=== RUN   TestWebhookUsecase_ProcessIndexerWebhook_PaymentUpdateStatusError
+2026/02/18 08:13:18 Processing indexer event: PAYMENT_EXECUTED
+2026/02/18 08:13:18 Error processing payment update: update status failed
+--- PASS: TestWebhookUsecase_ProcessIndexerWebhook_PaymentUpdateStatusError (0.00s)
+=== RUN   TestWebhookUsecase_ProcessIndexerWebhook_PaymentRequestCreatedBranch
+2026/02/18 08:13:18 Processing indexer event: PAYMENT_REQUEST_CREATED
+2026/02/18 08:13:18 Payment request created on-chain: {"requestId":"abc"}
+--- PASS: TestWebhookUsecase_ProcessIndexerWebhook_PaymentRequestCreatedBranch (0.00s)
+=== RUN   TestWebhookUsecase_ProcessIndexerWebhook_PaymentFailed
+2026/02/18 08:13:18 Processing indexer event: PAYMENT_FAILED
+--- PASS: TestWebhookUsecase_ProcessIndexerWebhook_PaymentFailed (0.00s)
+=== CONT  TestFormatDecodedRouteErrorForPreflight
+=== RUN   TestFormatDecodedRouteErrorForPreflight/prefer_detailed_message
+=== PAUSE TestFormatDecodedRouteErrorForPreflight/prefer_detailed_message
+=== CONT  TestDecodeRouteErrorData_UnknownSelector
+=== CONT  TestDecodeRouteErrorData_NoErrorRecorded
+=== CONT  TestNormalizeBytes32Hex
+--- PASS: TestDecodeRouteErrorData_NoErrorRecorded (0.00s)
+=== CONT  TestDecodeRouteErrorData_InsufficientNativeFeePayload
+--- PASS: TestNormalizeBytes32Hex (0.00s)
+=== CONT  TestDecodeRouteErrorData_KnownCustomSelector
+--- PASS: TestDecodeRouteErrorData_UnknownSelector (0.00s)
+=== CONT  TestDecodeRouteErrorData_Panic
+=== RUN   TestFormatDecodedRouteErrorForPreflight/fallback_by_known_name
+=== PAUSE TestFormatDecodedRouteErrorForPreflight/fallback_by_known_name
+=== CONT  TestDecodeRouteErrorData_KnownCustomSelectorWithPayload
+=== RUN   TestFormatDecodedRouteErrorForPreflight/unknown_name_returns_name
+=== CONT  TestDecodeRouteErrorData_ErrorString
+--- PASS: TestDecodeRouteErrorData_Panic (0.00s)
+--- PASS: TestDecodeRouteErrorData_InsufficientNativeFeePayload (0.00s)
+--- PASS: TestDecodeRouteErrorData_ErrorString (0.00s)
+--- PASS: TestDecodeRouteErrorData_KnownCustomSelector (0.00s)
+--- PASS: TestDecodeRouteErrorData_KnownCustomSelectorWithPayload (0.00s)
+=== PAUSE TestFormatDecodedRouteErrorForPreflight/unknown_name_returns_name
+=== RUN   TestFormatDecodedRouteErrorForPreflight/selector_fallback
+=== PAUSE TestFormatDecodedRouteErrorForPreflight/selector_fallback
+=== RUN   TestFormatDecodedRouteErrorForPreflight/generic_fallback
+=== PAUSE TestFormatDecodedRouteErrorForPreflight/generic_fallback
+=== CONT  TestFormatDecodedRouteErrorForPreflight/prefer_detailed_message
+=== CONT  TestFormatDecodedRouteErrorForPreflight/selector_fallback
+=== CONT  TestFormatDecodedRouteErrorForPreflight/unknown_name_returns_name
+=== CONT  TestFormatDecodedRouteErrorForPreflight/fallback_by_known_name
+=== CONT  TestFormatDecodedRouteErrorForPreflight/generic_fallback
+--- PASS: TestFormatDecodedRouteErrorForPreflight (0.00s)
+    --- PASS: TestFormatDecodedRouteErrorForPreflight/prefer_detailed_message (0.00s)
+    --- PASS: TestFormatDecodedRouteErrorForPreflight/selector_fallback (0.00s)
+    --- PASS: TestFormatDecodedRouteErrorForPreflight/unknown_name_returns_name (0.00s)
+    --- PASS: TestFormatDecodedRouteErrorForPreflight/fallback_by_known_name (0.00s)
+    --- PASS: TestFormatDecodedRouteErrorForPreflight/generic_fallback (0.00s)
+FAIL
+FAIL	pay-chain.backend/internal/usecases	10.681s
+FAIL

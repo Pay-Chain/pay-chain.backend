@@ -95,16 +95,24 @@ func (s *smartContractChainRepoStub) GetByChainID(ctx context.Context, chainID s
 func (s *smartContractChainRepoStub) GetByCAIP2(context.Context, string) (*entities.Chain, error) {
 	return nil, domainerrors.ErrNotFound
 }
-func (s *smartContractChainRepoStub) GetAll(context.Context) ([]*entities.Chain, error) { return nil, nil }
+func (s *smartContractChainRepoStub) GetAll(context.Context) ([]*entities.Chain, error) {
+	return nil, nil
+}
 func (s *smartContractChainRepoStub) GetAllRPCs(context.Context, *uuid.UUID, *bool, *string, utils.PaginationParams) ([]*entities.ChainRPC, int64, error) {
 	return nil, 0, nil
 }
 func (s *smartContractChainRepoStub) GetActive(context.Context, utils.PaginationParams) ([]*entities.Chain, int64, error) {
 	return nil, 0, nil
 }
-func (s *smartContractChainRepoStub) Create(context.Context, *entities.Chain) error { return nil }
-func (s *smartContractChainRepoStub) Update(context.Context, *entities.Chain) error { return nil }
-func (s *smartContractChainRepoStub) Delete(context.Context, uuid.UUID) error       { return nil }
+func (s *smartContractChainRepoStub) Create(context.Context, *entities.Chain) error       { return nil }
+func (s *smartContractChainRepoStub) Update(context.Context, *entities.Chain) error       { return nil }
+func (s *smartContractChainRepoStub) Delete(context.Context, uuid.UUID) error             { return nil }
+func (s *smartContractChainRepoStub) CreateRPC(context.Context, *entities.ChainRPC) error { return nil }
+func (s *smartContractChainRepoStub) UpdateRPC(context.Context, *entities.ChainRPC) error { return nil }
+func (s *smartContractChainRepoStub) DeleteRPC(context.Context, uuid.UUID) error          { return nil }
+func (s *smartContractChainRepoStub) GetRPCByID(context.Context, uuid.UUID) (*entities.ChainRPC, error) {
+	return nil, domainerrors.ErrNotFound
+}
 
 func TestSmartContractHandler_CRUDAndLookup(t *testing.T) {
 	gin.SetMode(gin.TestMode)

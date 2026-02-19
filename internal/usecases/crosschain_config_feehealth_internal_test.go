@@ -2,10 +2,12 @@ package usecases
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"math/big"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"pay-chain.backend/internal/domain/entities"
@@ -26,8 +28,20 @@ func TestCrosschainConfigUsecase_CheckFeeQuoteHealth_Matrix(t *testing.T) {
 	}
 
 	factory := blockchain.NewClientFactory()
-	factory.RegisterEVMClient(source.RPCURL, blockchain.NewEVMClientWithCallView(big.NewInt(8453), func(context.Context, string, []byte) ([]byte, error) {
-		return []byte{0x01}, nil
+	factory.RegisterEVMClient(source.RPCURL, blockchain.NewEVMClientWithCallView(big.NewInt(8453), func(_ context.Context, _ string, data []byte) ([]byte, error) {
+		if len(data) >= 4 {
+			sel := hex.EncodeToString(data[:4])
+			switch sel {
+			case "fbfa77cf": // vault()
+				return commonAddressWord("0x00000000000000000000000000000000000000aa"), nil
+			case "374f353f": // getAdapter(string,uint8)
+				return commonAddressWord("0x00000000000000000000000000000000000000bb"), nil
+			case "de50c31d": // authorizedSpenders(address)
+				return commonBoolWord(true), nil
+			}
+		}
+		// generic non-empty uint256-compatible response for quote paths
+		return commonBoolWord(true), nil
 	}))
 
 	contractRepo := &ccContractRepoStub{
@@ -37,6 +51,13 @@ func TestCrosschainConfigUsecase_CheckFeeQuoteHealth_Matrix(t *testing.T) {
 				ChainUUID:       sourceID,
 				Type:            entities.ContractTypeRouter,
 				ContractAddress: "0x00000000000000000000000000000000000000b2",
+				IsActive:        true,
+			},
+			contractKey(sourceID, entities.ContractTypeGateway): &entities.SmartContract{
+				ID:              uuid.New(),
+				ChainUUID:       sourceID,
+				Type:            entities.ContractTypeGateway,
+				ContractAddress: "0x00000000000000000000000000000000000000b1",
 				IsActive:        true,
 			},
 		},
@@ -86,4 +107,18 @@ func TestCrosschainConfigUsecase_CheckFeeQuoteHealth_Matrix(t *testing.T) {
 		clientFactory: factoryEmpty,
 	}
 	require.False(t, uEmpty.checkFeeQuoteHealth(context.Background(), source, dest, 0))
+}
+
+func commonAddressWord(addr string) []byte {
+	out := make([]byte, 32)
+	copy(out[12:], common.HexToAddress(addr).Bytes())
+	return out
+}
+
+func commonBoolWord(v bool) []byte {
+	out := make([]byte, 32)
+	if v {
+		out[31] = 1
+	}
+	return out
 }

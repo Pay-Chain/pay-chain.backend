@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"gorm.io/gorm"
 	"pay-chain.backend/internal/domain/entities"
 	domainerrors "pay-chain.backend/internal/domain/errors"
@@ -25,8 +27,6 @@ func NewPaymentEventRepository(db *gorm.DB) *PaymentEventRepository {
 
 // Create creates a new payment event
 func (r *PaymentEventRepository) Create(ctx context.Context, event *entities.PaymentEvent) error {
-	fmt.Printf("DEBUG: PaymentEventRepository.Create - PaymentID: %s\n", event.PaymentID)
-
 	meta := "{}"
 	createdAt := event.CreatedAt
 	if createdAt.IsZero() {
@@ -35,12 +35,6 @@ func (r *PaymentEventRepository) Create(ctx context.Context, event *entities.Pay
 
 	// Use transaction-aware DB instance
 	db := GetDB(ctx, r.db).WithContext(ctx)
-	isTx := false
-	if _, ok := ctx.Value(txKey).(*gorm.DB); ok {
-		isTx = true
-	}
-	fmt.Printf("DEBUG: PaymentEventRepository.Create - IsTX: %v\n", isTx)
-
 	// Map Entity -> Model
 	m := &models.PaymentEvent{
 		ID:          event.ID,
@@ -54,7 +48,30 @@ func (r *PaymentEventRepository) Create(ctx context.Context, event *entities.Pay
 		BlockNumber: event.BlockNumber,
 	}
 
-	return db.Create(m).Error
+	const maxFKRetries = 3
+	var lastErr error
+	for attempt := 0; attempt < maxFKRetries; attempt++ {
+		lastErr = db.Create(m).Error
+		if lastErr == nil {
+			return nil
+		}
+		if !isForeignKeyError(lastErr) {
+			return lastErr
+		}
+		time.Sleep(time.Duration(100*(attempt+1)) * time.Millisecond)
+	}
+	return fmt.Errorf("failed to create payment event after FK retries: %w", lastErr)
+}
+
+func isForeignKeyError(err error) bool {
+	if err == nil {
+		return false
+	}
+	var pgErr *pq.Error
+	if errors.As(err, &pgErr) {
+		return string(pgErr.Code) == "23503"
+	}
+	return strings.Contains(strings.ToLower(err.Error()), "foreign key")
 }
 
 func (r *PaymentEventRepository) resolveLegacyChainValue(chainID *uuid.UUID) string {

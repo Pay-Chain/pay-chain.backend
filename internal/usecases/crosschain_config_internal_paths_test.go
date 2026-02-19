@@ -50,9 +50,15 @@ func (s *ccChainRepoStub) GetAllRPCs(context.Context, *uuid.UUID, *bool, *string
 func (s *ccChainRepoStub) GetActive(context.Context, utils.PaginationParams) ([]*entities.Chain, int64, error) {
 	return s.allChain, int64(len(s.allChain)), nil
 }
-func (s *ccChainRepoStub) Create(context.Context, *entities.Chain) error { return nil }
-func (s *ccChainRepoStub) Update(context.Context, *entities.Chain) error { return nil }
-func (s *ccChainRepoStub) Delete(context.Context, uuid.UUID) error       { return nil }
+func (s *ccChainRepoStub) Create(context.Context, *entities.Chain) error       { return nil }
+func (s *ccChainRepoStub) Update(context.Context, *entities.Chain) error       { return nil }
+func (s *ccChainRepoStub) Delete(context.Context, uuid.UUID) error             { return nil }
+func (s *ccChainRepoStub) CreateRPC(context.Context, *entities.ChainRPC) error { return nil }
+func (s *ccChainRepoStub) UpdateRPC(context.Context, *entities.ChainRPC) error { return nil }
+func (s *ccChainRepoStub) DeleteRPC(context.Context, uuid.UUID) error          { return nil }
+func (s *ccChainRepoStub) GetRPCByID(context.Context, uuid.UUID) (*entities.ChainRPC, error) {
+	return nil, domainerrors.ErrNotFound
+}
 
 type ccTokenRepoStub struct {
 	byChain map[uuid.UUID][]*entities.Token
@@ -124,18 +130,18 @@ type rpcReqInternal struct {
 
 func buildCrosschainRPCTestServer(t *testing.T, adapter0, adapter1, adapter2 common.Address) *httptest.Server {
 	t.Helper()
-	defaultMethodID := "0x" + hex.EncodeToString(payChainGatewayAdminABI.Methods["defaultBridgeTypes"].ID)
-	hasMethodID := "0x" + hex.EncodeToString(payChainRouterAdminABI.Methods["hasAdapter"].ID)
-	getMethodID := "0x" + hex.EncodeToString(payChainRouterAdminABI.Methods["getAdapter"].ID)
-	hyperConfiguredMethodID := "0x" + hex.EncodeToString(hyperbridgeSenderAdminABI.Methods["isChainConfigured"].ID)
-	hyperStateMachineMethodID := "0x" + hex.EncodeToString(hyperbridgeSenderAdminABI.Methods["stateMachineIds"].ID)
-	hyperDestinationMethodID := "0x" + hex.EncodeToString(hyperbridgeSenderAdminABI.Methods["destinationContracts"].ID)
-	ccipSelectorMethodID := "0x" + hex.EncodeToString(ccipSenderAdminABI.Methods["chainSelectors"].ID)
-	ccipDestinationMethodID := "0x" + hex.EncodeToString(ccipSenderAdminABI.Methods["destinationAdapters"].ID)
-	lzConfiguredMethodID := "0x" + hex.EncodeToString(layerZeroSenderAdminABI.Methods["isRouteConfigured"].ID)
-	lzDstMethodID := "0x" + hex.EncodeToString(layerZeroSenderAdminABI.Methods["dstEids"].ID)
-	lzPeerMethodID := "0x" + hex.EncodeToString(layerZeroSenderAdminABI.Methods["peers"].ID)
-	lzOptionsMethodID := "0x" + hex.EncodeToString(layerZeroSenderAdminABI.Methods["enforcedOptions"].ID)
+	defaultMethodID := "0x" + hex.EncodeToString(FallbackPayChainGatewayABI.Methods["defaultBridgeTypes"].ID)
+	hasMethodID := "0x" + hex.EncodeToString(FallbackPayChainRouterAdminABI.Methods["hasAdapter"].ID)
+	getMethodID := "0x" + hex.EncodeToString(FallbackPayChainRouterAdminABI.Methods["getAdapter"].ID)
+	hyperConfiguredMethodID := "0x" + hex.EncodeToString(FallbackHyperbridgeSenderAdminABI.Methods["isChainConfigured"].ID)
+	hyperStateMachineMethodID := "0x" + hex.EncodeToString(FallbackHyperbridgeSenderAdminABI.Methods["stateMachineIds"].ID)
+	hyperDestinationMethodID := "0x" + hex.EncodeToString(FallbackHyperbridgeSenderAdminABI.Methods["destinationContracts"].ID)
+	ccipSelectorMethodID := "0x" + hex.EncodeToString(FallbackCCIPSenderAdminABI.Methods["chainSelectors"].ID)
+	ccipDestinationMethodID := "0x" + hex.EncodeToString(FallbackCCIPSenderAdminABI.Methods["destinationAdapters"].ID)
+	lzConfiguredMethodID := "0x" + hex.EncodeToString(FallbackLayerZeroSenderAdminABI.Methods["isRouteConfigured"].ID)
+	lzDstMethodID := "0x" + hex.EncodeToString(FallbackLayerZeroSenderAdminABI.Methods["dstEids"].ID)
+	lzPeerMethodID := "0x" + hex.EncodeToString(FallbackLayerZeroSenderAdminABI.Methods["peers"].ID)
+	lzOptionsMethodID := "0x" + hex.EncodeToString(FallbackLayerZeroSenderAdminABI.Methods["enforcedOptions"].ID)
 
 	return newSafeHTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer r.Body.Close()
@@ -164,16 +170,16 @@ func buildCrosschainRPCTestServer(t *testing.T, adapter0, adapter1, adapter2 com
 			}
 			switch methodID {
 			case defaultMethodID:
-				out, _ := payChainGatewayAdminABI.Methods["defaultBridgeTypes"].Outputs.Pack(uint8(0))
+				out, _ := FallbackPayChainGatewayABI.Methods["defaultBridgeTypes"].Outputs.Pack(uint8(0))
 				resp["result"] = "0x" + hex.EncodeToString(out)
 			case hasMethodID:
-				unpacked, _ := payChainRouterAdminABI.Methods["hasAdapter"].Inputs.Unpack(common.FromHex(callData)[4:])
+				unpacked, _ := FallbackPayChainRouterAdminABI.Methods["hasAdapter"].Inputs.Unpack(common.FromHex(callData)[4:])
 				bridgeType, _ := unpacked[1].(uint8)
 				has := bridgeType <= 2
-				out, _ := payChainRouterAdminABI.Methods["hasAdapter"].Outputs.Pack(has)
+				out, _ := FallbackPayChainRouterAdminABI.Methods["hasAdapter"].Outputs.Pack(has)
 				resp["result"] = "0x" + hex.EncodeToString(out)
 			case getMethodID:
-				unpacked, _ := payChainRouterAdminABI.Methods["getAdapter"].Inputs.Unpack(common.FromHex(callData)[4:])
+				unpacked, _ := FallbackPayChainRouterAdminABI.Methods["getAdapter"].Inputs.Unpack(common.FromHex(callData)[4:])
 				bridgeType, _ := unpacked[1].(uint8)
 				addr := common.Address{}
 				if bridgeType == 0 {
@@ -183,38 +189,38 @@ func buildCrosschainRPCTestServer(t *testing.T, adapter0, adapter1, adapter2 com
 				} else if bridgeType == 2 {
 					addr = adapter2
 				}
-				out, _ := payChainRouterAdminABI.Methods["getAdapter"].Outputs.Pack(addr)
+				out, _ := FallbackPayChainRouterAdminABI.Methods["getAdapter"].Outputs.Pack(addr)
 				resp["result"] = "0x" + hex.EncodeToString(out)
 			case hyperConfiguredMethodID:
-				out, _ := hyperbridgeSenderAdminABI.Methods["isChainConfigured"].Outputs.Pack(true)
+				out, _ := FallbackHyperbridgeSenderAdminABI.Methods["isChainConfigured"].Outputs.Pack(true)
 				resp["result"] = "0x" + hex.EncodeToString(out)
 			case hyperStateMachineMethodID:
-				out, _ := hyperbridgeSenderAdminABI.Methods["stateMachineIds"].Outputs.Pack([]byte("EVM-42161"))
+				out, _ := FallbackHyperbridgeSenderAdminABI.Methods["stateMachineIds"].Outputs.Pack([]byte("EVM-42161"))
 				resp["result"] = "0x" + hex.EncodeToString(out)
 			case hyperDestinationMethodID:
-				out, _ := hyperbridgeSenderAdminABI.Methods["destinationContracts"].Outputs.Pack(common.LeftPadBytes(common.HexToAddress("0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb").Bytes(), 32))
+				out, _ := FallbackHyperbridgeSenderAdminABI.Methods["destinationContracts"].Outputs.Pack(common.LeftPadBytes(common.HexToAddress("0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb").Bytes(), 32))
 				resp["result"] = "0x" + hex.EncodeToString(out)
 			case ccipSelectorMethodID:
-				out, _ := ccipSenderAdminABI.Methods["chainSelectors"].Outputs.Pack(uint64(4949039107694359620))
+				out, _ := FallbackCCIPSenderAdminABI.Methods["chainSelectors"].Outputs.Pack(uint64(4949039107694359620))
 				resp["result"] = "0x" + hex.EncodeToString(out)
 			case ccipDestinationMethodID:
-				out, _ := ccipSenderAdminABI.Methods["destinationAdapters"].Outputs.Pack(common.LeftPadBytes(common.HexToAddress("0xcccccccccccccccccccccccccccccccccccccccc").Bytes(), 32))
+				out, _ := FallbackCCIPSenderAdminABI.Methods["destinationAdapters"].Outputs.Pack(common.LeftPadBytes(common.HexToAddress("0xcccccccccccccccccccccccccccccccccccccccc").Bytes(), 32))
 				resp["result"] = "0x" + hex.EncodeToString(out)
 			case lzConfiguredMethodID:
-				out, _ := layerZeroSenderAdminABI.Methods["isRouteConfigured"].Outputs.Pack(true)
+				out, _ := FallbackLayerZeroSenderAdminABI.Methods["isRouteConfigured"].Outputs.Pack(true)
 				resp["result"] = "0x" + hex.EncodeToString(out)
 			case lzDstMethodID:
-				out, _ := layerZeroSenderAdminABI.Methods["dstEids"].Outputs.Pack(uint32(30110))
+				out, _ := FallbackLayerZeroSenderAdminABI.Methods["dstEids"].Outputs.Pack(uint32(30110))
 				resp["result"] = "0x" + hex.EncodeToString(out)
 			case lzPeerMethodID:
-				out, _ := layerZeroSenderAdminABI.Methods["peers"].Outputs.Pack([32]byte{1})
+				out, _ := FallbackLayerZeroSenderAdminABI.Methods["peers"].Outputs.Pack([32]byte{1})
 				resp["result"] = "0x" + hex.EncodeToString(out)
 			case lzOptionsMethodID:
-				out, _ := layerZeroSenderAdminABI.Methods["enforcedOptions"].Outputs.Pack([]byte{0x01, 0x02})
+				out, _ := FallbackLayerZeroSenderAdminABI.Methods["enforcedOptions"].Outputs.Pack([]byte{0x01, 0x02})
 				resp["result"] = "0x" + hex.EncodeToString(out)
 			default:
-				// quotePaymentFee and unknown views: return non-empty to mark healthy.
-				resp["result"] = "0x01"
+				// quotePaymentFee and unknown views: return non-empty 32-byte to mark ready.
+				resp["result"] = "0x0000000000000000000000000000000000000000000000000000000000000001"
 			}
 		default:
 			resp["result"] = "0x0"

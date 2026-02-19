@@ -56,16 +56,24 @@ func (s *contractAuditChainRepoStub) GetAllRPCs(context.Context, *uuid.UUID, *bo
 func (s *contractAuditChainRepoStub) GetActive(context.Context, utils.PaginationParams) ([]*entities.Chain, int64, error) {
 	return nil, 0, nil
 }
-func (s *contractAuditChainRepoStub) Create(context.Context, *entities.Chain) error { return nil }
-func (s *contractAuditChainRepoStub) Update(context.Context, *entities.Chain) error { return nil }
-func (s *contractAuditChainRepoStub) Delete(context.Context, uuid.UUID) error       { return nil }
+func (s *contractAuditChainRepoStub) Create(context.Context, *entities.Chain) error       { return nil }
+func (s *contractAuditChainRepoStub) Update(context.Context, *entities.Chain) error       { return nil }
+func (s *contractAuditChainRepoStub) Delete(context.Context, uuid.UUID) error             { return nil }
+func (s *contractAuditChainRepoStub) CreateRPC(context.Context, *entities.ChainRPC) error { return nil }
+func (s *contractAuditChainRepoStub) UpdateRPC(context.Context, *entities.ChainRPC) error { return nil }
+func (s *contractAuditChainRepoStub) DeleteRPC(context.Context, uuid.UUID) error          { return nil }
+func (s *contractAuditChainRepoStub) GetRPCByID(context.Context, uuid.UUID) (*entities.ChainRPC, error) {
+	return nil, domainerrors.ErrNotFound
+}
 
 type contractAuditContractRepoStub struct {
 	contractByID map[uuid.UUID]*entities.SmartContract
 	getByIDErr   error
 }
 
-func (s *contractAuditContractRepoStub) Create(context.Context, *entities.SmartContract) error { return nil }
+func (s *contractAuditContractRepoStub) Create(context.Context, *entities.SmartContract) error {
+	return nil
+}
 func (s *contractAuditContractRepoStub) GetByID(_ context.Context, id uuid.UUID) (*entities.SmartContract, error) {
 	if s.getByIDErr != nil {
 		return nil, s.getByIDErr
@@ -90,8 +98,10 @@ func (s *contractAuditContractRepoStub) GetByChain(context.Context, uuid.UUID, u
 func (s *contractAuditContractRepoStub) GetAll(context.Context, utils.PaginationParams) ([]*entities.SmartContract, int64, error) {
 	return nil, 0, nil
 }
-func (s *contractAuditContractRepoStub) Update(context.Context, *entities.SmartContract) error { return nil }
-func (s *contractAuditContractRepoStub) SoftDelete(context.Context, uuid.UUID) error            { return nil }
+func (s *contractAuditContractRepoStub) Update(context.Context, *entities.SmartContract) error {
+	return nil
+}
+func (s *contractAuditContractRepoStub) SoftDelete(context.Context, uuid.UUID) error { return nil }
 
 func TestContractConfigAuditHandler_CheckAndByContract(t *testing.T) {
 	gin.SetMode(gin.TestMode)

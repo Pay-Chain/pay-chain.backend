@@ -142,9 +142,15 @@ func (s walletChainRepoStub) GetAllRPCs(context.Context, *uuid.UUID, *bool, *str
 func (s walletChainRepoStub) GetActive(context.Context, utils.PaginationParams) ([]*entities.Chain, int64, error) {
 	return nil, 0, nil
 }
-func (s walletChainRepoStub) Create(context.Context, *entities.Chain) error { return nil }
-func (s walletChainRepoStub) Update(context.Context, *entities.Chain) error { return nil }
-func (s walletChainRepoStub) Delete(context.Context, uuid.UUID) error       { return nil }
+func (s walletChainRepoStub) Create(context.Context, *entities.Chain) error       { return nil }
+func (s walletChainRepoStub) Update(context.Context, *entities.Chain) error       { return nil }
+func (s walletChainRepoStub) Delete(context.Context, uuid.UUID) error             { return nil }
+func (s walletChainRepoStub) CreateRPC(context.Context, *entities.ChainRPC) error { return nil }
+func (s walletChainRepoStub) UpdateRPC(context.Context, *entities.ChainRPC) error { return nil }
+func (s walletChainRepoStub) DeleteRPC(context.Context, uuid.UUID) error          { return nil }
+func (s walletChainRepoStub) GetRPCByID(context.Context, uuid.UUID) (*entities.ChainRPC, error) {
+	return nil, domainerrors.ErrNotFound
+}
 
 func TestWalletHandler_SuccessFlow(t *testing.T) {
 	gin.SetMode(gin.TestMode)

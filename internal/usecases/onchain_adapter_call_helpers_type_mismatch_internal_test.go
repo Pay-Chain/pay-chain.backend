@@ -23,27 +23,27 @@ func TestOnchainAdapterUsecase_CallHelpers_InvalidReturnTypeBranches(t *testing.
 	dest := "eip155:42161"
 	addr := common.HexToAddress("0x1111111111111111111111111111111111111111").Hex()
 
-	origGatewayABI := payChainGatewayAdminABI
-	origRouterABI := payChainRouterAdminABI
-	origHyperABI := hyperbridgeSenderAdminABI
-	origCCIPABI := ccipSenderAdminABI
-	origLZABI := layerZeroSenderAdminABI
+	origGatewayABI := FallbackPayChainGatewayABI
+	origRouterABI := FallbackPayChainRouterAdminABI
+	origHyperABI := FallbackHyperbridgeSenderAdminABI
+	origCCIPABI := FallbackCCIPSenderAdminABI
+	origLZABI := FallbackLayerZeroSenderAdminABI
 	t.Cleanup(func() {
-		payChainGatewayAdminABI = origGatewayABI
-		payChainRouterAdminABI = origRouterABI
-		hyperbridgeSenderAdminABI = origHyperABI
-		ccipSenderAdminABI = origCCIPABI
-		layerZeroSenderAdminABI = origLZABI
+		FallbackPayChainGatewayABI = origGatewayABI
+		FallbackPayChainRouterAdminABI = origRouterABI
+		FallbackHyperbridgeSenderAdminABI = origHyperABI
+		FallbackCCIPSenderAdminABI = origCCIPABI
+		FallbackLayerZeroSenderAdminABI = origLZABI
 	})
 
 	gatewayMismatch := mustParseABI(`[
 		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"}],"name":"defaultBridgeTypes","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"}
 	]`)
-	payChainGatewayAdminABI = gatewayMismatch
+	FallbackPayChainGatewayABI = gatewayMismatch
 	client := newTestEVMClient(t, []string{
 		mustEncodeOutMismatch(t, gatewayMismatch, "defaultBridgeTypes", true),
 	})
-	_, err := u.callDefaultBridgeType(ctx, client, addr, dest)
+	_, err := u.callDefaultBridgeType(ctx, client, addr, FallbackPayChainGatewayABI, dest)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid defaultBridgeTypes return type")
 
@@ -51,15 +51,15 @@ func TestOnchainAdapterUsecase_CallHelpers_InvalidReturnTypeBranches(t *testing.
 		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"},{"internalType":"uint8","name":"bridgeType","type":"uint8"}],"name":"hasAdapter","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
 		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"},{"internalType":"uint8","name":"bridgeType","type":"uint8"}],"name":"getAdapter","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}
 	]`)
-	payChainRouterAdminABI = routerMismatch
+	FallbackPayChainRouterAdminABI = routerMismatch
 	client = newTestEVMClient(t, []string{
 		mustEncodeOutMismatch(t, routerMismatch, "hasAdapter", big.NewInt(1)),
 		mustEncodeOutMismatch(t, routerMismatch, "getAdapter", big.NewInt(1)),
 	})
-	_, err = u.callHasAdapter(ctx, client, addr, dest, 0)
+	_, err = u.callHasAdapter(ctx, client, addr, FallbackPayChainRouterAdminABI, dest, 0)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid hasAdapter return type")
-	_, err = u.callGetAdapter(ctx, client, addr, dest, 0)
+	_, err = u.callGetAdapter(ctx, client, addr, FallbackPayChainRouterAdminABI, dest, 0)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid getAdapter return type")
 
@@ -67,15 +67,15 @@ func TestOnchainAdapterUsecase_CallHelpers_InvalidReturnTypeBranches(t *testing.
 		{"inputs":[{"internalType":"string","name":"chainId","type":"string"}],"name":"isChainConfigured","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
 		{"inputs":[{"internalType":"string","name":"chainId","type":"string"}],"name":"stateMachineIds","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}
 	]`)
-	hyperbridgeSenderAdminABI = hyperMismatch
+	FallbackHyperbridgeSenderAdminABI = hyperMismatch
 	client = newTestEVMClient(t, []string{
 		mustEncodeOutMismatch(t, hyperMismatch, "isChainConfigured", big.NewInt(1)),
 		mustEncodeOutMismatch(t, hyperMismatch, "stateMachineIds", big.NewInt(1)),
 	})
-	_, err = u.callHyperbridgeConfigured(ctx, client, addr, dest)
+	_, err = u.callHyperbridgeConfigured(ctx, client, addr, FallbackHyperbridgeSenderAdminABI, dest)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid isChainConfigured return type")
-	_, err = u.callHyperbridgeBytes(ctx, client, addr, "stateMachineIds", dest)
+	_, err = u.callHyperbridgeBytes(ctx, client, addr, FallbackHyperbridgeSenderAdminABI, "stateMachineIds", dest)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid stateMachineIds return type")
 
@@ -83,15 +83,15 @@ func TestOnchainAdapterUsecase_CallHelpers_InvalidReturnTypeBranches(t *testing.
 		{"inputs":[{"internalType":"string","name":"chainId","type":"string"}],"name":"chainSelectors","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},
 		{"inputs":[{"internalType":"string","name":"chainId","type":"string"}],"name":"destinationAdapters","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}
 	]`)
-	ccipSenderAdminABI = ccipMismatch
+	FallbackCCIPSenderAdminABI = ccipMismatch
 	client = newTestEVMClient(t, []string{
 		mustEncodeOutMismatch(t, ccipMismatch, "chainSelectors", true),
 		mustEncodeOutMismatch(t, ccipMismatch, "destinationAdapters", big.NewInt(1)),
 	})
-	_, err = u.callCCIPSelector(ctx, client, addr, dest)
+	_, err = u.callCCIPSelector(ctx, client, addr, FallbackCCIPSenderAdminABI, dest)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid chainSelectors return type")
-	_, err = u.callCCIPDestinationAdapter(ctx, client, addr, dest)
+	_, err = u.callCCIPDestinationAdapter(ctx, client, addr, FallbackCCIPSenderAdminABI, dest)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid destinationAdapters return type")
 
@@ -101,23 +101,23 @@ func TestOnchainAdapterUsecase_CallHelpers_InvalidReturnTypeBranches(t *testing.
 		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"}],"name":"peers","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
 		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"}],"name":"enforcedOptions","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}
 	]`)
-	layerZeroSenderAdminABI = lzMismatch
+	FallbackLayerZeroSenderAdminABI = lzMismatch
 	client = newTestEVMClient(t, []string{
 		mustEncodeOutMismatch(t, lzMismatch, "isRouteConfigured", big.NewInt(1)),
 		mustEncodeOutMismatch(t, lzMismatch, "dstEids", true),
 		mustEncodeOutMismatch(t, lzMismatch, "peers", big.NewInt(1)),
 		mustEncodeOutMismatch(t, lzMismatch, "enforcedOptions", big.NewInt(1)),
 	})
-	_, err = u.callLayerZeroConfigured(ctx, client, addr, dest)
+	_, err = u.callLayerZeroConfigured(ctx, client, addr, FallbackLayerZeroSenderAdminABI, dest)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid isRouteConfigured return type")
-	_, err = u.callLayerZeroDstEid(ctx, client, addr, dest)
+	_, err = u.callLayerZeroDstEid(ctx, client, addr, FallbackLayerZeroSenderAdminABI, dest)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid dstEids return type")
-	_, err = u.callLayerZeroPeer(ctx, client, addr, dest)
+	_, err = u.callLayerZeroPeer(ctx, client, addr, FallbackLayerZeroSenderAdminABI, dest)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid peers return type")
-	_, err = u.callLayerZeroOptions(ctx, client, addr, dest)
+	_, err = u.callLayerZeroOptions(ctx, client, addr, FallbackLayerZeroSenderAdminABI, dest)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid enforcedOptions return type")
 }

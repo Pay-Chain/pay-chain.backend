@@ -201,3 +201,49 @@ func TestWebhookUsecase_ProcessIndexerWebhook_PaymentRequestCreatedBranch(t *tes
 	err := uc.ProcessIndexerWebhook(context.Background(), "PAYMENT_REQUEST_CREATED", json.RawMessage(`{"requestId":"abc"}`))
 	assert.NoError(t, err)
 }
+
+func TestWebhookUsecase_ProcessIndexerWebhook_PaymentFailed(t *testing.T) {
+	mockPaymentRepo := new(MockPaymentRepository)
+	mockEventRepo := new(MockPaymentEventRepository)
+	mockRequestRepo := new(MockPaymentRequestRepository)
+	mockUOW := new(MockUnitOfWork)
+
+	uc := usecases.NewWebhookUsecase(mockPaymentRepo, mockEventRepo, mockRequestRepo, mockUOW)
+
+	paymentID := uuid.New()
+	failurePayload := map[string]any{
+		"paymentId":    paymentID.String(),
+		"status":       "FAILED",
+		"reason":       "execution reverted",
+		"revertData":   "0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001bc5d2460186f7233303a3a416363657373436f6e74726f6c3a206163636f756e74203078313233206973206d697373696e6720726f6c652030783435360000000000", // "Error(string)" selector + "Some Error" (simulated)
+		"sourceTxHash": "0xfail",
+	}
+	// Note: The revertData above is just a filler hex for now,
+	// specific decoding logic verification is covered by unit tests for decodeRouteErrorData.
+	// We just want to ensure it passes the Update call with correct fields.
+
+	raw, _ := json.Marshal(failurePayload)
+	ctx := context.Background()
+
+	mockUOW.On("Do", ctx, mock.Anything).Return(nil).Once()
+	mockUOW.On("WithLock", ctx).Return(ctx).Once()
+
+	existingPayment := &entities.Payment{ID: paymentID, Status: entities.PaymentStatusPending}
+	mockPaymentRepo.On("GetByID", ctx, paymentID).Return(existingPayment, nil).Once()
+
+	// Expect Update to be called with modified payment
+	mockPaymentRepo.On("Update", ctx, mock.MatchedBy(func(p *entities.Payment) bool {
+		return p.ID == paymentID &&
+			p.Status == entities.PaymentStatusFailed &&
+			p.FailureReason.Valid &&
+			p.RevertData.Valid &&
+			p.RevertData.String == failurePayload["revertData"]
+	})).Return(nil).Once()
+
+	mockEventRepo.On("Create", ctx, mock.MatchedBy(func(e *entities.PaymentEvent) bool {
+		return e.PaymentID == paymentID && e.EventType == "PAYMENT_FAILED" && e.TxHash == "0xfail"
+	})).Return(nil).Once()
+
+	err := uc.ProcessIndexerWebhook(ctx, "PAYMENT_FAILED", raw)
+	assert.NoError(t, err)
+}

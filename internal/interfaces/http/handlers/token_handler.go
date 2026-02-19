@@ -117,6 +117,16 @@ func (h *TokenHandler) CreateToken(c *gin.Context) {
 		return
 	}
 
+	// Sanitize MinAmount
+	if req.MinAmount == "" {
+		req.MinAmount = "0"
+	}
+
+	// Sanitize MaxAmount: treat empty string as nil
+	if req.MaxAmount != nil && *req.MaxAmount == "" {
+		req.MaxAmount = nil
+	}
+
 	chainID, err := uuid.Parse(req.ChainID)
 	if err != nil {
 		// Try lookup by legacy blockchain ID
@@ -169,7 +179,7 @@ func (h *TokenHandler) UpdateToken(c *gin.Context) {
 		ContractAddress string  `json:"contractAddress"`
 		ChainID         string  `json:"chainId"`
 		MinAmount       string  `json:"minAmount"`
-		MaxAmount       *string `json:"maxAmount"`
+		MaxAmount       *string `json:"maxAmount"` // Use pointer to distinguish between missing field and explicit null/empty
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -204,9 +214,17 @@ func (h *TokenHandler) UpdateToken(c *gin.Context) {
 	if req.MinAmount != "" {
 		token.MinAmount = req.MinAmount
 	}
+
+	// Handle MaxAmount
 	if req.MaxAmount != nil {
-		token.MaxAmount = null.StringFromPtr(req.MaxAmount)
+		if *req.MaxAmount == "" {
+			// If explicitly set to empty string, set to null
+			token.MaxAmount = null.String{}
+		} else {
+			token.MaxAmount = null.StringFromPtr(req.MaxAmount)
+		}
 	}
+
 	if req.ChainID != "" {
 		chainID, err := uuid.Parse(req.ChainID)
 		if err != nil {

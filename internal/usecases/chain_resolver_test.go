@@ -89,7 +89,7 @@ func TestChainResolver_ResolveFromAny_CAIP2FallbackToRawID(t *testing.T) {
 
 	caip2 := "eip155:8453"
 	mockRepo.On("GetByCAIP2", context.Background(), caip2).Return(nil, errors.New("not found")).Once()
-	mockRepo.On("GetByChainID", context.Background(), caip2).Return(nil, errors.New("not found")).Once()
+
 	mockRepo.On("GetByChainID", context.Background(), "8453").Return(chain, nil).Once()
 
 	id, resolved, err := resolver.ResolveFromAny(context.Background(), caip2)
@@ -103,7 +103,7 @@ func TestChainResolver_ResolveFromAny_Failure(t *testing.T) {
 	mockRepo := new(MockChainRepository)
 	resolver := usecases.NewChainResolver(mockRepo)
 
-	mockRepo.On("GetByChainID", context.Background(), "unknown-chain").Return(nil, errors.New("not found")).Twice()
+	mockRepo.On("GetByChainID", context.Background(), "unknown-chain").Return(nil, errors.New("not found")).Once()
 
 	id, caip2, err := resolver.ResolveFromAny(context.Background(), "unknown-chain")
 	assert.Error(t, err)
@@ -139,7 +139,7 @@ func TestChainResolver_ResolveFromAny_TrimmedInputAndSolanaFallback(t *testing.T
 
 	caip2 := "solana:devnet"
 	mockRepo.On("GetByCAIP2", context.Background(), caip2).Return(nil, errors.New("not found")).Once()
-	mockRepo.On("GetByChainID", context.Background(), caip2).Return(nil, errors.New("not found")).Once()
+
 	mockRepo.On("GetByChainID", context.Background(), "devnet").Return(chain, nil).Once()
 
 	id, resolved, err := resolver.ResolveFromAny(context.Background(), "  "+caip2+"  ")

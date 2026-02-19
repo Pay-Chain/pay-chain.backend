@@ -1,0 +1,846 @@
+=== RUN   TestApiKeyRepository_CRUDAndFinders
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/api_key_repo_impl.go:61 [35;1mrecord not found
+[0m[33m[0.026ms] [34;1m[rows:0][0m SELECT * FROM `api_keys` WHERE id = "dd3d9929-e832-4587-82ab-d320a075872a" AND `api_keys`.`deleted_at` IS NULL ORDER BY `api_keys`.`id` LIMIT 1
+--- PASS: TestApiKeyRepository_CRUDAndFinders (0.00s)
+=== RUN   TestApiKeyRepository_NotFoundBranches
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/api_key_repo_impl.go:61 [35;1mrecord not found
+[0m[33m[0.234ms] [34;1m[rows:0][0m SELECT * FROM `api_keys` WHERE id = "115a979d-8671-47e9-8171-4aa6da702668" AND `api_keys`.`deleted_at` IS NULL ORDER BY `api_keys`.`id` LIMIT 1
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/api_key_repo_impl.go:36 [35;1mrecord not found
+[0m[33m[0.029ms] [34;1m[rows:0][0m SELECT * FROM `api_keys` WHERE key_hash = "missing" AND `api_keys`.`deleted_at` IS NULL ORDER BY `api_keys`.`id` LIMIT 1
+--- PASS: TestApiKeyRepository_NotFoundBranches (0.00s)
+=== RUN   TestApiKeyRepository_DBErrorBranches
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/api_key_repo_impl.go:26 [35;1mno such table: api_keys
+[0m[33m[0.149ms] [34;1m[rows:0][0m INSERT INTO `api_keys` (`user_id`,`name`,`key_prefix`,`key_hash`,`secret_encrypted`,`secret_masked`,`permissions`,`is_active`,`last_used_at`,`expires_at`,`created_at`,`updated_at`,`deleted_at`,`id`) VALUES ("f4f29c81-71cb-4cee-aa0d-d739e4665393","default","pk","hash","enc","mask","[""read""]",true,NULL,NULL,"2026-02-18 17:51:01.272","2026-02-18 17:51:01.272",NULL,"98bd22f7-7f2a-4583-9c06-50d1f2299919") RETURNING `id`
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/api_key_repo_impl.go:36 [35;1mno such table: api_keys
+[0m[33m[0.011ms] [34;1m[rows:0][0m SELECT * FROM `api_keys` WHERE key_hash = "hash" AND `api_keys`.`deleted_at` IS NULL ORDER BY `api_keys`.`id` LIMIT 1
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/api_key_repo_impl.go:47 [35;1mno such table: api_keys
+[0m[33m[0.008ms] [34;1m[rows:0][0m SELECT * FROM `api_keys` WHERE user_id = "97fe360b-14db-4e74-b506-862a67555c35" AND `api_keys`.`deleted_at` IS NULL
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/api_key_repo_impl.go:61 [35;1mno such table: api_keys
+[0m[33m[0.011ms] [34;1m[rows:0][0m SELECT * FROM `api_keys` WHERE id = "c5dbbc3e-d172-41c3-aeca-eef209f42bd6" AND `api_keys`.`deleted_at` IS NULL ORDER BY `api_keys`.`id` LIMIT 1
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/api_key_repo_impl.go:72 [35;1mno such table: api_keys
+[0m[33m[0.037ms] [34;1m[rows:0][0m UPDATE `api_keys` SET `is_active`=true,`last_used_at`=NULL,`name`="default",`permissions`="[""read""]",`secret_encrypted`="enc",`secret_masked`="mask",`updated_at`="2026-02-18 17:51:01.272" WHERE id = "d1cf9d17-686d-4c29-8e6a-80686bb95f59" AND `api_keys`.`deleted_at` IS NULL
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/api_key_repo_impl.go:91 [35;1mno such table: api_keys
+[0m[33m[0.036ms] [34;1m[rows:0][0m UPDATE `api_keys` SET `deleted_at`="2026-02-18 17:51:01.272" WHERE id = "ec52d67a-285e-482e-837a-62e9318cb34a" AND `api_keys`.`deleted_at` IS NULL
+--- PASS: TestApiKeyRepository_DBErrorBranches (0.00s)
+=== RUN   TestBridgeConfigRepository_CRUDAndNotFound
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/bridge_config_repo_impl.go:31 [35;1mrecord not found
+[0m[33m[0.030ms] [34;1m[rows:0][0m SELECT * FROM `bridge_configs` WHERE (source_chain_id = "c9ddc1a5-329c-4816-9027-8821197ad1aa" AND dest_chain_id = "c629d59b-22ca-437c-a968-4c5481e0c113" AND is_active = true) AND `bridge_configs`.`deleted_at` IS NULL ORDER BY updated_at DESC,`bridge_configs`.`id` LIMIT 1
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/bridge_config_repo_impl.go:52 [35;1mrecord not found
+[0m[33m[0.024ms] [34;1m[rows:0][0m SELECT * FROM `bridge_configs` WHERE id = "2bf294cb-33d0-425e-9cfe-f1b534e5be7d" AND `bridge_configs`.`deleted_at` IS NULL ORDER BY `bridge_configs`.`id` LIMIT 1
+--- PASS: TestBridgeConfigRepository_CRUDAndNotFound (0.00s)
+=== RUN   TestBridgeConfigRepository_Create_AssignsIDWhenNil
+--- PASS: TestBridgeConfigRepository_Create_AssignsIDWhenNil (0.00s)
+=== RUN   TestFeeConfigRepository_CRUDAndNotFound
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/fee_config_repo_impl.go:43 [35;1mrecord not found
+[0m[33m[0.018ms] [34;1m[rows:0][0m SELECT * FROM `fee_configs` WHERE id = "5b99bac4-ee75-4cf5-94c6-4e06f926c8f8" AND `fee_configs`.`deleted_at` IS NULL ORDER BY `fee_configs`.`id` LIMIT 1
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/fee_config_repo_impl.go:30 [35;1mrecord not found
+[0m[33m[0.028ms] [34;1m[rows:0][0m SELECT * FROM `fee_configs` WHERE (chain_id = "78ca34bb-79f2-4f2e-9913-38cf5cf5ab5b" AND token_id = "79dde593-7933-4674-ad2c-b4cb184fbd8c") AND `fee_configs`.`deleted_at` IS NULL ORDER BY updated_at DESC,`fee_configs`.`id` LIMIT 1
+--- PASS: TestFeeConfigRepository_CRUDAndNotFound (0.00s)
+=== RUN   TestFeeConfigRepository_Create_AssignsIDWhenNil
+--- PASS: TestFeeConfigRepository_Create_AssignsIDWhenNil (0.00s)
+=== RUN   TestBridgeAndFeeConfigRepository_DBErrorBranches
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/bridge_config_repo_impl.go:52 [35;1mno such table: bridge_configs
+[0m[33m[0.097ms] [34;1m[rows:0][0m SELECT * FROM `bridge_configs` WHERE id = "6aaf6dd9-a913-4ff6-9260-1cbecf542751" AND `bridge_configs`.`deleted_at` IS NULL ORDER BY `bridge_configs`.`id` LIMIT 1
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/bridge_config_repo_impl.go:31 [35;1mno such table: bridge_configs
+[0m[33m[0.015ms] [34;1m[rows:0][0m SELECT * FROM `bridge_configs` WHERE (source_chain_id = "18a6be34-c154-4048-92ac-0afc01631ed6" AND dest_chain_id = "46f66ebe-5504-4ddc-a560-ee1e092169ea" AND is_active = true) AND `bridge_configs`.`deleted_at` IS NULL ORDER BY updated_at DESC,`bridge_configs`.`id` LIMIT 1
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/bridge_config_repo_impl.go:82 [35;1mno such table: bridge_configs
+[0m[33m[0.007ms] [34;1m[rows:0][0m SELECT count(*) FROM `bridge_configs` WHERE `bridge_configs`.`deleted_at` IS NULL
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/bridge_config_repo_impl.go:127 [35;1mno such table: bridge_configs
+[0m[33m[0.026ms] [34;1m[rows:0][0m UPDATE `bridge_configs` SET `bridge_id`="00000000-0000-0000-0000-000000000000",`config`="",`dest_chain_id`="00000000-0000-0000-0000-000000000000",`fee_percentage`="",`is_active`=false,`router_address`="",`source_chain_id`="00000000-0000-0000-0000-000000000000",`updated_at`="2026-02-18 17:51:01.276" WHERE id = "bc5db1a1-f2a6-4e54-adc3-ca25a488799b" AND `bridge_configs`.`deleted_at` IS NULL
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/bridge_config_repo_impl.go:147 [35;1mno such table: bridge_configs
+[0m[33m[0.019ms] [34;1m[rows:0][0m UPDATE `bridge_configs` SET `deleted_at`="2026-02-18 17:51:01.276" WHERE id = "2839df68-997c-4f03-8e7c-4cd0b445895d" AND `bridge_configs`.`deleted_at` IS NULL
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/fee_config_repo_impl.go:43 [35;1mno such table: fee_configs
+[0m[33m[0.065ms] [34;1m[rows:0][0m SELECT * FROM `fee_configs` WHERE id = "4edba690-af45-4bab-b592-763108594d28" AND `fee_configs`.`deleted_at` IS NULL ORDER BY `fee_configs`.`id` LIMIT 1
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/fee_config_repo_impl.go:30 [35;1mno such table: fee_configs
+[0m[33m[0.009ms] [34;1m[rows:0][0m SELECT * FROM `fee_configs` WHERE (chain_id = "c56bdcf4-49c9-4b77-8b37-e79687d03487" AND token_id = "28ce350f-fe18-493c-9eda-8dcfbb0a6e45") AND `fee_configs`.`deleted_at` IS NULL ORDER BY updated_at DESC,`fee_configs`.`id` LIMIT 1
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/fee_config_repo_impl.go:65 [35;1mno such table: fee_configs
+[0m[33m[0.007ms] [34;1m[rows:0][0m SELECT count(*) FROM `fee_configs` WHERE `fee_configs`.`deleted_at` IS NULL
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/fee_config_repo_impl.go:105 [35;1mno such table: fee_configs
+[0m[33m[0.026ms] [34;1m[rows:0][0m UPDATE `fee_configs` SET `chain_id`="00000000-0000-0000-0000-000000000000",`fixed_base_fee`="",`max_fee`=NULL,`min_fee`="",`platform_fee_percent`="",`token_id`="00000000-0000-0000-0000-000000000000",`updated_at`="2026-02-18 17:51:01.276" WHERE id = "895a42d7-5cd4-49b2-a81b-463c6ea60a50" AND `fee_configs`.`deleted_at` IS NULL
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/fee_config_repo_impl.go:124 [35;1mno such table: fee_configs
+[0m[33m[0.019ms] [34;1m[rows:0][0m UPDATE `fee_configs` SET `deleted_at`="2026-02-18 17:51:01.276" WHERE id = "8861a081-b4e1-42f8-b362-0f207a2e3cd5" AND `fee_configs`.`deleted_at` IS NULL
+--- PASS: TestBridgeAndFeeConfigRepository_DBErrorBranches (0.00s)
+=== RUN   TestChainRepo_ToEntity_ToRpcEntity_AndNamespace
+--- PASS: TestChainRepo_ToEntity_ToRpcEntity_AndNamespace (0.00s)
+=== RUN   TestChainRepo_GetByCAIP2_Branches
+=== RUN   TestChainRepo_GetByCAIP2_Branches/invalid_input
+=== RUN   TestChainRepo_GetByCAIP2_Branches/fallback_by_reference
+=== RUN   TestChainRepo_GetByCAIP2_Branches/not_found_malformed_caip2
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/chain_repo_impl.go:76 [35;1mrecord not found
+[0m[33m[0.026ms] [34;1m[rows:0][0m SELECT * FROM `chains` WHERE chain_id = "999999" AND `chains`.`deleted_at` IS NULL ORDER BY `chains`.`id` LIMIT 1
+=== RUN   TestChainRepo_GetByCAIP2_Branches/not_found_valid_caip2
+--- PASS: TestChainRepo_GetByCAIP2_Branches (0.00s)
+    --- PASS: TestChainRepo_GetByCAIP2_Branches/invalid_input (0.00s)
+    --- PASS: TestChainRepo_GetByCAIP2_Branches/fallback_by_reference (0.00s)
+    --- PASS: TestChainRepo_GetByCAIP2_Branches/not_found_malformed_caip2 (0.00s)
+    --- PASS: TestChainRepo_GetByCAIP2_Branches/not_found_valid_caip2 (0.00s)
+=== RUN   TestChainRepository_BasicCRUD
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/chain_repo_impl.go:30 [35;1mrecord not found
+[0m[33m[0.019ms] [34;1m[rows:0][0m SELECT * FROM `chains` WHERE id = "5c99def4-f716-4aec-bbf4-32cd1175535a" AND `chains`.`deleted_at` IS NULL ORDER BY `chains`.`id` LIMIT 1
+--- PASS: TestChainRepository_BasicCRUD (0.00s)
+=== RUN   TestChainRepository_NotFoundAndInvalidBranches
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/chain_repo_impl.go:30 [35;1mrecord not found
+[0m[33m[0.186ms] [34;1m[rows:0][0m SELECT * FROM `chains` WHERE id = "6010d06a-e271-4d56-ae8e-8519e1ee94e5" AND `chains`.`deleted_at` IS NULL ORDER BY `chains`.`id` LIMIT 1
+--- PASS: TestChainRepository_NotFoundAndInvalidBranches (0.00s)
+=== RUN   TestChainRepository_GetByCAIP2_DirectAndMalformedBranches
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/chain_repo_impl.go:76 [35;1mrecord not found
+[0m[33m[0.021ms] [34;1m[rows:0][0m SELECT * FROM `chains` WHERE chain_id = "eip155-8453" AND `chains`.`deleted_at` IS NULL ORDER BY `chains`.`id` LIMIT 1
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/chain_repo_impl.go:76 [35;1mrecord not found
+[0m[33m[0.018ms] [34;1m[rows:0][0m SELECT * FROM `chains` WHERE chain_id = "eip155:" AND `chains`.`deleted_at` IS NULL ORDER BY `chains`.`id` LIMIT 1
+--- PASS: TestChainRepository_GetByCAIP2_DirectAndMalformedBranches (0.00s)
+=== RUN   TestChainRepository_NormalizeOnCreateUpdateAndLookup
+    chain_repo_impl_test.go:133: 
+        	Error Trace:	/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/chain_repo_impl_test.go:133
+        	Error:      	Not equal: 
+        	            	expected: "8453"
+        	            	actual  : "eip155:8453"
+        	            	
+        	            	Diff:
+        	            	--- Expected
+        	            	+++ Actual
+        	            	@@ -1 +1 @@
+        	            	-8453
+        	            	+eip155:8453
+        	Test:       	TestChainRepository_NormalizeOnCreateUpdateAndLookup
+--- FAIL: TestChainRepository_NormalizeOnCreateUpdateAndLookup (0.00s)
+=== RUN   TestChainRepository_GetAllRPCs
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/chain_repo_impl.go:137 [35;1mnear "ILIKE": syntax error
+[0m[33m[0.022ms] [34;1m[rows:0][0m SELECT count(*) FROM `chain_rpcs` WHERE chain_id = "14739090-23cb-4b07-8615-1667c6d7a018" AND is_active = true AND url ILIKE "%rpc.local%" AND `chain_rpcs`.`deleted_at` IS NULL
+--- PASS: TestChainRepository_GetAllRPCs (0.00s)
+=== RUN   TestChainRepository_Query_DBErrorBranches
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/chain_repo_impl.go:105 [35;1mno such table: chains
+[0m[33m[0.150ms] [34;1m[rows:0][0m SELECT * FROM `chains` WHERE `chains`.`deleted_at` IS NULL
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/chain_repo_impl.go:169 [35;1mno such table: chains
+[0m[33m[0.009ms] [34;1m[rows:0][0m SELECT count(*) FROM `chains` WHERE is_active = true AND `chains`.`deleted_at` IS NULL
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/chain_repo_impl.go:137 [35;1mno such table: chain_rpcs
+[0m[33m[0.006ms] [34;1m[rows:0][0m SELECT count(*) FROM `chain_rpcs` WHERE `chain_rpcs`.`deleted_at` IS NULL
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/chain_repo_impl.go:30 [35;1mno such table: chains
+[0m[33m[0.011ms] [34;1m[rows:0][0m SELECT * FROM `chains` WHERE id = "cd088585-84e8-4d01-b5de-d4a51fc33318" AND `chains`.`deleted_at` IS NULL ORDER BY `chains`.`id` LIMIT 1
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/chain_repo_impl.go:53 [35;1mno such table: chains
+[0m[33m[0.008ms] [34;1m[rows:0][0m SELECT * FROM `chains` WHERE chain_id IN ("8453") AND `chains`.`deleted_at` IS NULL LIMIT 1
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/chain_repo_impl.go:85 [35;1mno such table: chains
+[0m[33m[0.006ms] [34;1m[rows:0][0m SELECT * FROM `chains` WHERE chain_id = "8453" AND `chains`.`deleted_at` IS NULL LIMIT 1
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/chain_repo_impl.go:243 [35;1mno such table: chains
+[0m[33m[0.026ms] [34;1m[rows:0][0m UPDATE `chains` SET `deleted_at`="2026-02-18 17:51:01.282" WHERE id = "b19939b9-915f-4d2d-b5b7-94bd25842304" AND `chains`.`deleted_at` IS NULL
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/chain_repo_impl.go:231 [35;1mno such table: chains
+[0m[33m[0.033ms] [34;1m[rows:0][0m UPDATE `chains` SET `chain_id`="8453",`currency_symbol`="",`explorer_url`="",`image_url`="",`is_active`=false,`name`="Base",`rpc_url`="",`type`="EVM",`updated_at`="2026-02-18 17:51:01.282" WHERE id = "b07026a9-0697-485c-9aca-ae8a7b824fec" AND `chains`.`deleted_at` IS NULL
+--- PASS: TestChainRepository_Query_DBErrorBranches (0.00s)
+=== RUN   TestChainRepository_GetActive_FindErrorAfterCount
+
+2026/02/18 17:51:01 [34;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/chain_repo_impl_test.go:228
+[0m[35m[warn] [0mremoving callback `test:chain_getactive_find_error` from /Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/chain_repo_impl_test.go:228
+--- PASS: TestChainRepository_GetActive_FindErrorAfterCount (0.00s)
+=== RUN   TestChainRepository_GetByCAIP2_FallbackQueryError
+
+2026/02/18 17:51:01 [34;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/chain_repo_impl_test.go:250
+[0m[35m[warn] [0mremoving callback `test:chain_getbycaip2_fallback_error` from /Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/chain_repo_impl_test.go:250
+--- PASS: TestChainRepository_GetByCAIP2_FallbackQueryError (0.00s)
+=== RUN   TestChainRepository_GetAllRPCs_WithoutOptionalFilters
+--- PASS: TestChainRepository_GetAllRPCs_WithoutOptionalFilters (0.00s)
+=== RUN   TestChainRepository_GetAllRPCs_FindErrorAfterCount
+
+2026/02/18 17:51:01 [34;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/chain_repo_impl_test.go:297
+[0m[35m[warn] [0mremoving callback `test:chain_getallrpcs_find_error_after_count` from /Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/chain_repo_impl_test.go:297
+--- PASS: TestChainRepository_GetAllRPCs_FindErrorAfterCount (0.00s)
+=== RUN   TestEmailVerificationRepository_CRUDLikeFlow
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/user_repo_impl.go:207 [35;1mrecord not found
+[0m[33m[0.040ms] [34;1m[rows:0][0m SELECT `users`.`id`,`users`.`email`,`users`.`name`,`users`.`password_hash`,`users`.`role`,`users`.`kyc_status`,`users`.`kyc_verified_at`,`users`.`created_at`,`users`.`updated_at`,`users`.`deleted_at` FROM `users` JOIN email_verifications ev ON ev.user_id = users.id WHERE (ev.token = "token-1" AND ev.expires_at > "2026-02-18 17:51:01.284" AND ev.verified_at IS NULL AND ev.deleted_at IS NULL) AND `users`.`deleted_at` IS NULL ORDER BY `users`.`id` LIMIT 1
+--- PASS: TestEmailVerificationRepository_CRUDLikeFlow (0.00s)
+=== RUN   TestEmailVerificationRepository_DBErrorBranches
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/user_repo_impl.go:193 [35;1mno such table: email_verifications
+[0m[33m[0.126ms] [34;1m[rows:0][0m INSERT INTO `email_verifications` (`user_id`,`token`,`expires_at`,`verified_at`,`created_at`,`deleted_at`,`id`) VALUES ("879c3fff-c9c7-4ed4-8ed4-e959ddc5f38d","token","2026-02-19 17:51:01.284",NULL,"2026-02-18 17:51:01.284",NULL,"019c705f-ef24-7850-9404-162d4fb086da") RETURNING `id`
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/user_repo_impl.go:207 [35;1mno such table: users
+[0m[33m[0.018ms] [34;1m[rows:0][0m SELECT `users`.`id`,`users`.`email`,`users`.`name`,`users`.`password_hash`,`users`.`role`,`users`.`kyc_status`,`users`.`kyc_verified_at`,`users`.`created_at`,`users`.`updated_at`,`users`.`deleted_at` FROM `users` JOIN email_verifications ev ON ev.user_id = users.id WHERE (ev.token = "token" AND ev.expires_at > "2026-02-18 17:51:01.284" AND ev.verified_at IS NULL AND ev.deleted_at IS NULL) AND `users`.`deleted_at` IS NULL ORDER BY `users`.`id` LIMIT 1
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/user_repo_impl.go:238 [35;1mno such table: email_verifications
+[0m[33m[0.020ms] [34;1m[rows:0][0m UPDATE `email_verifications` SET `verified_at`="2026-02-18 17:51:01.284" WHERE (token = "token" AND verified_at IS NULL) AND `email_verifications`.`deleted_at` IS NULL
+--- PASS: TestEmailVerificationRepository_DBErrorBranches (0.00s)
+=== RUN   TestLayerZeroConfigRepo_CRUDAndList
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/layerzero_config_repo_impl.go:28 [35;1mrecord not found
+[0m[33m[0.019ms] [34;1m[rows:0][0m SELECT * FROM `layerzero_configs` WHERE id = "f818a313-98a2-4a78-b004-877ab641345e" AND `layerzero_configs`.`deleted_at` IS NULL ORDER BY `layerzero_configs`.`id` LIMIT 1
+--- PASS: TestLayerZeroConfigRepo_CRUDAndList (0.00s)
+=== RUN   TestLayerZeroConfigRepo_NotFoundBranches
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/layerzero_config_repo_impl.go:28 [35;1mrecord not found
+[0m[33m[0.051ms] [34;1m[rows:0][0m SELECT * FROM `layerzero_configs` WHERE id = "5df4018e-b9c1-41b5-aa90-d935085e8cea" AND `layerzero_configs`.`deleted_at` IS NULL ORDER BY `layerzero_configs`.`id` LIMIT 1
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/layerzero_config_repo_impl.go:43 [35;1mrecord not found
+[0m[33m[0.031ms] [34;1m[rows:0][0m SELECT * FROM `layerzero_configs` WHERE (source_chain_id = "836f22ca-c640-4a46-b534-41f5352123d9" AND dest_chain_id = "8014cff8-f3ea-4021-a012-7ef021db84ad") AND `layerzero_configs`.`deleted_at` IS NULL ORDER BY updated_at DESC,`layerzero_configs`.`id` LIMIT 1
+--- PASS: TestLayerZeroConfigRepo_NotFoundBranches (0.00s)
+=== RUN   TestLayerZeroConfigRepo_DBErrorBranches
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/layerzero_config_repo_impl.go:106 [35;1mno such table: layerzero_configs
+[0m[33m[0.071ms] [34;1m[rows:0][0m INSERT INTO `layerzero_configs` (`source_chain_id`,`dest_chain_id`,`dst_e_id`,`peer_hex`,`options_hex`,`is_active`,`created_at`,`updated_at`,`deleted_at`,`id`) VALUES ("e713b68f-79db-400d-a899-4e1854e17fe8","12ed0dcf-d718-4b8f-8d21-ae14b2da80f0",1,"0xpeer","0x",true,"2026-02-18 17:51:01.286","2026-02-18 17:51:01.286",NULL,"f573fdb9-b133-46b2-a2ad-7985903a06a9") RETURNING `id`
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/layerzero_config_repo_impl.go:28 [35;1mno such table: layerzero_configs
+[0m[33m[0.009ms] [34;1m[rows:0][0m SELECT * FROM `layerzero_configs` WHERE id = "3fc7d602-8d0d-4641-855f-f18f9bf247cf" AND `layerzero_configs`.`deleted_at` IS NULL ORDER BY `layerzero_configs`.`id` LIMIT 1
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/layerzero_config_repo_impl.go:43 [35;1mno such table: layerzero_configs
+[0m[33m[0.008ms] [34;1m[rows:0][0m SELECT * FROM `layerzero_configs` WHERE (source_chain_id = "34de1c2d-0599-4285-8d93-6fd0e639e6b7" AND dest_chain_id = "b9b6e18e-9859-4a8f-ade0-1275215d84ca") AND `layerzero_configs`.`deleted_at` IS NULL ORDER BY updated_at DESC,`layerzero_configs`.`id` LIMIT 1
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/layerzero_config_repo_impl.go:68 [35;1mno such table: layerzero_configs
+[0m[33m[0.006ms] [34;1m[rows:0][0m SELECT count(*) FROM `layerzero_configs` WHERE `layerzero_configs`.`deleted_at` IS NULL
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/layerzero_config_repo_impl.go:117 [35;1mno such table: layerzero_configs
+[0m[33m[0.025ms] [34;1m[rows:0][0m UPDATE `layerzero_configs` SET `dest_chain_id`="2c1684ab-1ad3-4549-803a-3b6647a865eb",`dst_eid`=1,`is_active`=true,`options_hex`="0x",`peer_hex`="0xpeer",`source_chain_id`="15f0ce21-67fb-4bd8-a4b2-b98321c7146a",`updated_at`="2026-02-18 17:51:01.286" WHERE id = "e8ad4eb6-a235-40d9-9f17-b04d053682b4" AND `layerzero_configs`.`deleted_at` IS NULL
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/layerzero_config_repo_impl.go:136 [35;1mno such table: layerzero_configs
+[0m[33m[0.019ms] [34;1m[rows:0][0m UPDATE `layerzero_configs` SET `deleted_at`="2026-02-18 17:51:01.286" WHERE id = "1a63475c-f4bf-4af9-a8ce-a430c56aace1" AND `layerzero_configs`.`deleted_at` IS NULL
+--- PASS: TestLayerZeroConfigRepo_DBErrorBranches (0.00s)
+=== RUN   TestRepository_List_FindErrorAfterCount_Branches
+=== RUN   TestRepository_List_FindErrorAfterCount_Branches/fee_config_list_find_error_after_count
+
+2026/02/18 17:51:01 [34;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/list_find_error_after_count_test.go:25
+[0m[35m[warn] [0mremoving callback `test:find_error_after_count:fee_configs` from /Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/list_find_error_after_count_test.go:25
+=== RUN   TestRepository_List_FindErrorAfterCount_Branches/bridge_config_list_find_error_after_count
+
+2026/02/18 17:51:01 [34;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/list_find_error_after_count_test.go:25
+[0m[35m[warn] [0mremoving callback `test:find_error_after_count:bridge_configs` from /Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/list_find_error_after_count_test.go:25
+=== RUN   TestRepository_List_FindErrorAfterCount_Branches/route_policy_list_find_error_after_count
+
+2026/02/18 17:51:01 [34;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/list_find_error_after_count_test.go:25
+[0m[35m[warn] [0mremoving callback `test:find_error_after_count:route_policies` from /Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/list_find_error_after_count_test.go:25
+=== RUN   TestRepository_List_FindErrorAfterCount_Branches/layerzero_config_list_find_error_after_count
+
+2026/02/18 17:51:01 [34;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/list_find_error_after_count_test.go:25
+[0m[35m[warn] [0mremoving callback `test:find_error_after_count:layerzero_configs` from /Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/list_find_error_after_count_test.go:25
+=== RUN   TestRepository_List_FindErrorAfterCount_Branches/token_get_all_tokens_find_error_after_count
+
+2026/02/18 17:51:01 [34;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/list_find_error_after_count_test.go:25
+[0m[35m[warn] [0mremoving callback `test:find_error_after_count:tokens` from /Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/list_find_error_after_count_test.go:25
+--- PASS: TestRepository_List_FindErrorAfterCount_Branches (0.00s)
+    --- PASS: TestRepository_List_FindErrorAfterCount_Branches/fee_config_list_find_error_after_count (0.00s)
+    --- PASS: TestRepository_List_FindErrorAfterCount_Branches/bridge_config_list_find_error_after_count (0.00s)
+    --- PASS: TestRepository_List_FindErrorAfterCount_Branches/route_policy_list_find_error_after_count (0.00s)
+    --- PASS: TestRepository_List_FindErrorAfterCount_Branches/layerzero_config_list_find_error_after_count (0.00s)
+    --- PASS: TestRepository_List_FindErrorAfterCount_Branches/token_get_all_tokens_find_error_after_count (0.00s)
+=== RUN   TestMerchantRepository_CreateGetUpdateStatusDelete
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/merchant_repo_impl.go:66 [35;1mrecord not found
+[0m[33m[0.016ms] [34;1m[rows:0][0m SELECT * FROM `merchants` WHERE id = "9bcfec88-390f-453e-8799-e927302b9ace" AND `merchants`.`deleted_at` IS NULL ORDER BY `merchants`.`id` LIMIT 1
+--- PASS: TestMerchantRepository_CreateGetUpdateStatusDelete (0.00s)
+=== RUN   TestMerchantRepository_NotFoundBranches
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/merchant_repo_impl.go:66 [35;1mrecord not found
+[0m[33m[0.074ms] [34;1m[rows:0][0m SELECT * FROM `merchants` WHERE id = "83a418d2-b9b0-4626-ac47-c08f715c485c" AND `merchants`.`deleted_at` IS NULL ORDER BY `merchants`.`id` LIMIT 1
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/merchant_repo_impl.go:78 [35;1mrecord not found
+[0m[33m[0.030ms] [34;1m[rows:0][0m SELECT * FROM `merchants` WHERE user_id = "83a418d2-b9b0-4626-ac47-c08f715c485c" AND `merchants`.`deleted_at` IS NULL ORDER BY `merchants`.`id` LIMIT 1
+--- PASS: TestMerchantRepository_NotFoundBranches (0.00s)
+=== RUN   TestMerchantRepository_DBErrorBranches
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/merchant_repo_impl.go:66 [35;1mno such table: merchants
+[0m[33m[0.072ms] [34;1m[rows:0][0m SELECT * FROM `merchants` WHERE id = "2f88711f-28ba-4b0e-a6b7-800ed7a366c4" AND `merchants`.`deleted_at` IS NULL ORDER BY `merchants`.`id` LIMIT 1
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/merchant_repo_impl.go:78 [35;1mno such table: merchants
+[0m[33m[0.007ms] [34;1m[rows:0][0m SELECT * FROM `merchants` WHERE user_id = "7d8cf5c3-f4cf-4712-9fab-c5ae6a9e5140" AND `merchants`.`deleted_at` IS NULL ORDER BY `merchants`.`id` LIMIT 1
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/merchant_repo_impl.go:155 [35;1mno such table: merchants
+[0m[33m[0.005ms] [34;1m[rows:0][0m SELECT * FROM `merchants` WHERE `merchants`.`deleted_at` IS NULL ORDER BY created_at DESC
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/merchant_repo_impl.go:60 [35;1mno such table: merchants
+[0m[33m[0.028ms] [34;1m[rows:0][0m INSERT INTO `merchants` (`user_id`,`business_name`,`business_email`,`merchant_type`,`status`,`tax_id`,`business_address`,`documents`,`fee_discount_percent`,`verified_at`,`created_at`,`updated_at`,`deleted_at`,`id`) VALUES ("93e5037e-ca8b-4b17-800c-2a331d239bc4","x","x@x","RETAIL","PENDING","","","{}","0",NULL,"2026-02-18 17:51:01.289","2026-02-18 17:51:01.289",NULL,"26b3e49b-30f3-4572-aaa6-66b24721535a") RETURNING `id`
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/merchant_repo_impl.go:117 [35;1mno such table: merchants
+[0m[33m[0.021ms] [34;1m[rows:0][0m UPDATE `merchants` SET `business_address`="",`business_email`="x@x",`business_name`="x",`documents`="{}",`fee_discount_percent`="",`merchant_type`="RETAIL",`status`="PENDING",`tax_id`="",`updated_at`="2026-02-18 17:51:01.289" WHERE id = "907c3784-324a-4d24-8f3b-f3102955c590" AND `merchants`.`deleted_at` IS NULL
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/merchant_repo_impl.go:141 [35;1mno such table: merchants
+[0m[33m[0.016ms] [34;1m[rows:0][0m UPDATE `merchants` SET `status`="ACTIVE",`updated_at`="2026-02-18 17:51:01.289",`verified_at`="2026-02-18 17:51:01.289" WHERE id = "c6d76ac5-7028-4557-8a4f-a0769cb99e22" AND `merchants`.`deleted_at` IS NULL
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/merchant_repo_impl.go:169 [35;1mno such table: merchants
+[0m[33m[0.019ms] [34;1m[rows:0][0m UPDATE `merchants` SET `deleted_at`="2026-02-18 17:51:01.289" WHERE id = "451670d4-6cd5-4b35-9022-67e8d07b4e99" AND `merchants`.`deleted_at` IS NULL
+--- PASS: TestMerchantRepository_DBErrorBranches (0.00s)
+=== RUN   TestPaymentBridgeRepository_CRUDAndList
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/payment_bridge_repo_impl.go:28 [35;1mrecord not found
+[0m[33m[0.012ms] [34;1m[rows:0][0m SELECT * FROM `payment_bridge` WHERE id = "e7109a29-9ae9-46fb-9368-ef04382d2037" AND `payment_bridge`.`deleted_at` IS NULL ORDER BY `payment_bridge`.`id` LIMIT 1
+--- PASS: TestPaymentBridgeRepository_CRUDAndList (0.00s)
+=== RUN   TestPaymentBridgeRepository_NotFoundBranches
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/payment_bridge_repo_impl.go:28 [35;1mrecord not found
+[0m[33m[0.030ms] [34;1m[rows:0][0m SELECT * FROM `payment_bridge` WHERE id = "5b712a9b-45b1-4d86-bbeb-accf524f95f5" AND `payment_bridge`.`deleted_at` IS NULL ORDER BY `payment_bridge`.`id` LIMIT 1
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/payment_bridge_repo_impl.go:39 [35;1mrecord not found
+[0m[33m[0.015ms] [34;1m[rows:0][0m SELECT * FROM `payment_bridge` WHERE LOWER(name) = "missing" AND `payment_bridge`.`deleted_at` IS NULL ORDER BY `payment_bridge`.`id` LIMIT 1
+--- PASS: TestPaymentBridgeRepository_NotFoundBranches (0.00s)
+=== RUN   TestPaymentBridgeRepository_Create_AssignsIDWhenNil
+--- PASS: TestPaymentBridgeRepository_Create_AssignsIDWhenNil (0.00s)
+=== RUN   TestPaymentBridgeRepository_DBErrorBranches
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/payment_bridge_repo_impl.go:28 [35;1mno such table: payment_bridge
+[0m[33m[0.021ms] [34;1m[rows:0][0m SELECT * FROM `payment_bridge` WHERE id = "bb7976a3-a2fa-4f35-87bf-f8e534676d1b" AND `payment_bridge`.`deleted_at` IS NULL ORDER BY `payment_bridge`.`id` LIMIT 1
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/payment_bridge_repo_impl.go:39 [35;1mno such table: payment_bridge
+[0m[33m[0.007ms] [34;1m[rows:0][0m SELECT * FROM `payment_bridge` WHERE LOWER(name) = "ccip" AND `payment_bridge`.`deleted_at` IS NULL ORDER BY `payment_bridge`.`id` LIMIT 1
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/payment_bridge_repo_impl.go:53 [35;1mno such table: payment_bridge
+[0m[33m[0.005ms] [34;1m[rows:0][0m SELECT count(*) FROM `payment_bridge` WHERE `payment_bridge`.`deleted_at` IS NULL
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/payment_bridge_repo_impl.go:92 [35;1mno such table: payment_bridge
+[0m[33m[0.019ms] [34;1m[rows:0][0m UPDATE `payment_bridge` SET `name`="x",`updated_at`="2026-02-18 17:51:01.29" WHERE id = "d16f7329-09a3-4423-b61f-f0fbcc7dfd96" AND `payment_bridge`.`deleted_at` IS NULL
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/payment_bridge_repo_impl.go:107 [35;1mno such table: payment_bridge
+[0m[33m[0.012ms] [34;1m[rows:0][0m UPDATE `payment_bridge` SET `deleted_at`="2026-02-18 17:51:01.29" WHERE id = "2025e7f4-dd29-40a5-87a9-59c6d79bf98f" AND `payment_bridge`.`deleted_at` IS NULL
+--- PASS: TestPaymentBridgeRepository_DBErrorBranches (0.00s)
+=== RUN   TestPaymentBridgeRepository_List_FindErrorAfterCount
+
+2026/02/18 17:51:01 [34;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/payment_bridge_repo_impl_test.go:115
+[0m[35m[warn] [0mremoving callback `test:payment_bridge_list_find_error` from /Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/payment_bridge_repo_impl_test.go:115
+--- PASS: TestPaymentBridgeRepository_List_FindErrorAfterCount (0.00s)
+=== RUN   TestPaymentEventRepository_CreateAndReads
+--- PASS: TestPaymentEventRepository_CreateAndReads (0.00s)
+=== RUN   TestPaymentEventRepository_NotFoundLatest
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/payment_event_repo_impl.go:119 [35;1mrecord not found
+[0m[33m[0.471ms] [34;1m[rows:0][0m SELECT * FROM `payment_events` WHERE payment_id = "2fb9d5a3-757f-425a-ac58-d8aaa4ca4744" ORDER BY created_at DESC,`payment_events`.`id` LIMIT 1
+--- PASS: TestPaymentEventRepository_NotFoundLatest (0.00s)
+=== RUN   TestPaymentEventRepository_DBErrorBranches
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/payment_event_repo_impl.go:54 [35;1mno such table: payment_events
+[0m[33m[0.874ms] [34;1m[rows:0][0m INSERT INTO `payment_events` (`payment_id`,`event_type`,`chain_id`,`chain`,`tx_hash`,`block_number`,`metadata`,`created_at`,`id`) VALUES ("6c54e8f4-d01e-4e61-94a7-1a3c4e6b7832","CREATED",NULL,"UNKNOWN","0x",0,"{}","2026-02-18 17:51:01.292","ed0aa4c7-eb29-4699-98ed-568af9a1dce4") RETURNING `id`
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/payment_event_repo_impl.go:91 [35;1mno such table: payment_events
+[0m[33m[0.009ms] [34;1m[rows:0][0m SELECT * FROM `payment_events` WHERE payment_id = "15fb9046-f9d3-4a9b-beee-4b76001a8f2a" ORDER BY created_at ASC
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/payment_event_repo_impl.go:119 [35;1mno such table: payment_events
+[0m[33m[0.008ms] [34;1m[rows:0][0m SELECT * FROM `payment_events` WHERE payment_id = "3da8e3d0-4c70-4a15-adb2-1517269dd39a" ORDER BY created_at DESC,`payment_events`.`id` LIMIT 1
+--- PASS: TestPaymentEventRepository_DBErrorBranches (0.00s)
+=== RUN   TestPaymentEventRepository_ResolveLegacyChainValue
+--- PASS: TestPaymentEventRepository_ResolveLegacyChainValue (0.00s)
+=== RUN   TestPaymentEventRepository_Create_ZeroCreatedAtAndNilChain
+--- PASS: TestPaymentEventRepository_Create_ZeroCreatedAtAndNilChain (0.00s)
+=== RUN   TestPaymentEventRepository_Create_WithinTxContext
+--- PASS: TestPaymentEventRepository_Create_WithinTxContext (0.00s)
+=== RUN   TestPaymentRepository_BasicFlow
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/payment_repo_impl.go:86 [35;1mtable payments has no column named failure_reason
+[0m[33m[0.376ms] [34;1m[rows:0][0m INSERT INTO `payments` (`sender_id`,`merchant_id`,`bridge_id`,`source_chain_id`,`dest_chain_id`,`source_token_id`,`dest_token_id`,`source_amount`,`dest_amount`,`fee_amount`,`total_charged`,`sender_address`,`dest_address`,`status`,`source_tx_hash`,`dest_tx_hash`,`refund_tx_hash`,`cross_chain_message_id`,`failure_reason`,`revert_data`,`expires_at`,`created_at`,`updated_at`,`deleted_at`,`id`) VALUES ("f8ec4fc2-061e-4cc4-a5a1-7a3242c13545","ce41391f-d13c-4556-bbe1-2996b51494b7",NULL,"baece0e8-37d7-4026-83c0-5328b873e9a2","f1b1b0f9-3596-4820-977f-0cc64da090e5","d8a08f09-d08c-48ae-948e-7a21bd26240a","9cf444a3-510f-47cf-ae00-6156df0c4f00","100",NULL,"1","101","0xsender","","PENDING",NULL,NULL,NULL,NULL,NULL,NULL,NULL,"2026-02-18 17:51:01.295","2026-02-18 17:51:01.295",NULL,"0aa5663d-5b7f-41e1-aea1-c9227a87dbba") RETURNING `id`
+    payment_repo_impl_test.go:56: 
+        	Error Trace:	/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/payment_repo_impl_test.go:56
+        	Error:      	Received unexpected error:
+        	            	table payments has no column named failure_reason
+        	Test:       	TestPaymentRepository_BasicFlow
+--- FAIL: TestPaymentRepository_BasicFlow (0.00s)
+=== RUN   TestPaymentRepository_NotFoundBranches
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/payment_repo_impl.go:99 [35;1mrecord not found
+[0m[33m[0.378ms] [34;1m[rows:0][0m SELECT * FROM `payments` WHERE id = "71d9af66-e4e5-46cb-acee-a17b8725be30" AND `payments`.`deleted_at` IS NULL ORDER BY `payments`.`id` LIMIT 1
+--- PASS: TestPaymentRepository_NotFoundBranches (0.00s)
+=== RUN   TestPaymentRepository_List_DBErrorBranches
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/payment_repo_impl.go:113 [35;1mno such table: payments
+[0m[33m[0.323ms] [34;1m[rows:0][0m SELECT count(*) FROM `payments` WHERE sender_id = "b437ad9c-7037-451b-a222-d8399c99f853" AND `payments`.`deleted_at` IS NULL
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/payment_repo_impl.go:141 [35;1mno such table: payments
+[0m[33m[0.006ms] [34;1m[rows:0][0m SELECT count(*) FROM `payments` WHERE merchant_id = "8f7705c2-548f-402a-85b9-97d166a0c4a9" AND `payments`.`deleted_at` IS NULL
+--- PASS: TestPaymentRepository_List_DBErrorBranches (0.00s)
+=== RUN   TestPaymentRepository_DBErrorBranches_SingleAndUpdates
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/payment_repo_impl.go:99 [35;1mno such table: payments
+[0m[33m[0.312ms] [34;1m[rows:0][0m SELECT * FROM `payments` WHERE id = "17a886c4-4a32-4667-b9de-c79fc0edbce4" AND `payments`.`deleted_at` IS NULL ORDER BY `payments`.`id` LIMIT 1
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/payment_repo_impl.go:198 [35;1mno such table: payments
+[0m[33m[0.028ms] [34;1m[rows:0][0m UPDATE `payments` SET `status`="COMPLETED",`updated_at`="2026-02-18 17:51:01.297" WHERE id = "209a9b23-24d7-407d-90fb-56c3707bf75a" AND `payments`.`deleted_at` IS NULL
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/payment_repo_impl.go:216 [35;1mno such table: payments
+[0m[33m[0.020ms] [34;1m[rows:0][0m UPDATE `payments` SET `dest_tx_hash`="0xhash",`updated_at`="2026-02-18 17:51:01.297" WHERE id = "330dbab2-0fee-40d4-92b0-c378c86a7a52" AND `payments`.`deleted_at` IS NULL
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/payment_repo_impl.go:227 [35;1mno such table: payments
+[0m[33m[0.018ms] [34;1m[rows:0][0m UPDATE `payments` SET `status`="REFUNDED",`updated_at`="2026-02-18 17:51:01.297" WHERE id = "142fcf3b-fced-4d1b-9eda-9b9d7c90efd3" AND `payments`.`deleted_at` IS NULL
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/payment_repo_impl.go:86 [35;1mno such table: payments
+[0m[33m[0.037ms] [34;1m[rows:0][0m INSERT INTO `payments` (`sender_id`,`merchant_id`,`bridge_id`,`source_chain_id`,`dest_chain_id`,`source_token_id`,`dest_token_id`,`source_amount`,`dest_amount`,`fee_amount`,`total_charged`,`sender_address`,`dest_address`,`status`,`source_tx_hash`,`dest_tx_hash`,`refund_tx_hash`,`cross_chain_message_id`,`failure_reason`,`revert_data`,`expires_at`,`created_at`,`updated_at`,`deleted_at`,`id`) VALUES ("47d58c27-6281-4823-b494-83d6e7e815dd",NULL,NULL,"4d97365f-c921-48d8-9ff3-6b17aedb23ef","b8ee8971-799e-4394-8a91-a96fae4323a8","f9298809-e393-4ab1-aca5-530b6eb2c513","753d8220-6158-469c-8fc0-694ca44fcae6","1",NULL,"0","1","","","PENDING",NULL,NULL,NULL,NULL,NULL,NULL,NULL,"2026-02-18 17:51:01.297","2026-02-18 17:51:01.297",NULL,"a0c0e0b2-219a-47f2-87e3-402107665f80") RETURNING `id`
+--- PASS: TestPaymentRepository_DBErrorBranches_SingleAndUpdates (0.00s)
+=== RUN   TestPaymentRepository_Create_WithTxAndDestAmountBranch
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/payment_repo_impl.go:86 [35;1mtable payments has no column named failure_reason
+[0m[33m[0.307ms] [34;1m[rows:0][0m INSERT INTO `payments` (`sender_id`,`merchant_id`,`bridge_id`,`source_chain_id`,`dest_chain_id`,`source_token_id`,`dest_token_id`,`source_amount`,`dest_amount`,`fee_amount`,`total_charged`,`sender_address`,`dest_address`,`status`,`source_tx_hash`,`dest_tx_hash`,`refund_tx_hash`,`cross_chain_message_id`,`failure_reason`,`revert_data`,`expires_at`,`created_at`,`updated_at`,`deleted_at`,`id`) VALUES ("48c5bb11-05db-49cc-9ed3-ddd8c6805f47",NULL,NULL,"96cb241d-d7ce-4217-bb81-14e204a83dc0","b3a2ab91-ca03-4d07-b9f3-5cbf5c5fa7e6","4abc665c-d258-46c9-accf-b21e62ab523c","f0ac7fab-1ca2-4706-9f24-a4c2753d8962","1000","947","53","1053","0xsender","","PENDING",NULL,NULL,NULL,NULL,NULL,NULL,NULL,"2026-02-18 17:51:01.298","2026-02-18 17:51:01.298",NULL,"89c73026-ec7e-43ca-9020-e6a998c583d2") RETURNING `id`
+    payment_repo_impl_test.go:189: 
+        	Error Trace:	/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/payment_repo_impl_test.go:189
+        	Error:      	Received unexpected error:
+        	            	table payments has no column named failure_reason
+        	Test:       	TestPaymentRepository_Create_WithTxAndDestAmountBranch
+--- FAIL: TestPaymentRepository_Create_WithTxAndDestAmountBranch (0.00s)
+=== RUN   TestPaymentRepository_List_FindErrorBranches
+
+2026/02/18 17:51:01 [34;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/payment_repo_impl_test.go:217
+[0m[35m[warn] [0mremoving callback `test:payment_repo_fail_find` from /Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/payment_repo_impl_test.go:217
+--- PASS: TestPaymentRepository_List_FindErrorBranches (0.00s)
+=== RUN   TestPaymentRequestRepository_FullFlow
+--- PASS: TestPaymentRequestRepository_FullFlow (0.00s)
+=== RUN   TestPaymentRequestRepository_ExpiredAndBulkExpire
+--- PASS: TestPaymentRequestRepository_ExpiredAndBulkExpire (0.00s)
+=== RUN   TestPaymentRequestRepository_GetByID_NotFound
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/payment_request_repo_impl.go:45 [35;1mrecord not found
+[0m[33m[0.101ms] [34;1m[rows:0][0m SELECT * FROM `payment_requests` WHERE id = "eeaf3fb9-16f8-450f-9336-c655c802577c" AND `payment_requests`.`deleted_at` IS NULL ORDER BY `payment_requests`.`id` LIMIT 1
+--- PASS: TestPaymentRequestRepository_GetByID_NotFound (0.00s)
+=== RUN   TestBackgroundJobRepository_FullFlow
+--- PASS: TestBackgroundJobRepository_FullFlow (0.00s)
+=== RUN   TestPaymentRequestRepository_Create_DBError
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/payment_request_repo_impl.go:40 [35;1mno such table: payment_requests
+[0m[33m[0.090ms] [34;1m[rows:0][0m INSERT INTO `payment_requests` (`merchant_id`,`chain_id`,`token_id`,`wallet_address`,`token_address`,`amount`,`decimals`,`description`,`status`,`expires_at`,`tx_hash`,`payer_address`,`completed_at`,`created_at`,`updated_at`,`deleted_at`,`id`) VALUES ("3ab8819b-ac09-4797-abf5-1f16bd6c6542","1926c98b-a4b4-4303-b315-48665431f7ce","9c7e006c-6bfb-4916-952d-ad4a76f1bffa","0xwallet","0xtoken","10",6,"test","PENDING","2026-02-18 18:51:01.301","","",NULL,"2026-02-18 17:51:01.301","2026-02-18 17:51:01.301",NULL,"08e6d464-08d6-4ba2-90d4-ff74e2913b74") RETURNING `id`
+--- PASS: TestPaymentRequestRepository_Create_DBError (0.00s)
+=== RUN   TestBackgroundJobRepository_Create_MarshalError
+--- PASS: TestBackgroundJobRepository_Create_MarshalError (0.00s)
+=== RUN   TestPaymentRequestRepository_GetByMerchantID_DBError
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/payment_request_repo_impl.go:55 [35;1mno such table: payment_requests
+[0m[33m[0.068ms] [34;1m[rows:0][0m SELECT count(*) FROM `payment_requests` WHERE merchant_id = "a857b979-2358-4a23-8325-1911d614be7f" AND `payment_requests`.`deleted_at` IS NULL
+--- PASS: TestPaymentRequestRepository_GetByMerchantID_DBError (0.00s)
+=== RUN   TestPaymentRequestRepository_GetByMerchantID_FindErrorAfterCount
+
+2026/02/18 17:51:01 [34;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/payment_request_repo_impl_test.go:174
+[0m[35m[warn] [0mremoving callback `test:payment_request_find_fail` from /Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/payment_request_repo_impl_test.go:174
+--- PASS: TestPaymentRequestRepository_GetByMerchantID_FindErrorAfterCount (0.00s)
+=== RUN   TestPaymentRequestRepository_ExtraDBErrorBranches
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/payment_request_repo_impl.go:79 [35;1mno such table: payment_requests
+[0m[33m[0.085ms] [34;1m[rows:0][0m UPDATE `payment_requests` SET `status`="PENDING",`updated_at`="2026-02-18 17:51:01.302" WHERE id = "770182e6-c7fb-455f-adcb-fc0afd9fb8da" AND `payment_requests`.`deleted_at` IS NULL
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/payment_request_repo_impl.go:88 [35;1mno such table: payment_requests
+[0m[33m[0.019ms] [34;1m[rows:0][0m UPDATE `payment_requests` SET `payer_address`="0xpayer",`tx_hash`="0xtx",`updated_at`="2026-02-18 17:51:01.302" WHERE id = "2526d772-9912-4209-ad84-7f6c35347dcb" AND `payment_requests`.`deleted_at` IS NULL
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/payment_request_repo_impl.go:100 [35;1mno such table: payment_requests
+[0m[33m[0.015ms] [34;1m[rows:0][0m UPDATE `payment_requests` SET `completed_at`="2026-02-18 17:51:01.302",`status`="COMPLETED",`tx_hash`="0xtx",`updated_at`="2026-02-18 17:51:01.302" WHERE id = "d295ba73-23a0-4a95-9bbf-5eb4ac97ed49" AND `payment_requests`.`deleted_at` IS NULL
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/payment_request_repo_impl.go:113 [35;1mno such table: payment_requests
+[0m[33m[0.007ms] [34;1m[rows:0][0m SELECT * FROM `payment_requests` WHERE (status = "PENDING" AND expires_at < "2026-02-18 17:51:01.302") AND `payment_requests`.`deleted_at` IS NULL LIMIT 10
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/payment_request_repo_impl.go:131 [35;1mno such table: payment_requests
+[0m[33m[0.016ms] [34;1m[rows:0][0m UPDATE `payment_requests` SET `status`="EXPIRED",`updated_at`="2026-02-18 17:51:01.302" WHERE id IN ("3f250af2-b56a-48df-836f-6727b855b486") AND `payment_requests`.`deleted_at` IS NULL
+--- PASS: TestPaymentRequestRepository_ExtraDBErrorBranches (0.00s)
+=== RUN   TestBackgroundJobRepository_DBErrorBranches
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/payment_request_repo_impl.go:192 [35;1mno such table: background_jobs
+[0m[33m[0.061ms] [34;1m[rows:0][0m SELECT * FROM `background_jobs` WHERE status = "PENDING" AND scheduled_at <= "2026-02-18 17:51:01.302" AND attempts < max_attempts ORDER BY scheduled_at ASC LIMIT 10
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/payment_request_repo_impl.go:222 [35;1mno such table: background_jobs
+[0m[33m[0.015ms] [34;1m[rows:0][0m UPDATE `background_jobs` SET `attempts`=attempts + 1,`started_at`="2026-02-18 17:51:01.302",`status`="PROCESSING",`updated_at`="2026-02-18 17:51:01.302" WHERE id = "88074d3d-1ac0-4f39-ba98-f3a102f2304a"
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/payment_request_repo_impl.go:244 [35;1mno such table: background_jobs
+[0m[33m[0.012ms] [34;1m[rows:0][0m UPDATE `background_jobs` SET `error_message`="boom",`status`="FAILED",`updated_at`="2026-02-18 17:51:01.302" WHERE id = "88074d3d-1ac0-4f39-ba98-f3a102f2304a"
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/payment_request_repo_impl.go:234 [35;1mno such table: background_jobs
+[0m[33m[0.012ms] [34;1m[rows:0][0m UPDATE `background_jobs` SET `completed_at`="2026-02-18 17:51:01.302",`status`="COMPLETED",`updated_at`="2026-02-18 17:51:01.302" WHERE id = "88074d3d-1ac0-4f39-ba98-f3a102f2304a"
+--- PASS: TestBackgroundJobRepository_DBErrorBranches (0.00s)
+=== RUN   TestNewUnitOfWork_CreatesImplementation
+--- PASS: TestNewUnitOfWork_CreatesImplementation (0.00s)
+=== RUN   TestChainRepository_Create_AndNamespaceMapping
+--- PASS: TestChainRepository_Create_AndNamespaceMapping (0.00s)
+=== RUN   TestTokenRepository_Create_Method
+--- PASS: TestTokenRepository_Create_Method (0.00s)
+=== RUN   TestEmailVerificationRepository_CRUDFlow
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/user_repo_impl.go:207 [35;1mrecord not found
+[0m[33m[0.033ms] [34;1m[rows:0][0m SELECT `users`.`id`,`users`.`email`,`users`.`name`,`users`.`password_hash`,`users`.`role`,`users`.`kyc_status`,`users`.`kyc_verified_at`,`users`.`created_at`,`users`.`updated_at`,`users`.`deleted_at` FROM `users` JOIN email_verifications ev ON ev.user_id = users.id WHERE (ev.token = "verify-token-1" AND ev.expires_at > "2026-02-18 17:51:01.304" AND ev.verified_at IS NULL AND ev.deleted_at IS NULL) AND `users`.`deleted_at` IS NULL ORDER BY `users`.`id` LIMIT 1
+--- PASS: TestEmailVerificationRepository_CRUDFlow (0.00s)
+=== RUN   TestRepositoryCreate_ErrorPaths
+=== RUN   TestRepositoryCreate_ErrorPaths/bridge_config_create_error
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/bridge_config_repo_impl.go:121 [35;1mno such table: bridge_configs
+[0m[33m[0.105ms] [34;1m[rows:0][0m INSERT INTO `bridge_configs` (`bridge_id`,`source_chain_id`,`dest_chain_id`,`router_address`,`fee_percentage`,`config`,`is_active`,`created_at`,`updated_at`,`deleted_at`,`id`) VALUES ("4e93c55a-ca3f-486e-9fc6-fea2c4ab6323","066c1803-d6c1-47a4-afe6-45eed7f58d00","7955df71-60e8-46dd-8067-bf96ca7c8e8d","0x1","0.1","{}",true,"2026-02-18 17:51:01.304","2026-02-18 17:51:01.304",NULL,"b9d16ad2-6713-4c92-8054-666914539b50") RETURNING `id`
+=== RUN   TestRepositoryCreate_ErrorPaths/chain_create_error
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/chain_repo_impl.go:209 [35;1mno such table: chains
+[0m[33m[0.123ms] [34;1m[rows:0][0m INSERT INTO `chains` (`chain_id`,`name`,`type`,`rpc_url`,`explorer_url`,`currency_symbol`,`image_url`,`is_active`,`state_machine_id`,`created_at`,`updated_at`,`deleted_at`,`id`) VALUES ("8453","Base","EVM","https://rpc.example","https://scan.example","ETH","",true,"","2026-02-18 17:51:01.304","2026-02-18 17:51:01.304",NULL,"97b2f6d1-65c6-4d98-99bd-c9c501f15c1e") RETURNING `id`
+=== RUN   TestRepositoryCreate_ErrorPaths/fee_config_create_error
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/fee_config_repo_impl.go:99 [35;1mno such table: fee_configs
+[0m[33m[0.069ms] [34;1m[rows:0][0m INSERT INTO `fee_configs` (`chain_id`,`token_id`,`platform_fee_percent`,`fixed_base_fee`,`min_fee`,`max_fee`,`created_at`,`updated_at`,`deleted_at`,`id`) VALUES ("2298cdd8-9d33-4756-9b85-6683e0b0ccba","995c7969-6f86-4d50-a4e8-ccb3d23001fc","0.01","1","0.1",NULL,"2026-02-18 17:51:01.304","2026-02-18 17:51:01.304",NULL,"294c9b41-7b26-47ed-a2dd-9488f123569c") RETURNING `id`
+=== RUN   TestRepositoryCreate_ErrorPaths/payment_bridge_create_error
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/payment_bridge_repo_impl.go:86 [35;1mno such table: payment_bridge
+[0m[33m[0.030ms] [34;1m[rows:0][0m INSERT INTO `payment_bridge` (`name`,`created_at`,`updated_at`,`deleted_at`,`id`) VALUES ("Hyperbridge","2026-02-18 17:51:01.304","2026-02-18 17:51:01.304",NULL,"c998ea9b-c694-4031-bd2f-82f81283aff3") RETURNING `id`
+=== RUN   TestRepositoryCreate_ErrorPaths/payment_event_create_error
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/payment_event_repo_impl.go:54 [35;1mno such table: payment_events
+[0m[33m[0.339ms] [34;1m[rows:0][0m INSERT INTO `payment_events` (`payment_id`,`event_type`,`chain_id`,`chain`,`tx_hash`,`block_number`,`metadata`,`created_at`,`id`) VALUES ("ccb31c1b-7a41-4eb1-97eb-93e829566f55","CREATED",NULL,"UNKNOWN","",0,"{}","2026-02-18 17:51:01.305","2798f235-f1bb-48b1-8423-522a41bd9d59") RETURNING `id`
+=== RUN   TestRepositoryCreate_ErrorPaths/user_create_error
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/user_repo_impl.go:40 [35;1mno such table: users
+[0m[33m[0.044ms] [34;1m[rows:0][0m INSERT INTO `users` (`email`,`name`,`password_hash`,`role`,`kyc_status`,`kyc_verified_at`,`created_at`,`updated_at`,`deleted_at`,`id`) VALUES ("a@b.c","A","x","USER","NOT_STARTED",NULL,"2026-02-18 17:51:01.305","2026-02-18 17:51:01.305",NULL,"c2727762-e8a1-46aa-9739-37336816eb84") RETURNING `id`
+--- PASS: TestRepositoryCreate_ErrorPaths (0.00s)
+    --- PASS: TestRepositoryCreate_ErrorPaths/bridge_config_create_error (0.00s)
+    --- PASS: TestRepositoryCreate_ErrorPaths/chain_create_error (0.00s)
+    --- PASS: TestRepositoryCreate_ErrorPaths/fee_config_create_error (0.00s)
+    --- PASS: TestRepositoryCreate_ErrorPaths/payment_bridge_create_error (0.00s)
+    --- PASS: TestRepositoryCreate_ErrorPaths/payment_event_create_error (0.00s)
+    --- PASS: TestRepositoryCreate_ErrorPaths/user_create_error (0.00s)
+=== RUN   TestRoutePolicyRepository_CRUDAndNotFound
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/route_policy_repo_impl.go:30 [35;1mrecord not found
+[0m[33m[0.016ms] [34;1m[rows:0][0m SELECT * FROM `route_policies` WHERE id = "0a9c43c1-fb00-471e-8f16-80edda64f2da" AND `route_policies`.`deleted_at` IS NULL ORDER BY `route_policies`.`id` LIMIT 1
+--- PASS: TestRoutePolicyRepository_CRUDAndNotFound (0.00s)
+=== RUN   TestRoutePolicyRepository_Create_DefaultsAndGeneratedID
+--- PASS: TestRoutePolicyRepository_Create_DefaultsAndGeneratedID (0.00s)
+=== RUN   TestLayerZeroConfigRepository_CRUDAndNotFound
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/layerzero_config_repo_impl.go:28 [35;1mrecord not found
+[0m[33m[0.013ms] [34;1m[rows:0][0m SELECT * FROM `layerzero_configs` WHERE id = "09f65534-7296-4811-bd2d-3e54ce06a8d7" AND `layerzero_configs`.`deleted_at` IS NULL ORDER BY `layerzero_configs`.`id` LIMIT 1
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/layerzero_config_repo_impl.go:43 [35;1mrecord not found
+[0m[33m[0.018ms] [34;1m[rows:0][0m SELECT * FROM `layerzero_configs` WHERE (source_chain_id = "6f78eb67-2129-45e1-a4cc-26dbe6107725" AND dest_chain_id = "d2b8118c-f1cb-4aa4-9cd6-06e5d29b3981") AND `layerzero_configs`.`deleted_at` IS NULL ORDER BY updated_at DESC,`layerzero_configs`.`id` LIMIT 1
+--- PASS: TestLayerZeroConfigRepository_CRUDAndNotFound (0.00s)
+=== RUN   TestRouteAndLayerZeroRepository_DBErrorBranches
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/route_policy_repo_impl.go:30 [35;1mno such table: route_policies
+[0m[33m[0.030ms] [34;1m[rows:0][0m SELECT * FROM `route_policies` WHERE id = "211b5a49-34a2-4b4a-9378-5eb0a54999f5" AND `route_policies`.`deleted_at` IS NULL ORDER BY `route_policies`.`id` LIMIT 1
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/route_policy_repo_impl.go:46 [35;1mno such table: route_policies
+[0m[33m[0.006ms] [34;1m[rows:0][0m SELECT * FROM `route_policies` WHERE (source_chain_id = "543a8e0c-52a0-4ded-bb60-e0ab5034e196" AND dest_chain_id = "45c47266-1a12-4b95-8b81-48ec11e9eaf5") AND `route_policies`.`deleted_at` IS NULL ORDER BY updated_at DESC LIMIT 1
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/route_policy_repo_impl.go:68 [35;1mno such table: route_policies
+[0m[33m[0.005ms] [34;1m[rows:0][0m SELECT count(*) FROM `route_policies` WHERE `route_policies`.`deleted_at` IS NULL
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/route_policy_repo_impl.go:137 [35;1mno such table: route_policies
+[0m[33m[0.012ms] [34;1m[rows:0][0m UPDATE `route_policies` SET `deleted_at`="2026-02-18 17:51:01.306" WHERE id = "c4e4df85-941d-4cc8-87d0-bb9bebd181b8" AND `route_policies`.`deleted_at` IS NULL
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/layerzero_config_repo_impl.go:28 [35;1mno such table: layerzero_configs
+[0m[33m[0.024ms] [34;1m[rows:0][0m SELECT * FROM `layerzero_configs` WHERE id = "de9118f5-5669-41de-8d47-31bf29a3525c" AND `layerzero_configs`.`deleted_at` IS NULL ORDER BY `layerzero_configs`.`id` LIMIT 1
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/layerzero_config_repo_impl.go:43 [35;1mno such table: layerzero_configs
+[0m[33m[0.006ms] [34;1m[rows:0][0m SELECT * FROM `layerzero_configs` WHERE (source_chain_id = "e0f75646-3864-4526-b547-c28eb06e99ae" AND dest_chain_id = "f4c11093-ccd2-4db9-9c9a-9adf6ecca975") AND `layerzero_configs`.`deleted_at` IS NULL ORDER BY updated_at DESC,`layerzero_configs`.`id` LIMIT 1
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/layerzero_config_repo_impl.go:68 [35;1mno such table: layerzero_configs
+[0m[33m[0.007ms] [34;1m[rows:0][0m SELECT count(*) FROM `layerzero_configs` WHERE `layerzero_configs`.`deleted_at` IS NULL
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/layerzero_config_repo_impl.go:136 [35;1mno such table: layerzero_configs
+[0m[33m[0.011ms] [34;1m[rows:0][0m UPDATE `layerzero_configs` SET `deleted_at`="2026-02-18 17:51:01.306" WHERE id = "5a3b9a36-76c1-426c-8a72-075f50e554a7" AND `layerzero_configs`.`deleted_at` IS NULL
+--- PASS: TestRouteAndLayerZeroRepository_DBErrorBranches (0.00s)
+=== RUN   TestRoutePolicyRepo_FallbackOrderHelpers
+=== RUN   TestRoutePolicyRepo_FallbackOrderHelpers/marshal_empty_defaults_to_bridge_type_0
+=== RUN   TestRoutePolicyRepo_FallbackOrderHelpers/marshal_non-empty_order
+=== RUN   TestRoutePolicyRepo_FallbackOrderHelpers/parse_empty_or_invalid_defaults_to_0
+=== RUN   TestRoutePolicyRepo_FallbackOrderHelpers/parse_valid_order
+--- PASS: TestRoutePolicyRepo_FallbackOrderHelpers (0.00s)
+    --- PASS: TestRoutePolicyRepo_FallbackOrderHelpers/marshal_empty_defaults_to_bridge_type_0 (0.00s)
+    --- PASS: TestRoutePolicyRepo_FallbackOrderHelpers/marshal_non-empty_order (0.00s)
+    --- PASS: TestRoutePolicyRepo_FallbackOrderHelpers/parse_empty_or_invalid_defaults_to_0 (0.00s)
+    --- PASS: TestRoutePolicyRepo_FallbackOrderHelpers/parse_valid_order (0.00s)
+=== RUN   TestRoutePolicyRepo_UpdateAndListBranches
+--- PASS: TestRoutePolicyRepo_UpdateAndListBranches (0.00s)
+=== RUN   TestRoutePolicyRepo_Update_DBErrorBranch
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/route_policy_repo_impl.go:119 [35;1mno such table: route_policies
+[0m[33m[0.047ms] [34;1m[rows:0][0m UPDATE `route_policies` SET `default_bridge_type`=1,`dest_chain_id`="c4bb8373-ee54-462d-9777-6fb5c4e553b4",`fallback_mode`="strict",`fallback_order`="[0]",`source_chain_id`="451caf08-ec4c-4838-9400-bbc986d4e907",`updated_at`="2026-02-18 17:51:01.307" WHERE id = "2a0b0e20-fa2c-4b31-9a01-903a3b830ce4" AND `route_policies`.`deleted_at` IS NULL
+--- PASS: TestRoutePolicyRepo_Update_DBErrorBranch (0.00s)
+=== RUN   TestRoutePolicyRepo_DeleteAndGetByIDBranches
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/route_policy_repo_impl.go:30 [35;1mrecord not found
+[0m[33m[0.012ms] [34;1m[rows:0][0m SELECT * FROM `route_policies` WHERE id = "12c77418-f81b-40be-924b-4a20973861d0" AND `route_policies`.`deleted_at` IS NULL ORDER BY `route_policies`.`id` LIMIT 1
+--- PASS: TestRoutePolicyRepo_DeleteAndGetByIDBranches (0.00s)
+=== RUN   TestRoutePolicyRepo_List_DBErrorBranch
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/route_policy_repo_impl.go:68 [35;1mno such table: route_policies
+[0m[33m[0.027ms] [34;1m[rows:0][0m SELECT count(*) FROM `route_policies` WHERE `route_policies`.`deleted_at` IS NULL
+--- PASS: TestRoutePolicyRepo_List_DBErrorBranch (0.00s)
+=== RUN   TestRoutePolicyRepo_Create_DefaultsAndDBErrorBranches
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/route_policy_repo_impl.go:107 [35;1mno such table: route_policies
+[0m[33m[0.038ms] [34;1m[rows:0][0m INSERT INTO `route_policies` (`source_chain_id`,`dest_chain_id`,`default_bridge_type`,`fallback_mode`,`fallback_order`,`created_at`,`updated_at`,`deleted_at`,`id`) VALUES ("383334e6-1fa7-478c-af8b-89d9f4e0a422","17940921-7e71-4b3d-a065-b00855299a2f",0,"strict","[0]","2026-02-18 17:51:01.308","2026-02-18 17:51:01.308",NULL,"019c705f-ef3c-7718-9ad4-4d73b802e42c") RETURNING `id`
+--- PASS: TestRoutePolicyRepo_Create_DefaultsAndDBErrorBranches (0.00s)
+=== RUN   TestSmartContractRepository_CRUDAndFilters
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/smart_contract_repo_impl.go:78 [35;1mrecord not found
+[0m[33m[0.014ms] [34;1m[rows:0][0m SELECT * FROM `smart_contracts` WHERE id = "bb3c689c-a21a-4630-ade3-199bc137546c" AND `smart_contracts`.`deleted_at` IS NULL ORDER BY `smart_contracts`.`id` LIMIT 1
+--- PASS: TestSmartContractRepository_CRUDAndFilters (0.00s)
+=== RUN   TestSmartContractRepository_NotFoundAndDecodeBranches
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/smart_contract_repo_impl.go:89 [35;1mrecord not found
+[0m[33m[0.189ms] [34;1m[rows:0][0m SELECT * FROM `smart_contracts` WHERE (chain_id = "2e2b9c2b-dc1e-478e-ac0c-0be6a4718097" AND address = "0xdoesnotexist") AND `smart_contracts`.`deleted_at` IS NULL ORDER BY `smart_contracts`.`id` LIMIT 1
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/smart_contract_repo_impl.go:103 [35;1mrecord not found
+[0m[33m[0.024ms] [34;1m[rows:0][0m SELECT * FROM `smart_contracts` WHERE (chain_id = "2e2b9c2b-dc1e-478e-ac0c-0be6a4718097" AND type = "ROUTER" AND is_active = true) AND `smart_contracts`.`deleted_at` IS NULL ORDER BY updated_at DESC, created_at DESC, version DESC, id DESC,`smart_contracts`.`id` LIMIT 1
+Warning: failed to unmarshal ABI for contract b94d4e05-3cf5-4fa0-8991-c58a76823cc9: invalid character 'i' looking for beginning of object key string
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/smart_contract_repo_impl.go:103 [35;1mrecord not found
+[0m[33m[0.022ms] [34;1m[rows:0][0m SELECT * FROM `smart_contracts` WHERE (chain_id = "2e2b9c2b-dc1e-478e-ac0c-0be6a4718097" AND type = "GATEWAY" AND is_active = true) AND `smart_contracts`.`deleted_at` IS NULL ORDER BY updated_at DESC, created_at DESC, version DESC, id DESC,`smart_contracts`.`id` LIMIT 1
+--- PASS: TestSmartContractRepository_NotFoundAndDecodeBranches (0.00s)
+=== RUN   TestSmartContractRepository_CreateMarshalError
+--- PASS: TestSmartContractRepository_CreateMarshalError (0.00s)
+=== RUN   TestSmartContractRepository_Query_DBErrorAndFilterCompat
+=== RUN   TestSmartContractRepository_Query_DBErrorAndFilterCompat/db_errors_when_table_missing
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/smart_contract_repo_impl.go:118 [35;1mno such table: smart_contracts
+[0m[33m[0.171ms] [34;1m[rows:0][0m SELECT count(*) FROM `smart_contracts` WHERE chain_id = "8e9339da-c555-4f50-9953-57a240405cb4" AND `smart_contracts`.`deleted_at` IS NULL
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/smart_contract_repo_impl.go:145 [35;1mno such table: smart_contracts
+[0m[33m[0.005ms] [34;1m[rows:0][0m SELECT count(*) FROM `smart_contracts` WHERE `smart_contracts`.`deleted_at` IS NULL
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/smart_contract_repo_impl.go:184 [35;1mno such table: smart_contracts
+[0m[33m[0.005ms] [34;1m[rows:0][0m SELECT count(*) FROM `smart_contracts` WHERE chain_id = "8e9339da-c555-4f50-9953-57a240405cb4" AND type = "ROUTER" AND `smart_contracts`.`deleted_at` IS NULL
+=== RUN   TestSmartContractRepository_Query_DBErrorAndFilterCompat/filter_compat_for_pool_and_DEX_POOL_type
+--- PASS: TestSmartContractRepository_Query_DBErrorAndFilterCompat (0.00s)
+    --- PASS: TestSmartContractRepository_Query_DBErrorAndFilterCompat/db_errors_when_table_missing (0.00s)
+    --- PASS: TestSmartContractRepository_Query_DBErrorAndFilterCompat/filter_compat_for_pool_and_DEX_POOL_type (0.00s)
+=== RUN   TestSmartContractRepository_DBErrorBranches_OnSingleLookups
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/smart_contract_repo_impl.go:78 [35;1mno such table: smart_contracts
+[0m[33m[0.163ms] [34;1m[rows:0][0m SELECT * FROM `smart_contracts` WHERE id = "9749700e-37a9-4fcf-97fb-03c36a36a6a8" AND `smart_contracts`.`deleted_at` IS NULL ORDER BY `smart_contracts`.`id` LIMIT 1
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/smart_contract_repo_impl.go:89 [35;1mno such table: smart_contracts
+[0m[33m[0.006ms] [34;1m[rows:0][0m SELECT * FROM `smart_contracts` WHERE (chain_id = "7ad1ae29-1abd-4a4e-a28b-2b059e8ce450" AND address = "0xabc") AND `smart_contracts`.`deleted_at` IS NULL ORDER BY `smart_contracts`.`id` LIMIT 1
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/smart_contract_repo_impl.go:103 [35;1mno such table: smart_contracts
+[0m[33m[0.007ms] [34;1m[rows:0][0m SELECT * FROM `smart_contracts` WHERE (chain_id = "050a2111-5bc8-47cd-ac02-664d6ba6039c" AND type = "ROUTER" AND is_active = true) AND `smart_contracts`.`deleted_at` IS NULL ORDER BY updated_at DESC, created_at DESC, version DESC, id DESC,`smart_contracts`.`id` LIMIT 1
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/smart_contract_repo_impl.go:241 [35;1mno such table: smart_contracts
+[0m[33m[0.016ms] [34;1m[rows:0][0m UPDATE `smart_contracts` SET `deleted_at`="2026-02-18 17:51:01.31" WHERE id = "d3ae3970-3839-4234-9245-a73e0d57e06e" AND `smart_contracts`.`deleted_at` IS NULL
+--- PASS: TestSmartContractRepository_DBErrorBranches_OnSingleLookups (0.00s)
+=== RUN   TestSmartContractRepository_Create_DBErrorBranch
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/smart_contract_repo_impl.go:70 [35;1mno such table: smart_contracts
+[0m[33m[0.166ms] [34;1m[rows:0][0m INSERT INTO `smart_contracts` (`name`,`chain_id`,`address`,`abi`,`type`,`version`,`deployer_address`,`token0_address`,`token1_address`,`fee_tier`,`hook_address`,`start_block`,`metadata`,`is_active`,`created_at`,`updated_at`,`deleted_at`,`id`,`destination_map`) VALUES ("Router","3f9758e3-dd6a-4421-acf2-6dbe61cb21b9","0x1111111111111111111111111111111111111111","[{""name"":""fn""}]","ROUTER","1.0.0","","","",0,"",0,"{}",true,"2026-02-18 17:51:01.31","2026-02-18 17:51:01.31",NULL,"830dcffe-2568-4c3d-a946-e2f71bff0b73","{}") RETURNING `id`,`destination_map`
+--- PASS: TestSmartContractRepository_Create_DBErrorBranch (0.00s)
+=== RUN   TestSmartContractRepository_Update_DBErrorBranch
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/smart_contract_repo_impl.go:230 [35;1mno such table: smart_contracts
+[0m[33m[0.191ms] [34;1m[rows:0][0m UPDATE `smart_contracts` SET `abi`="null",`address`="0x1111111111111111111111111111111111111111",`chain_id`="ce13f539-fc8f-4864-9151-e4efc521b172",`deployer_address`="",`fee_tier`=0,`hook_address`="",`is_active`=true,`metadata`="{}",`name`="Router",`start_block`=0,`token0_address`="",`token1_address`="",`type`="ROUTER",`version`="1.0.0",`updated_at`="2026-02-18 17:51:01.311" WHERE id = "4bbcbd86-e8f5-412d-8a63-5cbae070ad96" AND `smart_contracts`.`deleted_at` IS NULL
+--- PASS: TestSmartContractRepository_Update_DBErrorBranch (0.00s)
+=== RUN   TestSmartContractRepository_List_FindErrorAfterCount
+
+2026/02/18 17:51:01 [34;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/smart_contract_repo_impl_test.go:330
+[0m[35m[warn] [0mremoving callback `test:smart_contract_find_error_after_count` from /Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/smart_contract_repo_impl_test.go:330
+--- PASS: TestSmartContractRepository_List_FindErrorAfterCount (0.00s)
+=== RUN   TestSmartContractRepository_ToEntity_NullAndInvalidJSONBranches
+=== RUN   TestSmartContractRepository_ToEntity_NullAndInvalidJSONBranches/null_abi_and_null_metadata_fallback
+=== RUN   TestSmartContractRepository_ToEntity_NullAndInvalidJSONBranches/invalid_abi_json_keeps_entity_alive
+Warning: failed to unmarshal ABI for contract 94e2b944-4492-4935-a767-b0fb3cfae847: invalid character 'n' looking for beginning of object key string
+--- PASS: TestSmartContractRepository_ToEntity_NullAndInvalidJSONBranches (0.00s)
+    --- PASS: TestSmartContractRepository_ToEntity_NullAndInvalidJSONBranches/null_abi_and_null_metadata_fallback (0.00s)
+    --- PASS: TestSmartContractRepository_ToEntity_NullAndInvalidJSONBranches/invalid_abi_json_keeps_entity_alive (0.00s)
+=== RUN   TestSmartContractRepository_GetFiltered_NoTypeAndNoChainFilter
+--- PASS: TestSmartContractRepository_GetFiltered_NoTypeAndNoChainFilter (0.00s)
+=== RUN   TestSmartContractRepository_GetFiltered_FindErrorAfterCount
+
+2026/02/18 17:51:01 [34;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/smart_contract_repo_impl_test.go:433
+[0m[35m[warn] [0mremoving callback `test:smart_contract_filtered_find_error_after_count` from /Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/smart_contract_repo_impl_test.go:433
+--- PASS: TestSmartContractRepository_GetFiltered_FindErrorAfterCount (0.00s)
+=== RUN   TestTeamRepository_CRUDAndLists
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/team_repo_impl.go:69 [35;1mnear "ILIKE": syntax error
+[0m[33m[0.006ms] [34;1m[rows:0][0m SELECT * FROM `teams` WHERE (name ILIKE "%desig%" OR role ILIKE "%desig%") AND `teams`.`deleted_at` IS NULL ORDER BY display_order ASC, created_at ASC
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/team_repo_impl.go:37 [35;1mrecord not found
+[0m[33m[0.014ms] [34;1m[rows:0][0m SELECT * FROM `teams` WHERE id = "51fef44e-22e7-47e5-ab16-062b968954cc" AND `teams`.`deleted_at` IS NULL ORDER BY `teams`.`id` LIMIT 1
+--- PASS: TestTeamRepository_CRUDAndLists (0.00s)
+=== RUN   TestTeamRepository_NotFoundBranches
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/team_repo_impl.go:37 [35;1mrecord not found
+[0m[33m[0.056ms] [34;1m[rows:0][0m SELECT * FROM `teams` WHERE id = "ee87e0b4-4020-43b2-8bba-c3905cfbc940" AND `teams`.`deleted_at` IS NULL ORDER BY `teams`.`id` LIMIT 1
+--- PASS: TestTeamRepository_NotFoundBranches (0.00s)
+=== RUN   TestTeamRepository_ToEntity_DeletedAtBranch
+--- PASS: TestTeamRepository_ToEntity_DeletedAtBranch (0.00s)
+=== RUN   TestTeamRepository_DBErrorBranches
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/team_repo_impl.go:26 [35;1mno such table: teams
+[0m[33m[0.059ms] [34;1m[rows:0][0m INSERT INTO `teams` (`name`,`role`,`bio`,`image_url`,`github_url`,`twitter_url`,`linkedin_url`,`display_order`,`is_active`,`created_at`,`updated_at`,`deleted_at`,`id`) VALUES ("x","r","b","https://img","","","",0,true,"2026-02-18 17:51:01.313","2026-02-18 17:51:01.313",NULL,"0be5d40f-a38f-43fd-851e-2f53d6f2c44a") RETURNING `id`
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/team_repo_impl.go:37 [35;1mno such table: teams
+[0m[33m[0.006ms] [34;1m[rows:0][0m SELECT * FROM `teams` WHERE id = "3d77f527-e7e2-4e45-85b0-d771bc335bda" AND `teams`.`deleted_at` IS NULL ORDER BY `teams`.`id` LIMIT 1
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/team_repo_impl.go:51 [35;1mno such table: teams
+[0m[33m[0.005ms] [34;1m[rows:0][0m SELECT * FROM `teams` WHERE is_active = true AND `teams`.`deleted_at` IS NULL ORDER BY display_order ASC, created_at ASC
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/team_repo_impl.go:69 [35;1mno such table: teams
+[0m[33m[0.004ms] [34;1m[rows:0][0m SELECT * FROM `teams` WHERE `teams`.`deleted_at` IS NULL ORDER BY display_order ASC, created_at ASC
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/team_repo_impl.go:97 [35;1mno such table: teams
+[0m[33m[0.020ms] [34;1m[rows:0][0m UPDATE `teams` SET `bio`="b",`display_order`=0,`github_url`="",`image_url`="https://img",`is_active`=true,`linkedin_url`="",`name`="x",`role`="r",`twitter_url`="",`updated_at`="2026-02-18 17:51:01.313" WHERE id = "c4318b2e-0d5b-4079-b8ee-3c6f815b9146" AND `teams`.`deleted_at` IS NULL
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/team_repo_impl.go:108 [35;1mno such table: teams
+[0m[33m[0.015ms] [34;1m[rows:0][0m UPDATE `teams` SET `deleted_at`="2026-02-18 17:51:01.313" WHERE id = "2c841aee-b036-44c4-a780-5070e69c5de7" AND `teams`.`deleted_at` IS NULL
+--- PASS: TestTeamRepository_DBErrorBranches (0.00s)
+=== RUN   TestTokenRepository_ToEntityAndToModel_InternalBranches
+--- PASS: TestTokenRepository_ToEntityAndToModel_InternalBranches (0.00s)
+=== RUN   TestTokenRepository_Create_ErrorBranch
+--- PASS: TestTokenRepository_Create_ErrorBranch (0.00s)
+=== RUN   TestTokenRepository_GetAllTokens_QueryBranches
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/token_repo_impl.go:158 [35;1mnear "ILIKE": syntax error
+[0m[33m[0.006ms] [34;1m[rows:0][0m SELECT count(*) FROM `tokens` WHERE (symbol ILIKE "%USD%" OR name ILIKE "%USD%" OR address ILIKE "%USD%") AND `tokens`.`deleted_at` IS NULL
+--- PASS: TestTokenRepository_GetAllTokens_QueryBranches (0.00s)
+=== RUN   TestTokenRepository_CRUDAndQueries
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/token_repo_impl.go:36 [35;1mrecord not found
+[0m[33m[0.018ms] [34;1m[rows:0][0m SELECT * FROM `tokens` WHERE id = "4e74b310-8caa-4765-84cc-c0f2a28f280f" AND `tokens`.`deleted_at` IS NULL ORDER BY `tokens`.`id` LIMIT 1
+--- PASS: TestTokenRepository_CRUDAndQueries (0.00s)
+=== RUN   TestTokenRepository_NotFoundBranches
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/token_repo_impl.go:36 [35;1mrecord not found
+[0m[33m[0.166ms] [34;1m[rows:0][0m SELECT * FROM `tokens` WHERE id = "df485ea4-75cd-413a-b794-b6abfee8c7ee" AND `tokens`.`deleted_at` IS NULL ORDER BY `tokens`.`id` LIMIT 1
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/token_repo_impl.go:48 [35;1mrecord not found
+[0m[33m[0.023ms] [34;1m[rows:0][0m SELECT * FROM `tokens` WHERE (symbol = "NOPE" AND chain_id = "8ee51388-9221-4e0b-9c96-878f3aef3a2d") AND `tokens`.`deleted_at` IS NULL ORDER BY `tokens`.`id` LIMIT 1
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/token_repo_impl.go:60 [35;1mrecord not found
+[0m[33m[0.017ms] [34;1m[rows:0][0m SELECT * FROM `tokens` WHERE (address = "0xnope" AND chain_id = "8ee51388-9221-4e0b-9c96-878f3aef3a2d") AND `tokens`.`deleted_at` IS NULL ORDER BY `tokens`.`id` LIMIT 1
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/token_repo_impl.go:104 [35;1mrecord not found
+[0m[33m[0.018ms] [34;1m[rows:0][0m SELECT * FROM `tokens` WHERE (chain_id = "8ee51388-9221-4e0b-9c96-878f3aef3a2d" AND is_native = true) AND `tokens`.`deleted_at` IS NULL ORDER BY `tokens`.`id` LIMIT 1
+--- PASS: TestTokenRepository_NotFoundBranches (0.00s)
+=== RUN   TestTokenRepository_DBErrorBranches
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/token_repo_impl.go:36 [35;1mno such table: tokens
+[0m[33m[0.159ms] [34;1m[rows:0][0m SELECT * FROM `tokens` WHERE id = "65b9f356-6869-4c89-9974-c68a445b19e8" AND `tokens`.`deleted_at` IS NULL ORDER BY `tokens`.`id` LIMIT 1
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/token_repo_impl.go:48 [35;1mno such table: tokens
+[0m[33m[0.006ms] [34;1m[rows:0][0m SELECT * FROM `tokens` WHERE (symbol = "USDC" AND chain_id = "0a0a8f92-b36f-40db-90cf-633b18729674") AND `tokens`.`deleted_at` IS NULL ORDER BY `tokens`.`id` LIMIT 1
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/token_repo_impl.go:60 [35;1mno such table: tokens
+[0m[33m[0.005ms] [34;1m[rows:0][0m SELECT * FROM `tokens` WHERE (address = "0x1" AND chain_id = "e1627fe1-d4dd-4890-b1e1-83899e224e70") AND `tokens`.`deleted_at` IS NULL ORDER BY `tokens`.`id` LIMIT 1
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/token_repo_impl.go:72 [35;1mno such table: tokens
+[0m[33m[0.004ms] [34;1m[rows:0][0m SELECT * FROM `tokens` WHERE `tokens`.`deleted_at` IS NULL ORDER BY symbol
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/token_repo_impl.go:87 [35;1mno such table: tokens
+[0m[33m[0.004ms] [34;1m[rows:0][0m SELECT * FROM `tokens` WHERE is_stablecoin = true AND `tokens`.`deleted_at` IS NULL ORDER BY symbol
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/token_repo_impl.go:104 [35;1mno such table: tokens
+[0m[33m[0.005ms] [34;1m[rows:0][0m SELECT * FROM `tokens` WHERE (chain_id = "ad680400-533a-4c14-90d0-009f9c3fe32c" AND is_native = true) AND `tokens`.`deleted_at` IS NULL ORDER BY `tokens`.`id` LIMIT 1
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/token_repo_impl.go:121 [35;1mno such table: tokens
+[0m[33m[0.004ms] [34;1m[rows:0][0m SELECT count(*) FROM `tokens` WHERE (chain_id = "b530a8e0-a4f8-4763-9fd1-2f78b6252c46" AND is_active = true) AND `tokens`.`deleted_at` IS NULL
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/token_repo_impl.go:158 [35;1mno such table: tokens
+[0m[33m[0.003ms] [34;1m[rows:0][0m SELECT count(*) FROM `tokens` WHERE `tokens`.`deleted_at` IS NULL
+--- PASS: TestTokenRepository_DBErrorBranches (0.00s)
+=== RUN   TestTokenRepository_GetAllTokens_SearchPathSQLiteILikeError
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/token_repo_impl.go:158 [35;1mnear "ILIKE": syntax error
+[0m[33m[0.136ms] [34;1m[rows:0][0m SELECT count(*) FROM `tokens` WHERE chain_id = "bc3baff9-866b-4ae2-8666-f2074ade24ce" AND (symbol ILIKE "%USD%" OR name ILIKE "%USD%" OR address ILIKE "%USD%") AND `tokens`.`deleted_at` IS NULL
+--- PASS: TestTokenRepository_GetAllTokens_SearchPathSQLiteILikeError (0.00s)
+=== RUN   TestTokenRepository_GetTokensByChain_FindErrorAfterCount
+
+2026/02/18 17:51:01 [34;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/token_repo_impl_test.go:162
+[0m[35m[warn] [0mremoving callback `test:token_gettokensbychain_find_error` from /Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/token_repo_impl_test.go:162
+--- PASS: TestTokenRepository_GetTokensByChain_FindErrorAfterCount (0.00s)
+=== RUN   TestUnitOfWork_DoCommitAndRollback
+--- PASS: TestUnitOfWork_DoCommitAndRollback (0.00s)
+=== RUN   TestUnitOfWork_WithLockAndGetDB
+--- PASS: TestUnitOfWork_WithLockAndGetDB (0.00s)
+=== RUN   TestUnitOfWork_DoBeginFailure
+--- PASS: TestUnitOfWork_DoBeginFailure (0.00s)
+=== RUN   TestUnitOfWork_DoCommitFailure_WithHook
+--- PASS: TestUnitOfWork_DoCommitFailure_WithHook (0.00s)
+=== RUN   TestUserRepository_CRUDAndList
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/user_repo_impl.go:118 [35;1mnear "ILIKE": syntax error
+[0m[33m[0.005ms] [34;1m[rows:0][0m SELECT * FROM `users` WHERE (name ILIKE "%Ali%" OR email ILIKE "%Ali%") AND `users`.`deleted_at` IS NULL ORDER BY created_at DESC
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/user_repo_impl.go:49 [35;1mrecord not found
+[0m[33m[0.011ms] [34;1m[rows:0][0m SELECT * FROM `users` WHERE id = "b28a7b9b-4d76-41f4-a258-081b9681e2ba" AND `users`.`deleted_at` IS NULL ORDER BY `users`.`id` LIMIT 1
+--- PASS: TestUserRepository_CRUDAndList (0.00s)
+=== RUN   TestUserRepository_NotFoundBranches
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/user_repo_impl.go:49 [35;1mrecord not found
+[0m[33m[0.042ms] [34;1m[rows:0][0m SELECT * FROM `users` WHERE id = "bf4238f8-5da0-47f2-9162-e25bcfaa516b" AND `users`.`deleted_at` IS NULL ORDER BY `users`.`id` LIMIT 1
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/user_repo_impl.go:61 [35;1mrecord not found
+[0m[33m[0.019ms] [34;1m[rows:0][0m SELECT * FROM `users` WHERE email = "missing@paychain.io" AND `users`.`deleted_at` IS NULL ORDER BY `users`.`id` LIMIT 1
+--- PASS: TestUserRepository_NotFoundBranches (0.00s)
+=== RUN   TestUserRepository_Update_WithKYCVerifiedAt_AndDBErrorBranch
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/user_repo_impl.go:83 [35;1mno such table: users
+[0m[33m[0.040ms] [34;1m[rows:0][0m UPDATE `users` SET `kyc_status`="NOT_STARTED",`name`="x",`role`="USER",`updated_at`="2026-02-18 17:51:01.319" WHERE id = "e6941c9d-111c-444b-9433-d6e97aa31640" AND `users`.`deleted_at` IS NULL
+--- PASS: TestUserRepository_Update_WithKYCVerifiedAt_AndDBErrorBranch (0.00s)
+=== RUN   TestUserRepository_DBErrorBranches
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/user_repo_impl.go:49 [35;1mno such table: users
+[0m[33m[0.031ms] [34;1m[rows:0][0m SELECT * FROM `users` WHERE id = "5c6e3184-5e68-4ba6-acf5-dc542641f6e0" AND `users`.`deleted_at` IS NULL ORDER BY `users`.`id` LIMIT 1
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/user_repo_impl.go:61 [35;1mno such table: users
+[0m[33m[0.008ms] [34;1m[rows:0][0m SELECT * FROM `users` WHERE email = "x@paychain.io" AND `users`.`deleted_at` IS NULL ORDER BY `users`.`id` LIMIT 1
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/user_repo_impl.go:95 [35;1mno such table: users
+[0m[33m[0.015ms] [34;1m[rows:0][0m UPDATE `users` SET `password_hash`="hash",`updated_at`="2026-02-18 17:51:01.319" WHERE id = "e24539a6-cf13-44fc-8f14-36af939205d7" AND `users`.`deleted_at` IS NULL
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/user_repo_impl.go:132 [35;1mno such table: users
+[0m[33m[0.011ms] [34;1m[rows:0][0m UPDATE `users` SET `deleted_at`="2026-02-18 17:51:01.319" WHERE id = "50b51ce9-aaa7-416c-abc5-d6ea555a1a3a" AND `users`.`deleted_at` IS NULL
+--- PASS: TestUserRepository_DBErrorBranches (0.00s)
+=== RUN   TestWalletRepository_CRUDAndPrimary
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/wallet_repo_impl.go:48 [35;1mrecord not found
+[0m[33m[0.011ms] [34;1m[rows:0][0m SELECT * FROM `wallets` WHERE id = "9ad00944-2a25-4164-89ff-5071105944d0" AND `wallets`.`deleted_at` IS NULL ORDER BY `wallets`.`id` LIMIT 1
+--- PASS: TestWalletRepository_CRUDAndPrimary (0.00s)
+=== RUN   TestWalletRepository_NotFoundBranches
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/wallet_repo_impl.go:48 [35;1mrecord not found
+[0m[33m[0.125ms] [34;1m[rows:0][0m SELECT * FROM `wallets` WHERE id = "16085cce-f1d6-4d21-8b93-adf57a6e7515" AND `wallets`.`deleted_at` IS NULL ORDER BY `wallets`.`id` LIMIT 1
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/wallet_repo_impl.go:97 [35;1mrecord not found
+[0m[33m[0.022ms] [34;1m[rows:0][0m SELECT * FROM `wallets` WHERE (chain_id = "2e107003-9f54-4aa9-964c-8460bef76181" AND address = "0xmissing") AND `wallets`.`deleted_at` IS NULL ORDER BY `wallets`.`id` LIMIT 1
+--- PASS: TestWalletRepository_NotFoundBranches (0.00s)
+=== RUN   TestWalletRepository_SetPrimary_DBErrorBranch
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/wallet_repo_impl.go:112 [35;1mno such table: wallets
+[0m[33m[0.121ms] [34;1m[rows:0][0m UPDATE `wallets` SET `is_primary`=false,`updated_at`="2026-02-18 17:51:01.32" WHERE user_id = "50b326b1-dd36-40c9-8b9e-9bf13eac6d14" AND `wallets`.`deleted_at` IS NULL
+--- PASS: TestWalletRepository_SetPrimary_DBErrorBranch (0.00s)
+=== RUN   TestWalletRepository_SetPrimary_SecondUpdateErrorBranch
+
+2026/02/18 17:51:01 [34;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/wallet_repo_impl_test.go:119
+[0m[35m[warn] [0mremoving callback `test:setprimary_fail_on_true` from /Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/wallet_repo_impl_test.go:119
+--- PASS: TestWalletRepository_SetPrimary_SecondUpdateErrorBranch (0.00s)
+=== RUN   TestWalletRepository_OtherDBErrorBranches
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/wallet_repo_impl.go:42 [35;1mno such table: wallets
+[0m[33m[0.210ms] [34;1m[rows:0][0m INSERT INTO `wallets` (`user_id`,`merchant_id`,`chain_id`,`address`,`is_primary`,`created_at`,`updated_at`,`deleted_at`,`id`) VALUES ("6999b37f-5dba-44a9-b0b9-0bdbd9825dbe",NULL,"611bd542-8f96-41a3-955a-8287a59e747e","0xabc",false,"2026-02-18 17:51:01.321","2026-02-18 17:51:01.321",NULL,"1d149af6-6c31-4fce-b731-a07b3040d6fc") RETURNING `id`
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/wallet_repo_impl.go:48 [35;1mno such table: wallets
+[0m[33m[0.008ms] [34;1m[rows:0][0m SELECT * FROM `wallets` WHERE id = "008af525-f777-48bd-b358-71e03e095b56" AND `wallets`.`deleted_at` IS NULL ORDER BY `wallets`.`id` LIMIT 1
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/wallet_repo_impl.go:97 [35;1mno such table: wallets
+[0m[33m[0.006ms] [34;1m[rows:0][0m SELECT * FROM `wallets` WHERE (chain_id = "271aead8-e9ec-4a63-85f7-0e53529b8a2d" AND address = "0xabc") AND `wallets`.`deleted_at` IS NULL ORDER BY `wallets`.`id` LIMIT 1
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/wallet_repo_impl.go:63 [35;1mno such table: wallets
+[0m[33m[0.006ms] [34;1m[rows:0][0m SELECT * FROM `wallets` WHERE user_id = "b917cb89-386c-4f08-a25f-4526cda95379" AND `wallets`.`deleted_at` IS NULL ORDER BY is_primary DESC, created_at DESC
+
+2026/02/18 17:51:01 [31;1m/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/infrastructure/repositories/wallet_repo_impl.go:133 [35;1mno such table: wallets
+[0m[33m[0.018ms] [34;1m[rows:0][0m UPDATE `wallets` SET `deleted_at`="2026-02-18 17:51:01.321" WHERE id = "9911f632-36f5-4fa5-8e8d-6f563d539054" AND `wallets`.`deleted_at` IS NULL
+--- PASS: TestWalletRepository_OtherDBErrorBranches (0.00s)
+FAIL
+FAIL	pay-chain.backend/internal/infrastructure/repositories	0.324s
+FAIL

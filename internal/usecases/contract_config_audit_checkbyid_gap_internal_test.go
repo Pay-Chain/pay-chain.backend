@@ -35,9 +35,15 @@ func (s *ccasChainRepoStub) GetAllRPCs(context.Context, *uuid.UUID, *bool, *stri
 func (s *ccasChainRepoStub) GetActive(context.Context, utils.PaginationParams) ([]*entities.Chain, int64, error) {
 	return nil, 0, nil
 }
-func (s *ccasChainRepoStub) Create(context.Context, *entities.Chain) error { return nil }
-func (s *ccasChainRepoStub) Update(context.Context, *entities.Chain) error { return nil }
-func (s *ccasChainRepoStub) Delete(context.Context, uuid.UUID) error       { return nil }
+func (s *ccasChainRepoStub) Create(context.Context, *entities.Chain) error       { return nil }
+func (s *ccasChainRepoStub) Update(context.Context, *entities.Chain) error       { return nil }
+func (s *ccasChainRepoStub) Delete(context.Context, uuid.UUID) error             { return nil }
+func (s *ccasChainRepoStub) CreateRPC(context.Context, *entities.ChainRPC) error { return nil }
+func (s *ccasChainRepoStub) UpdateRPC(context.Context, *entities.ChainRPC) error { return nil }
+func (s *ccasChainRepoStub) DeleteRPC(context.Context, uuid.UUID) error          { return nil }
+func (s *ccasChainRepoStub) GetRPCByID(context.Context, uuid.UUID) (*entities.ChainRPC, error) {
+	return nil, errors.New("not found")
+}
 
 type ccasContractRepoStub struct {
 	contract *entities.SmartContract

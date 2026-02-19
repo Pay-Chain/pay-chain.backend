@@ -17,15 +17,15 @@ import (
 )
 
 type chainHandlerRepoStub struct {
-	getActiveFn   func(ctx context.Context, pagination utils.PaginationParams) ([]*entities.Chain, int64, error)
-	getByChainID  func(ctx context.Context, chainID string) (*entities.Chain, error)
-	createFn      func(ctx context.Context, chain *entities.Chain) error
-	updateFn      func(ctx context.Context, chain *entities.Chain) error
-	deleteFn      func(ctx context.Context, id uuid.UUID) error
-	getByIDFn     func(ctx context.Context, id uuid.UUID) (*entities.Chain, error)
-	getByCAIP2Fn  func(ctx context.Context, caip2 string) (*entities.Chain, error)
-	getAllFn      func(ctx context.Context) ([]*entities.Chain, error)
-	getAllRPCsFn  func(ctx context.Context, chainID *uuid.UUID, isActive *bool, search *string, pagination utils.PaginationParams) ([]*entities.ChainRPC, int64, error)
+	getActiveFn  func(ctx context.Context, pagination utils.PaginationParams) ([]*entities.Chain, int64, error)
+	getByChainID func(ctx context.Context, chainID string) (*entities.Chain, error)
+	createFn     func(ctx context.Context, chain *entities.Chain) error
+	updateFn     func(ctx context.Context, chain *entities.Chain) error
+	deleteFn     func(ctx context.Context, id uuid.UUID) error
+	getByIDFn    func(ctx context.Context, id uuid.UUID) (*entities.Chain, error)
+	getByCAIP2Fn func(ctx context.Context, caip2 string) (*entities.Chain, error)
+	getAllFn     func(ctx context.Context) ([]*entities.Chain, error)
+	getAllRPCsFn func(ctx context.Context, chainID *uuid.UUID, isActive *bool, search *string, pagination utils.PaginationParams) ([]*entities.ChainRPC, int64, error)
 }
 
 func (s *chainHandlerRepoStub) GetByID(ctx context.Context, id uuid.UUID) (*entities.Chain, error) {
@@ -89,6 +89,17 @@ func (s *chainHandlerRepoStub) Delete(ctx context.Context, id uuid.UUID) error {
 		return s.deleteFn(ctx, id)
 	}
 	return nil
+}
+
+func (s *chainHandlerRepoStub) CreateRPC(ctx context.Context, rpc *entities.ChainRPC) error {
+	return nil
+}
+func (s *chainHandlerRepoStub) UpdateRPC(ctx context.Context, rpc *entities.ChainRPC) error {
+	return nil
+}
+func (s *chainHandlerRepoStub) DeleteRPC(ctx context.Context, id uuid.UUID) error { return nil }
+func (s *chainHandlerRepoStub) GetRPCByID(ctx context.Context, id uuid.UUID) (*entities.ChainRPC, error) {
+	return nil, domainerrors.ErrNotFound
 }
 
 func TestChainHandler_ListChains_SuccessAndError(t *testing.T) {

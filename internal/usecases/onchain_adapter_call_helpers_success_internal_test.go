@@ -27,60 +27,60 @@ func TestOnchainAdapterUsecase_CallHelpers_Success(t *testing.T) {
 	lzOptions := []byte{0x01, 0x02}
 
 	client := newTestEVMClient(t, []string{
-		mustEncodeOutputFromABI(t, payChainGatewayAdminABI, "defaultBridgeTypes", uint8(1)),
-		mustEncodeOutputFromABI(t, payChainRouterAdminABI, "hasAdapter", true),
-		mustEncodeOutputFromABI(t, payChainRouterAdminABI, "getAdapter", adapterAddr),
-		mustEncodeOutputFromABI(t, hyperbridgeSenderAdminABI, "isChainConfigured", true),
-		mustEncodeOutputFromABI(t, hyperbridgeSenderAdminABI, "stateMachineIds", hyperBytes),
-		mustEncodeOutputFromABI(t, ccipSenderAdminABI, "chainSelectors", uint64(12345)),
-		mustEncodeOutputFromABI(t, ccipSenderAdminABI, "destinationAdapters", ccipDest),
-		mustEncodeOutputFromABI(t, layerZeroSenderAdminABI, "isRouteConfigured", true),
-		mustEncodeOutputFromABI(t, layerZeroSenderAdminABI, "dstEids", uint32(40161)),
-		mustEncodeOutputFromABI(t, layerZeroSenderAdminABI, "peers", [32]byte(peerHash)),
-		mustEncodeOutputFromABI(t, layerZeroSenderAdminABI, "enforcedOptions", lzOptions),
+		mustEncodeOutputFromABI(t, FallbackPayChainGatewayABI, "defaultBridgeTypes", uint8(1)),
+		mustEncodeOutputFromABI(t, FallbackPayChainRouterAdminABI, "hasAdapter", true),
+		mustEncodeOutputFromABI(t, FallbackPayChainRouterAdminABI, "getAdapter", adapterAddr),
+		mustEncodeOutputFromABI(t, FallbackHyperbridgeSenderAdminABI, "isChainConfigured", true),
+		mustEncodeOutputFromABI(t, FallbackHyperbridgeSenderAdminABI, "stateMachineIds", hyperBytes),
+		mustEncodeOutputFromABI(t, FallbackCCIPSenderAdminABI, "chainSelectors", uint64(12345)),
+		mustEncodeOutputFromABI(t, FallbackCCIPSenderAdminABI, "destinationAdapters", ccipDest),
+		mustEncodeOutputFromABI(t, FallbackLayerZeroSenderAdminABI, "isRouteConfigured", true),
+		mustEncodeOutputFromABI(t, FallbackLayerZeroSenderAdminABI, "dstEids", uint32(40161)),
+		mustEncodeOutputFromABI(t, FallbackLayerZeroSenderAdminABI, "peers", [32]byte(peerHash)),
+		mustEncodeOutputFromABI(t, FallbackLayerZeroSenderAdminABI, "enforcedOptions", lzOptions),
 	})
 
-	vBridge, err := u.callDefaultBridgeType(context.Background(), client, routerAddr.Hex(), dest)
+	vBridge, err := u.callDefaultBridgeType(context.Background(), client, routerAddr.Hex(), FallbackPayChainGatewayABI, dest)
 	require.NoError(t, err)
 	require.Equal(t, uint8(1), vBridge)
 
-	vHas, err := u.callHasAdapter(context.Background(), client, routerAddr.Hex(), dest, 1)
+	vHas, err := u.callHasAdapter(context.Background(), client, routerAddr.Hex(), FallbackPayChainRouterAdminABI, dest, 1)
 	require.NoError(t, err)
 	require.True(t, vHas)
 
-	vAdapter, err := u.callGetAdapter(context.Background(), client, routerAddr.Hex(), dest, 1)
+	vAdapter, err := u.callGetAdapter(context.Background(), client, routerAddr.Hex(), FallbackPayChainRouterAdminABI, dest, 1)
 	require.NoError(t, err)
 	require.Equal(t, adapterAddr.Hex(), vAdapter)
 
-	vHB, err := u.callHyperbridgeConfigured(context.Background(), client, adapterAddr.Hex(), dest)
+	vHB, err := u.callHyperbridgeConfigured(context.Background(), client, adapterAddr.Hex(), FallbackHyperbridgeSenderAdminABI, dest)
 	require.NoError(t, err)
 	require.True(t, vHB)
 
-	vHBBytes, err := u.callHyperbridgeBytes(context.Background(), client, adapterAddr.Hex(), "stateMachineIds", dest)
+	vHBBytes, err := u.callHyperbridgeBytes(context.Background(), client, adapterAddr.Hex(), FallbackHyperbridgeSenderAdminABI, "stateMachineIds", dest)
 	require.NoError(t, err)
 	require.Equal(t, hyperBytes, vHBBytes)
 
-	vSelector, err := u.callCCIPSelector(context.Background(), client, adapterAddr.Hex(), dest)
+	vSelector, err := u.callCCIPSelector(context.Background(), client, adapterAddr.Hex(), FallbackCCIPSenderAdminABI, dest)
 	require.NoError(t, err)
 	require.Equal(t, uint64(12345), vSelector)
 
-	vCCIPDest, err := u.callCCIPDestinationAdapter(context.Background(), client, adapterAddr.Hex(), dest)
+	vCCIPDest, err := u.callCCIPDestinationAdapter(context.Background(), client, adapterAddr.Hex(), FallbackCCIPSenderAdminABI, dest)
 	require.NoError(t, err)
 	require.Equal(t, ccipDest, vCCIPDest)
 
-	vLZCfg, err := u.callLayerZeroConfigured(context.Background(), client, adapterAddr.Hex(), dest)
+	vLZCfg, err := u.callLayerZeroConfigured(context.Background(), client, adapterAddr.Hex(), FallbackLayerZeroSenderAdminABI, dest)
 	require.NoError(t, err)
 	require.True(t, vLZCfg)
 
-	vDstEid, err := u.callLayerZeroDstEid(context.Background(), client, adapterAddr.Hex(), dest)
+	vDstEid, err := u.callLayerZeroDstEid(context.Background(), client, adapterAddr.Hex(), FallbackLayerZeroSenderAdminABI, dest)
 	require.NoError(t, err)
 	require.Equal(t, uint32(40161), vDstEid)
 
-	vPeer, err := u.callLayerZeroPeer(context.Background(), client, adapterAddr.Hex(), dest)
+	vPeer, err := u.callLayerZeroPeer(context.Background(), client, adapterAddr.Hex(), FallbackLayerZeroSenderAdminABI, dest)
 	require.NoError(t, err)
 	require.Equal(t, peerHash, vPeer)
 
-	vOpts, err := u.callLayerZeroOptions(context.Background(), client, adapterAddr.Hex(), dest)
+	vOpts, err := u.callLayerZeroOptions(context.Background(), client, adapterAddr.Hex(), FallbackLayerZeroSenderAdminABI, dest)
 	require.NoError(t, err)
 	require.Equal(t, lzOptions, vOpts)
 }
@@ -88,6 +88,6 @@ func TestOnchainAdapterUsecase_CallHelpers_Success(t *testing.T) {
 func TestOnchainAdapterUsecase_CallHelpers_DecodeError(t *testing.T) {
 	u := &OnchainAdapterUsecase{}
 	client := newTestEVMClient(t, []string{"0x"})
-	_, err := u.callDefaultBridgeType(context.Background(), client, common.Address{}.Hex(), "eip155:42161")
+	_, err := u.callDefaultBridgeType(context.Background(), client, common.Address{}.Hex(), FallbackPayChainGatewayABI, "eip155:42161")
 	require.Error(t, err)
 }

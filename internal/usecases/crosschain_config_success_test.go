@@ -129,6 +129,13 @@ func TestCrosschainConfigUsecase_RecheckRoute_StatusAndFeeQuoteIssue(t *testing.
 
 	contractRepo.On("GetActiveContract", mock.Anything, sourceID, entities.ContractTypeGateway).Return(gateway, nil)
 	contractRepo.On("GetActiveContract", mock.Anything, sourceID, entities.ContractTypeRouter).Return(router, nil)
+	contractRepo.On("GetActiveContract", mock.Anything, sourceID, entities.ContractTypeAdapterHyperbridge).Return(&entities.SmartContract{
+		ID:              uuid.New(),
+		ChainUUID:       sourceID,
+		Type:            entities.ContractTypeAdapterHyperbridge,
+		ContractAddress: "0x1111111111111111111111111111111111111111",
+		IsActive:        true,
+	}, nil)
 
 	tokenRepo.On("GetTokensByChain", mock.Anything, sourceID, mock.Anything).Return([]*entities.Token{}, int64(0), nil)
 	tokenRepo.On("GetTokensByChain", mock.Anything, destID, mock.Anything).Return([]*entities.Token{}, int64(0), nil)

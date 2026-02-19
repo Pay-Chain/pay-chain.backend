@@ -99,7 +99,7 @@ func (r *SmartContractRepositoryImpl) GetActiveContract(ctx context.Context, cha
 	var m models.SmartContract
 	if err := r.db.WithContext(ctx).
 		Where("chain_id = ? AND type = ? AND is_active = ?", chainID, contractType, true).
-		Order("version DESC").
+		Order("updated_at DESC, created_at DESC, version DESC, id DESC").
 		First(&m).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, nil

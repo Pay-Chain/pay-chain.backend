@@ -2,11 +2,13 @@ package usecases
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/google/uuid"
+	"pay-chain.backend/internal/domain/entities"
 	domainerrors "pay-chain.backend/internal/domain/errors"
 )
 
@@ -20,18 +22,26 @@ type evmAdminContext struct {
 type evmAdminResolveFn func(ctx context.Context, sourceChainInput, destChainInput string) (*evmAdminContext, error)
 type evmAdminGetAdapterFn func(ctx context.Context, sourceChainID uuid.UUID, routerAddress, destCAIP2 string, bridgeType uint8) (string, error)
 type evmAdminSendTxFn func(ctx context.Context, sourceChainID uuid.UUID, contractAddress string, parsedABI abi.ABI, method string, args ...interface{}) (string, error)
+type evmAdminResolveABIFn func(ctx context.Context, sourceChainID uuid.UUID, contractType entities.SmartContractType) (abi.ABI, error)
 
 type evmAdminOpsService struct {
 	resolveContext evmAdminResolveFn
 	getAdapter     evmAdminGetAdapterFn
 	sendTx         evmAdminSendTxFn
+	resolveABI     evmAdminResolveABIFn
 }
 
-func newEVMAdminOpsService(resolveFn evmAdminResolveFn, getAdapterFn evmAdminGetAdapterFn, sendTxFn evmAdminSendTxFn) *evmAdminOpsService {
+func newEVMAdminOpsService(
+	resolveFn evmAdminResolveFn,
+	getAdapterFn evmAdminGetAdapterFn,
+	sendTxFn evmAdminSendTxFn,
+	resolveABIFn evmAdminResolveABIFn,
+) *evmAdminOpsService {
 	return &evmAdminOpsService{
 		resolveContext: resolveFn,
 		getAdapter:     getAdapterFn,
 		sendTx:         sendTxFn,
+		resolveABI:     resolveABIFn,
 	}
 }
 
@@ -50,11 +60,16 @@ func (s *evmAdminOpsService) RegisterAdapter(
 		return "", err
 	}
 
+	parsedABI, err := s.resolveABI(ctx, resolved.sourceChainID, entities.ContractTypeRouter)
+	if err != nil {
+		return "", err
+	}
+
 	return s.sendTx(
 		ctx,
 		resolved.sourceChainID,
 		resolved.routerAddress,
-		payChainRouterAdminABI,
+		parsedABI,
 		"registerAdapter",
 		resolved.destCAIP2,
 		bridgeType,
@@ -72,11 +87,16 @@ func (s *evmAdminOpsService) SetDefaultBridgeType(
 		return "", err
 	}
 
+	parsedABI, err := s.resolveABI(ctx, resolved.sourceChainID, entities.ContractTypeGateway)
+	if err != nil {
+		return "", err
+	}
+
 	return s.sendTx(
 		ctx,
 		resolved.sourceChainID,
 		resolved.gatewayAddress,
-		payChainGatewayAdminABI,
+		parsedABI,
 		"setDefaultBridgeType",
 		resolved.destCAIP2,
 		bridgeType,
@@ -100,21 +120,26 @@ func (s *evmAdminOpsService) SetHyperbridgeConfig(
 		return "", nil, domainerrors.BadRequest("hyperbridge adapter (type 0) is not registered")
 	}
 
+	parsedABI, err := s.resolveABI(ctx, resolved.sourceChainID, entities.ContractTypeAdapterHyperbridge)
+	if err != nil {
+		return "", nil, err
+	}
+
 	var txHashes []string
 	target := normalizeHexInput(stateMachineIDHex)
 	if target != "" {
-		txHash, txErr := s.sendTx(ctx, resolved.sourceChainID, adapter, hyperbridgeSenderAdminABI, "setStateMachineId", resolved.destCAIP2, common.FromHex("0x"+target))
+		txHash, txErr := s.sendTx(ctx, resolved.sourceChainID, adapter, parsedABI, "setStateMachineId", resolved.destCAIP2, common.FromHex("0x"+target))
 		if txErr != nil {
-			return "", txHashes, txErr
+			return "", txHashes, wrapAdminTxError("setStateMachineId", txErr)
 		}
 		txHashes = append(txHashes, txHash)
 	}
 
 	dest := normalizeHexInput(destinationContractHex)
 	if dest != "" {
-		txHash, txErr := s.sendTx(ctx, resolved.sourceChainID, adapter, hyperbridgeSenderAdminABI, "setDestinationContract", resolved.destCAIP2, common.FromHex("0x"+dest))
+		txHash, txErr := s.sendTx(ctx, resolved.sourceChainID, adapter, parsedABI, "setDestinationContract", resolved.destCAIP2, common.FromHex("0x"+dest))
 		if txErr != nil {
-			return "", txHashes, txErr
+			return "", txHashes, wrapAdminTxError("setDestinationContract", txErr)
 		}
 		txHashes = append(txHashes, txHash)
 	}
@@ -141,19 +166,24 @@ func (s *evmAdminOpsService) SetCCIPConfig(
 		return "", nil, domainerrors.BadRequest("ccip adapter (type 1) is not registered")
 	}
 
+	parsedABI, err := s.resolveABI(ctx, resolved.sourceChainID, entities.ContractTypeAdapterCCIP)
+	if err != nil {
+		return "", nil, err
+	}
+
 	var txHashes []string
 	if chainSelector != nil {
-		txHash, txErr := s.sendTx(ctx, resolved.sourceChainID, adapter, ccipSenderAdminABI, "setChainSelector", resolved.destCAIP2, *chainSelector)
+		txHash, txErr := s.sendTx(ctx, resolved.sourceChainID, adapter, parsedABI, "setChainSelector", resolved.destCAIP2, *chainSelector)
 		if txErr != nil {
-			return "", txHashes, txErr
+			return "", txHashes, wrapAdminTxError("setChainSelector", txErr)
 		}
 		txHashes = append(txHashes, txHash)
 	}
 	dest := normalizeHexInput(destinationAdapterHex)
 	if dest != "" {
-		txHash, txErr := s.sendTx(ctx, resolved.sourceChainID, adapter, ccipSenderAdminABI, "setDestinationAdapter", resolved.destCAIP2, common.FromHex("0x"+dest))
+		txHash, txErr := s.sendTx(ctx, resolved.sourceChainID, adapter, parsedABI, "setDestinationAdapter", resolved.destCAIP2, common.FromHex("0x"+dest))
 		if txErr != nil {
-			return "", txHashes, txErr
+			return "", txHashes, wrapAdminTxError("setDestinationAdapter", txErr)
 		}
 		txHashes = append(txHashes, txHash)
 	}
@@ -180,6 +210,11 @@ func (s *evmAdminOpsService) SetLayerZeroConfig(
 		return "", nil, domainerrors.BadRequest("layerzero adapter (type 2) is not registered")
 	}
 
+	parsedABI, err := s.resolveABI(ctx, resolved.sourceChainID, entities.ContractTypeAdapterLayerZero)
+	if err != nil {
+		return "", nil, err
+	}
+
 	var txHashes []string
 	trimmedPeer := strings.TrimSpace(peerHex)
 	if dstEid != nil || trimmedPeer != "" {
@@ -190,9 +225,9 @@ func (s *evmAdminOpsService) SetLayerZeroConfig(
 		if parseErr != nil {
 			return "", nil, domainerrors.BadRequest("invalid peerHex")
 		}
-		txHash, txErr := s.sendTx(ctx, resolved.sourceChainID, adapter, layerZeroSenderAdminABI, "setRoute", resolved.destCAIP2, *dstEid, peer32)
+		txHash, txErr := s.sendTx(ctx, resolved.sourceChainID, adapter, parsedABI, "setRoute", resolved.destCAIP2, *dstEid, peer32)
 		if txErr != nil {
-			return "", txHashes, txErr
+			return "", txHashes, wrapAdminTxError("setRoute", txErr)
 		}
 		txHashes = append(txHashes, txHash)
 	}
@@ -202,9 +237,9 @@ func (s *evmAdminOpsService) SetLayerZeroConfig(
 		if !strings.HasPrefix(trimmedOptions, "0x") {
 			trimmedOptions = "0x" + trimmedOptions
 		}
-		txHash, txErr := s.sendTx(ctx, resolved.sourceChainID, adapter, layerZeroSenderAdminABI, "setEnforcedOptions", resolved.destCAIP2, common.FromHex(trimmedOptions))
+		txHash, txErr := s.sendTx(ctx, resolved.sourceChainID, adapter, parsedABI, "setEnforcedOptions", resolved.destCAIP2, common.FromHex(trimmedOptions))
 		if txErr != nil {
-			return "", txHashes, txErr
+			return "", txHashes, wrapAdminTxError("setEnforcedOptions", txErr)
 		}
 		txHashes = append(txHashes, txHash)
 	}
@@ -222,4 +257,11 @@ func isValidAdapterAddress(adapter string) bool {
 func normalizeHexInput(value string) string {
 	trimmed := strings.TrimSpace(value)
 	return strings.TrimPrefix(trimmed, "0x")
+}
+
+func wrapAdminTxError(method string, err error) error {
+	if err == nil {
+		return nil
+	}
+	return domainerrors.BadRequest(fmt.Sprintf("%s failed: %s", method, err.Error()))
 }

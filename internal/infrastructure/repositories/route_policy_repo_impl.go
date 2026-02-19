@@ -39,15 +39,16 @@ func (r *routePolicyRepo) GetByID(ctx context.Context, id uuid.UUID) (*entities.
 
 func (r *routePolicyRepo) GetByRoute(ctx context.Context, sourceChainID, destChainID uuid.UUID) (*entities.RoutePolicy, error) {
 	var row models.RoutePolicy
-	err := r.db.WithContext(ctx).
+	tx := r.db.WithContext(ctx).
 		Where("source_chain_id = ? AND dest_chain_id = ?", sourceChainID, destChainID).
 		Order("updated_at DESC").
-		First(&row).Error
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, domainerrors.ErrNotFound
-		}
-		return nil, err
+		Limit(1).
+		Find(&row)
+	if tx.Error != nil {
+		return nil, tx.Error
+	}
+	if tx.RowsAffected == 0 {
+		return nil, domainerrors.ErrNotFound
 	}
 	return toRoutePolicyEntity(&row), nil
 }
