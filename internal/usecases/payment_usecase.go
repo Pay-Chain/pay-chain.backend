@@ -1373,6 +1373,68 @@ func (u *PaymentUsecase) getSwapQuote(
 	return nil, fmt.Errorf("invalid quote result")
 }
 
+// CheckRouteSupport checks if a route exists for a token pair on-chain
+func (u *PaymentUsecase) CheckRouteSupport(
+	ctx context.Context,
+	chainID uuid.UUID,
+	tokenIn, tokenOut string,
+) (bool, bool, []string, error) {
+	if tokenIn == tokenOut {
+		return true, true, []string{tokenIn}, nil
+	}
+
+	chain, err := u.chainRepo.GetByID(ctx, chainID)
+	if err != nil {
+		return false, false, nil, err
+	}
+
+	swapper, err := u.contractRepo.GetActiveContract(ctx, chain.ID, entities.ContractTypeTokenSwapper)
+	if err != nil {
+		return false, false, nil, fmt.Errorf("active swapper not found")
+	}
+
+	client, err := u.clientFactory.GetEVMClient(chain.RPCURL)
+	if err != nil {
+		return false, false, nil, err
+	}
+
+	swapperABI, err := u.ResolveABIWithFallback(ctx, chain.ID, entities.ContractTypeTokenSwapper)
+	if err != nil {
+		return false, false, nil, err
+	}
+
+	findRouteCall, err := swapperABI.Pack("findRoute", common.HexToAddress(tokenIn), common.HexToAddress(tokenOut))
+	if err != nil {
+		return false, false, nil, err
+	}
+
+	out, err := client.CallView(ctx, swapper.ContractAddress, findRouteCall)
+	if err != nil {
+		return false, false, nil, err
+	}
+
+	// Unpack: (bool exists, bool isDirect, address[] path)
+	results, err := swapperABI.Unpack("findRoute", out)
+	if err != nil || len(results) < 3 {
+		return false, false, nil, fmt.Errorf("failed to unpack findRoute")
+	}
+
+	exists, ok1 := results[0].(bool)
+	isDirect, ok2 := results[1].(bool)
+	pathAddrs, ok3 := results[2].([]common.Address)
+
+	if !ok1 || !ok2 || !ok3 {
+		return false, false, nil, fmt.Errorf("failed to type cast findRoute results")
+	}
+
+	path := make([]string, len(pathAddrs))
+	for i, addr := range pathAddrs {
+		path[i] = addr.Hex()
+	}
+
+	return exists, isDirect, path, nil
+}
+
 // decodeSafeQuoteResult decodes (bool, uint256, string) from a SAFE quote call.
 func decodeSafeQuoteResult(data []byte) (bool, *big.Int, string, error) {
 	boolType, _ := abi.NewType("bool", "", nil)

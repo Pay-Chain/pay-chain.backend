@@ -154,7 +154,7 @@ func runMainProcess() error {
 	merchantHandler := handlers.NewMerchantHandler(merchantUsecase)
 	walletHandler := handlers.NewWalletHandler(walletUsecase)
 	chainHandler := handlers.NewChainHandler(chainRepo)
-	tokenHandler := handlers.NewTokenHandler(tokenRepo, chainRepo)
+	tokenHandler := handlers.NewTokenHandler(tokenRepo, chainRepo, paymentUsecase)
 	smartContractHandler := handlers.NewSmartContractHandler(smartContractRepo, chainRepo)
 	paymentRequestHandler := handlers.NewPaymentRequestHandler(paymentRequestUsecase)
 	webhookHandler := handlers.NewWebhookHandler(webhookUsecase)

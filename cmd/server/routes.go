@@ -96,6 +96,7 @@ func registerAPIV1Routes(r *gin.Engine, d routeDeps) {
 		{
 			tokens.GET("", d.tokenHandler.ListSupportedTokens)
 			tokens.GET("/stablecoins", d.tokenHandler.ListStablecoins)
+			tokens.GET("/check-pair", d.tokenHandler.CheckPairSupport)
 		}
 
 		// Smart Contract routes (public read, protected write)

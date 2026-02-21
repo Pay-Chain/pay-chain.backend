@@ -12,20 +12,23 @@ import (
 	domainerrors "pay-chain.backend/internal/domain/errors"
 	"pay-chain.backend/internal/domain/repositories"
 	"pay-chain.backend/internal/interfaces/http/response"
+	"pay-chain.backend/internal/usecases"
 	"pay-chain.backend/pkg/utils"
 )
 
 // TokenHandler handles token endpoints
 type TokenHandler struct {
-	tokenRepo repositories.TokenRepository
-	chainRepo repositories.ChainRepository
+	tokenRepo      repositories.TokenRepository
+	chainRepo      repositories.ChainRepository
+	paymentUseCase *usecases.PaymentUsecase
 }
 
 // NewTokenHandler creates a new token handler
-func NewTokenHandler(tokenRepo repositories.TokenRepository, chainRepo repositories.ChainRepository) *TokenHandler {
+func NewTokenHandler(tokenRepo repositories.TokenRepository, chainRepo repositories.ChainRepository, paymentUseCase *usecases.PaymentUsecase) *TokenHandler {
 	return &TokenHandler{
-		tokenRepo: tokenRepo,
-		chainRepo: chainRepo,
+		tokenRepo:      tokenRepo,
+		chainRepo:      chainRepo,
+		paymentUseCase: paymentUseCase,
 	}
 }
 
@@ -263,4 +266,40 @@ func (h *TokenHandler) DeleteToken(c *gin.Context) {
 	}
 
 	response.Success(c, http.StatusOK, gin.H{"message": "Token deleted successfully"})
+}
+
+// CheckPairSupport checks if a swap route exists for a token pair on-chain
+// GET /api/v1/tokens/check-pair?chainId=...&tokenIn=...&tokenOut=...
+func (h *TokenHandler) CheckPairSupport(c *gin.Context) {
+	chainIDStr := c.Query("chainId")
+	tokenIn := c.Query("tokenIn")
+	tokenOut := c.Query("tokenOut")
+
+	if chainIDStr == "" || tokenIn == "" || tokenOut == "" {
+		response.Error(c, domainerrors.BadRequest("Missing required parameters: chainId, tokenIn, tokenOut"))
+		return
+	}
+
+	chainID, err := uuid.Parse(chainIDStr)
+	if err != nil {
+		// Try lookup by legacy blockchain ID
+		chain, err := h.chainRepo.GetByChainID(c.Request.Context(), chainIDStr)
+		if err != nil {
+			response.Error(c, domainerrors.BadRequest("Invalid chainId"))
+			return
+		}
+		chainID = chain.ID
+	}
+
+	exists, isDirect, path, err := h.paymentUseCase.CheckRouteSupport(c.Request.Context(), chainID, tokenIn, tokenOut)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, gin.H{
+		"exists":   exists,
+		"isDirect": isDirect,
+		"path":     path,
+	})
 }
