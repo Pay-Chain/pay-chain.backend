@@ -3,6 +3,7 @@ package usecases
 import (
 	"context"
 	"fmt"
+	"math/big"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -310,6 +311,199 @@ func (u *OnchainAdapterUsecase) SetLayerZeroConfig(
 	dstEid *uint32, peerHex, optionsHex string,
 ) (string, []string, error) {
 	return u.adminOps.SetLayerZeroConfig(ctx, sourceChainInput, destChainInput, dstEid, peerHex, optionsHex)
+}
+
+func (u *OnchainAdapterUsecase) GenericInteract(
+	ctx context.Context,
+	sourceChainInput, contractAddress, method, abiStr string,
+	args []interface{},
+) (interface{}, bool, error) {
+	sourceChainID, _, err := u.chainResolver.ResolveFromAny(ctx, sourceChainInput)
+	if err != nil {
+		return nil, false, domainerrors.BadRequest("invalid sourceChainId")
+	}
+
+	if abiStr == "" {
+		return nil, false, domainerrors.BadRequest("abi is required for generic interaction")
+	}
+
+	parsedABI, err := abi.JSON(strings.NewReader(abiStr))
+	if err != nil {
+		return nil, false, domainerrors.BadRequest("invalid abi: " + err.Error())
+	}
+
+	m, ok := parsedABI.Methods[method]
+	if !ok {
+		return nil, false, domainerrors.BadRequest(fmt.Sprintf("method %s not found in abi", method))
+	}
+
+	// Convert arguments to types expected by the ABI
+	convertedArgs, err := convertArgs(m.Inputs, args)
+	if err != nil {
+		return nil, false, domainerrors.BadRequest("argument conversion failed: " + err.Error())
+	}
+
+	isWrite := m.StateMutability != "view" && m.StateMutability != "pure"
+
+	if isWrite {
+		txHash, err := u.sendTx(ctx, sourceChainID, contractAddress, parsedABI, method, convertedArgs...)
+		if err != nil {
+			return nil, true, err
+		}
+		return txHash, true, nil
+	}
+
+	// Read operation
+	chain, err := u.chainRepo.GetByID(ctx, sourceChainID)
+	if err != nil {
+		return nil, false, err
+	}
+	rpcURL := resolveRPCURL(chain)
+	if rpcURL == "" {
+		return nil, false, domainerrors.BadRequest("no active rpc url for chain")
+	}
+	evmClient, err := u.clientFactory.GetEVMClient(rpcURL)
+	if err != nil {
+		return nil, false, err
+	}
+	defer evmClient.Close()
+
+	data, err := parsedABI.Pack(method, convertedArgs...)
+	if err != nil {
+		return nil, false, err
+	}
+
+	out, err := evmClient.CallView(ctx, contractAddress, data)
+	if err != nil {
+		return nil, false, err
+	}
+
+	vals, err := parsedABI.Unpack(method, out)
+	if err != nil {
+		return nil, false, err
+	}
+
+	var result interface{}
+	if len(vals) == 1 {
+		result = vals[0]
+	} else {
+		result = vals
+	}
+
+	return result, false, nil
+}
+
+func convertArgs(inputs abi.Arguments, args []interface{}) ([]interface{}, error) {
+	if len(inputs) != len(args) {
+		return nil, fmt.Errorf("expected %d arguments, got %d", len(inputs), len(args))
+	}
+
+	converted := make([]interface{}, len(args))
+	for i, input := range inputs {
+		val, err := convertArg(input.Type, args[i])
+		if err != nil {
+			return nil, fmt.Errorf("arg %d (%s): %v", i, input.Name, err)
+		}
+		converted[i] = val
+	}
+	return converted, nil
+}
+
+func convertArg(t abi.Type, val interface{}) (interface{}, error) {
+	switch t.T {
+	case abi.AddressTy:
+		s, ok := val.(string)
+		if !ok {
+			return nil, fmt.Errorf("expected string for address")
+		}
+		if !common.IsHexAddress(s) {
+			return nil, fmt.Errorf("invalid address hex")
+		}
+		return common.HexToAddress(s), nil
+	case abi.FixedBytesTy:
+		s, ok := val.(string)
+		if !ok {
+			return nil, fmt.Errorf("expected hex string for fixed bytes")
+		}
+		b := common.FromHex(s)
+		if len(b) > t.Size {
+			return nil, fmt.Errorf("bytes length %d exceeds %d", len(b), t.Size)
+		}
+		// Pad to correct size
+		padded := make([]byte, t.Size)
+		copy(padded[len(padded)-len(b):], b)
+
+		// We need to return the correct fixed size array type for go-ethereum
+		// This is tricky because it depends on t.Size.
+		// For common sizes (bytes32), we can handle them explicitly.
+		if t.Size == 32 {
+			var res [32]byte
+			copy(res[:], padded)
+			return res, nil
+		}
+		return padded, nil // Fallback for others, might fail Pack
+	case abi.BytesTy:
+		s, ok := val.(string)
+		if !ok {
+			return nil, fmt.Errorf("expected hex string for bytes")
+		}
+		return common.FromHex(s), nil
+	case abi.IntTy, abi.UintTy:
+		// JSON numbers are float64 by default in Go
+		var bigVal *big.Int
+		switch v := val.(type) {
+		case float64:
+			bigVal = new(big.Int).SetInt64(int64(v))
+		case string:
+			var ok bool
+			bigVal, ok = new(big.Int).SetString(v, 0)
+			if !ok {
+				return nil, fmt.Errorf("invalid number string")
+			}
+		default:
+			return nil, fmt.Errorf("invalid number type %T", val)
+		}
+
+		// Convert to specific bitsize if needed (for Pack)
+		switch t.Size {
+		case 8:
+			if t.T == abi.UintTy {
+				return uint8(bigVal.Uint64()), nil
+			}
+			return int8(bigVal.Int64()), nil
+		case 16:
+			if t.T == abi.UintTy {
+				return uint16(bigVal.Uint64()), nil
+			}
+			return int16(bigVal.Int64()), nil
+		case 32:
+			if t.T == abi.UintTy {
+				return uint32(bigVal.Uint64()), nil
+			}
+			return int32(bigVal.Int64()), nil
+		case 64:
+			if t.T == abi.UintTy {
+				return bigVal.Uint64(), nil
+			}
+			return bigVal.Int64(), nil
+		default:
+			return bigVal, nil
+		}
+	case abi.BoolTy:
+		b, ok := val.(bool)
+		if !ok {
+			return nil, fmt.Errorf("expected boolean")
+		}
+		return b, nil
+	case abi.StringTy:
+		s, ok := val.(string)
+		if !ok {
+			return nil, fmt.Errorf("expected string")
+		}
+		return s, nil
+	default:
+		return val, nil // Fallback
+	}
 }
 
 func (u *OnchainAdapterUsecase) resolveEVMContext(

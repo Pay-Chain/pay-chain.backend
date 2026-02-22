@@ -20,6 +20,7 @@ type onchainAdapterServiceStub struct {
 	setHyperbridge   func(context.Context, string, string, string, string) (string, []string, error)
 	setCCIP          func(context.Context, string, string, *uint64, string) (string, []string, error)
 	setLayerZero     func(context.Context, string, string, *uint32, string, string) (string, []string, error)
+	genericInteract  func(context.Context, string, string, string, string, []interface{}) (interface{}, bool, error)
 }
 
 func (s onchainAdapterServiceStub) GetStatus(ctx context.Context, sourceChainInput, destChainInput string) (*usecases.OnchainAdapterStatus, error) {
@@ -39,6 +40,9 @@ func (s onchainAdapterServiceStub) SetCCIPConfig(ctx context.Context, sourceChai
 }
 func (s onchainAdapterServiceStub) SetLayerZeroConfig(ctx context.Context, sourceChainInput, destChainInput string, dstEid *uint32, peerHex, optionsHex string) (string, []string, error) {
 	return s.setLayerZero(ctx, sourceChainInput, destChainInput, dstEid, peerHex, optionsHex)
+}
+func (s onchainAdapterServiceStub) GenericInteract(ctx context.Context, sourceChainInput, contractAddress, method, abiStr string, args []interface{}) (interface{}, bool, error) {
+	return s.genericInteract(ctx, sourceChainInput, contractAddress, method, abiStr, args)
 }
 
 func TestOnchainAdapterHandler_SuccessPaths(t *testing.T) {
@@ -63,6 +67,9 @@ func TestOnchainAdapterHandler_SuccessPaths(t *testing.T) {
 			},
 			setLayerZero: func(_ context.Context, _, _ string, _ *uint32, _, _ string) (string, []string, error) {
 				return "0xlz", []string{"0x4"}, nil
+			},
+			genericInteract: func(_ context.Context, _, _, _, _ string, _ []interface{}) (interface{}, bool, error) {
+				return "0xresult", false, nil
 			},
 		},
 	}

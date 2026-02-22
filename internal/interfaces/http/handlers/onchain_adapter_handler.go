@@ -14,7 +14,6 @@ import (
 type OnchainAdapterHandler struct {
 	usecase onchainAdapterService
 }
-
 type onchainAdapterService interface {
 	GetStatus(ctx context.Context, sourceChainInput, destChainInput string) (*usecases.OnchainAdapterStatus, error)
 	RegisterAdapter(ctx context.Context, sourceChainInput, destChainInput string, bridgeType uint8, adapterAddress string) (string, error)
@@ -22,6 +21,7 @@ type onchainAdapterService interface {
 	SetHyperbridgeConfig(ctx context.Context, sourceChainInput, destChainInput string, stateMachineIDHex, destinationContractHex string) (string, []string, error)
 	SetCCIPConfig(ctx context.Context, sourceChainInput, destChainInput string, chainSelector *uint64, destinationAdapterHex string) (string, []string, error)
 	SetLayerZeroConfig(ctx context.Context, sourceChainInput, destChainInput string, dstEid *uint32, peerHex, optionsHex string) (string, []string, error)
+	GenericInteract(ctx context.Context, sourceChainInput, contractAddress, method, abiStr string, args []interface{}) (interface{}, bool, error)
 }
 
 func NewOnchainAdapterHandler(usecase *usecases.OnchainAdapterUsecase) *OnchainAdapterHandler {
@@ -183,5 +183,37 @@ func (h *OnchainAdapterHandler) SetLayerZeroConfig(c *gin.Context) {
 		"adapterAddress": adapter,
 		"txHashes":       txHashes,
 		"destChainId":    input.DestChainID,
+	})
+}
+
+func (h *OnchainAdapterHandler) Interact(c *gin.Context) {
+	var input struct {
+		SourceChainID   string        `json:"sourceChainId" binding:"required"`
+		ContractAddress string        `json:"contractAddress" binding:"required"`
+		Method          string        `json:"method" binding:"required"`
+		ABI             string        `json:"abi" binding:"required"`
+		Args            []interface{} `json:"args"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		response.Error(c, domainerrors.BadRequest(err.Error()))
+		return
+	}
+
+	result, isWrite, err := h.usecase.GenericInteract(
+		c.Request.Context(),
+		input.SourceChainID,
+		input.ContractAddress,
+		input.Method,
+		input.ABI,
+		input.Args,
+	)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, gin.H{
+		"result":  result,
+		"isWrite": isWrite,
 	})
 }

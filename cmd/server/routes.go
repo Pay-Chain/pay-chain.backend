@@ -208,6 +208,7 @@ func registerAPIV1Routes(r *gin.Engine, d routeDeps) {
 			admin.POST("/onchain-adapters/hyperbridge-config", d.onchainAdapterHandler.SetHyperbridgeConfig)
 			admin.POST("/onchain-adapters/ccip-config", d.onchainAdapterHandler.SetCCIPConfig)
 			admin.POST("/onchain-adapters/layerzero-config", d.onchainAdapterHandler.SetLayerZeroConfig)
+			admin.POST("/contracts/interact", d.onchainAdapterHandler.Interact)
 			admin.GET("/contracts/config-check", d.contractConfigAuditHandler.Check)
 			admin.GET("/contracts/:id/config-check", d.contractConfigAuditHandler.CheckByContract)
 			admin.GET("/crosschain-config/overview", d.crosschainConfigHandler.Overview)
