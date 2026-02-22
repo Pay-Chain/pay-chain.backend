@@ -21,6 +21,10 @@ func TestRoutePolicyRepo_UpdateAndListBranches(t *testing.T) {
 		default_bridge_type INTEGER NOT NULL,
 		fallback_mode TEXT NOT NULL,
 		fallback_order TEXT NOT NULL,
+		per_byte_rate TEXT,
+		overhead_bytes TEXT,
+		min_fee TEXT,
+		max_fee TEXT,
 		created_at DATETIME,
 		updated_at DATETIME,
 		deleted_at DATETIME
@@ -103,6 +107,10 @@ func TestRoutePolicyRepo_DeleteAndGetByIDBranches(t *testing.T) {
 		default_bridge_type INTEGER NOT NULL,
 		fallback_mode TEXT NOT NULL,
 		fallback_order TEXT NOT NULL,
+		per_byte_rate TEXT,
+		overhead_bytes TEXT,
+		min_fee TEXT,
+		max_fee TEXT,
 		created_at DATETIME,
 		updated_at DATETIME,
 		deleted_at DATETIME
@@ -152,6 +160,10 @@ func TestRoutePolicyRepo_Create_DefaultsAndDBErrorBranches(t *testing.T) {
 		default_bridge_type INTEGER NOT NULL,
 		fallback_mode TEXT NOT NULL,
 		fallback_order TEXT NOT NULL,
+		per_byte_rate TEXT,
+		overhead_bytes TEXT,
+		min_fee TEXT,
+		max_fee TEXT,
 		created_at DATETIME,
 		updated_at DATETIME,
 		deleted_at DATETIME

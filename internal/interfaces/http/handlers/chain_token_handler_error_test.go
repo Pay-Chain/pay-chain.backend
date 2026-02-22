@@ -203,7 +203,7 @@ func TestTokenHandler_ErrorPaths(t *testing.T) {
 	tokenID := uuid.New()
 	tokenRepo.items[tokenID] = &entities.Token{ID: tokenID, ChainUUID: chainID, Symbol: "USDC"}
 
-	h := NewTokenHandler(tokenRepo, chainRepo)
+	h := NewTokenHandler(tokenRepo, chainRepo, nil)
 	r := gin.New()
 	r.GET("/tokens", h.ListSupportedTokens)
 	r.GET("/tokens/stablecoins", h.ListStablecoins)
@@ -355,7 +355,7 @@ func TestTokenHandler_CreateAndUpdate_ExtraBranches(t *testing.T) {
 		MinAmount: "1",
 	}
 
-	h := NewTokenHandler(tokenRepo, chainRepo)
+	h := NewTokenHandler(tokenRepo, chainRepo, nil)
 	r := gin.New()
 	r.POST("/admin/tokens", h.CreateToken)
 	r.PUT("/admin/tokens/:id", h.UpdateToken)

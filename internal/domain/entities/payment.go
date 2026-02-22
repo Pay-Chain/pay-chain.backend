@@ -129,8 +129,21 @@ type CreatePaymentResponse struct {
 	FeeBreakdown   FeeBreakdown  `json:"feeBreakdown"`
 	BridgeType     string        `json:"bridgeType"`
 	BridgeReason   string        `json:"bridgeReason"`
+	OnchainCost    *OnchainCost  `json:"onchainCost,omitempty"`
 	ExpiresAt      time.Time     `json:"expiresAt"`
 	SignatureData  interface{}   `json:"signatureData"`
+}
+
+// OnchainCost represents Track-B style on-chain quote breakdown from gateway.quotePaymentCost.
+// All amounts are returned in smallest unit of their respective token/native denomination.
+type OnchainCost struct {
+	PlatformFeeToken         string `json:"platformFeeToken"`
+	BridgeFeeNative          string `json:"bridgeFeeNative"`
+	TotalSourceTokenRequired string `json:"totalSourceTokenRequired"`
+	BridgeType               uint8  `json:"bridgeType"`
+	IsSameChain              bool   `json:"isSameChain"`
+	BridgeQuoteOk            bool   `json:"bridgeQuoteOk"`
+	BridgeQuoteReason        string `json:"bridgeQuoteReason"`
 }
 
 // FeeBreakdown represents fee breakdown

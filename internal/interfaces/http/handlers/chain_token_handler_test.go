@@ -242,7 +242,7 @@ func TestTokenHandler_CoreFlows(t *testing.T) {
 	token := &entities.Token{ID: uuid.New(), ChainUUID: chain.ID, Symbol: "USDC", Name: "USD Coin", Decimals: 6, ContractAddress: "0xUSDC", IsActive: true}
 	tokenRepo.items[token.ID] = token
 
-	h := NewTokenHandler(tokenRepo, chainRepo)
+	h := NewTokenHandler(tokenRepo, chainRepo, nil)
 	r := gin.New()
 	r.GET("/tokens", h.ListSupportedTokens)
 	r.GET("/tokens/stablecoins", h.ListStablecoins)
@@ -309,7 +309,7 @@ func TestTokenHandler_CoreFlows(t *testing.T) {
 
 func TestTokenHandler_InvalidInputs(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	h := NewTokenHandler(newTokenRepoStub(), newChainRepoStub())
+	h := NewTokenHandler(newTokenRepoStub(), newChainRepoStub(), nil)
 	r := gin.New()
 	r.POST("/admin/tokens", h.CreateToken)
 	r.PUT("/admin/tokens/:id", h.UpdateToken)
@@ -349,7 +349,7 @@ func TestTokenHandler_CreateAndUpdate_LegacyChainFallback(t *testing.T) {
 	legacyChain := &entities.Chain{ID: uuid.New(), ChainID: "8453", Type: entities.ChainTypeEVM, Name: "Base", IsActive: true}
 	chainRepo.items[legacyChain.ID] = legacyChain
 
-	h := NewTokenHandler(tokenRepo, chainRepo)
+	h := NewTokenHandler(tokenRepo, chainRepo, nil)
 	r := gin.New()
 	r.POST("/admin/tokens", h.CreateToken)
 	r.PUT("/admin/tokens/:id", h.UpdateToken)

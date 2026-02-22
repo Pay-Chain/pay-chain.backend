@@ -69,6 +69,16 @@ func TestCrosschainPolicyHandler_CreateRoutePolicy_ValidationMatrix(t *testing.T
 		`{"sourceChainId":"eip155:8453","destChainId":"eip155:42161","defaultBridgeType":0,"fallbackMode":"unknown"}`,
 		// duplicate fallback order
 		`{"sourceChainId":"eip155:8453","destChainId":"eip155:42161","defaultBridgeType":0,"fallbackMode":"strict","fallbackOrder":[0,0]}`,
+		// invalid perByteRate (non-numeric)
+		`{"sourceChainId":"eip155:8453","destChainId":"eip155:42161","defaultBridgeType":0,"perByteRate":"abc"}`,
+		// invalid overheadBytes (non-numeric)
+		`{"sourceChainId":"eip155:8453","destChainId":"eip155:42161","defaultBridgeType":0,"overheadBytes":"12x"}`,
+		// invalid minFee (non-numeric)
+		`{"sourceChainId":"eip155:8453","destChainId":"eip155:42161","defaultBridgeType":0,"minFee":"bad"}`,
+		// invalid maxFee (non-numeric)
+		`{"sourceChainId":"eip155:8453","destChainId":"eip155:42161","defaultBridgeType":0,"maxFee":"bad"}`,
+		// maxFee lower than minFee
+		`{"sourceChainId":"eip155:8453","destChainId":"eip155:42161","defaultBridgeType":0,"minFee":"100","maxFee":"99"}`,
 	}
 
 	for _, body := range cases {

@@ -93,6 +93,24 @@ func TestCrosschainPolicyHandler_GapValidationBranches(t *testing.T) {
 		require.Equal(t, http.StatusBadRequest, w.Code)
 	})
 
+	t.Run("update route invalid perByteRate", func(t *testing.T) {
+		body := `{"sourceChainId":"8453","destChainId":"42161","defaultBridgeType":0,"perByteRate":"abc"}`
+		req := httptest.NewRequest(http.MethodPut, "/route/"+routeID.String(), strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		require.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("update route invalid maxFee less than minFee", func(t *testing.T) {
+		body := `{"sourceChainId":"8453","destChainId":"42161","defaultBridgeType":0,"minFee":"10","maxFee":"9"}`
+		req := httptest.NewRequest(http.MethodPut, "/route/"+routeID.String(), strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		require.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
 	t.Run("list layerzero invalid dest query", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/lz?sourceChainId=8453&destChainId=bad-dest", nil)
 		w := httptest.NewRecorder()
@@ -135,4 +153,3 @@ func TestCrosschainPolicyHandler_GapValidationBranches(t *testing.T) {
 		require.Equal(t, http.StatusBadRequest, w.Code)
 	})
 }
-

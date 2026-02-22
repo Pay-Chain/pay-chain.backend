@@ -440,6 +440,14 @@ func (u *PaymentUsecase) CreatePayment(ctx context.Context, userID uuid.UUID, in
 		return nil, sigErr
 	}
 
+	// Phase 3 (Track-B): expose gateway quotePaymentCost breakdown when available.
+	var onchainCost *entities.OnchainCost
+	if contract != nil && getChainTypeFromCAIP2(sourceCAIP2) == "eip155" {
+		if quoted, qErr := u.quoteGatewayPaymentCost(ctx, payment, contract.ContractAddress); qErr == nil {
+			onchainCost = quoted
+		}
+	}
+
 	return &entities.CreatePaymentResponse{
 		PaymentID:      payment.ID,
 		Status:         payment.Status,
@@ -451,6 +459,7 @@ func (u *PaymentUsecase) CreatePayment(ctx context.Context, userID uuid.UUID, in
 		FeeAmount:      payment.FeeAmount,
 		BridgeType:     bridgeType,
 		FeeBreakdown:   *feeBreakdown,
+		OnchainCost:    onchainCost,
 		ExpiresAt:      time.Now().Add(PaymentExpiryDuration),
 		SignatureData:  signatureData,
 	}, nil
@@ -721,6 +730,18 @@ func (u *PaymentUsecase) calculateOnchainApprovalAmount(payment *entities.Paymen
 		totalCharged = new(big.Int).Set(amount)
 	}
 
+	// Track-B preferred path: quotePaymentCost(bytes,bytes,address,address,uint256,uint256)
+	// Use contract-returned totalSourceTokenRequired if available.
+	if quote, err := u.quoteGatewayPaymentCost(context.Background(), payment, gatewayAddress); err == nil && quote != nil {
+		quotedTotal := new(big.Int)
+		if _, ok := quotedTotal.SetString(quote.TotalSourceTokenRequired, 10); ok {
+			if quotedTotal.Cmp(totalCharged) < 0 {
+				return totalCharged.String(), nil
+			}
+			return quotedTotal.String(), nil
+		}
+	}
+
 	chain, err := u.chainRepo.GetByID(context.Background(), payment.SourceChainID)
 	if err != nil || chain == nil {
 		return "", fmt.Errorf("failed to resolve source chain")
@@ -798,6 +819,134 @@ func (u *PaymentUsecase) calculateOnchainApprovalAmount(payment *entities.Paymen
 		onchainTotal = totalCharged
 	}
 	return onchainTotal.String(), nil
+}
+
+func (u *PaymentUsecase) quoteGatewayPaymentCost(
+	ctx context.Context,
+	payment *entities.Payment,
+	gatewayAddress string,
+) (*entities.OnchainCost, error) {
+	if payment == nil || gatewayAddress == "" {
+		return nil, fmt.Errorf("invalid payment or gateway address")
+	}
+
+	sourceChain, err := u.chainRepo.GetByID(ctx, payment.SourceChainID)
+	if err != nil || sourceChain == nil {
+		return nil, fmt.Errorf("failed to resolve source chain")
+	}
+
+	rpcURL := strings.TrimSpace(sourceChain.RPCURL)
+	if rpcURL == "" {
+		for _, rpc := range sourceChain.RPCs {
+			if rpc.IsActive && strings.TrimSpace(rpc.URL) != "" {
+				rpcURL = rpc.URL
+				break
+			}
+		}
+	}
+	if rpcURL == "" {
+		return nil, fmt.Errorf("no active source chain rpc url")
+	}
+
+	client, err := u.clientFactory.GetEVMClient(rpcURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create evm client for payment cost quote: %w", err)
+	}
+
+	destChainID := payment.DestChainID.String()
+	if payment.DestChain != nil {
+		destChainID = payment.DestChain.GetCAIP2ID()
+	} else if chain, err := u.chainRepo.GetByID(ctx, payment.DestChainID); err == nil && chain != nil {
+		destChainID = chain.GetCAIP2ID()
+	}
+
+	minAmountOut := big.NewInt(0)
+	if payment.MinDestAmount.Valid {
+		if _, ok := minAmountOut.SetString(payment.MinDestAmount.String, 10); !ok {
+			minAmountOut = big.NewInt(0)
+		}
+	}
+
+	amount := new(big.Int)
+	if _, ok := amount.SetString(payment.SourceAmount, 10); !ok {
+		return nil, fmt.Errorf("invalid source amount")
+	}
+
+	feeABI, abiErr := u.ResolveABIWithFallback(ctx, payment.SourceChainID, entities.ContractTypeGateway)
+	if abiErr != nil {
+		// Optional Track-B path; keep legacy behavior when ABI unavailable.
+		return nil, nil
+	}
+	if _, ok := feeABI.Methods["quotePaymentCost"]; !ok {
+		// Gateway deployed without Track-B quote method.
+		return nil, nil
+	}
+
+	addressType, err := newABIType("address", "", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	receiverPacked, err := packABIArgs(
+		abi.Arguments{{Type: addressType}},
+		common.HexToAddress(normalizeEvmAddress(payment.ReceiverAddress)),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode receiver bytes: %w", err)
+	}
+
+	calldata, err := feeABI.Pack(
+		"quotePaymentCost",
+		[]byte(destChainID),
+		receiverPacked,
+		common.HexToAddress(normalizeEvmAddress(payment.SourceTokenAddress)),
+		common.HexToAddress(normalizeEvmAddress(payment.DestTokenAddress)),
+		amount,
+		minAmountOut,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to pack quotePaymentCost args: %w", err)
+	}
+	out, err := client.CallView(ctx, gatewayAddress, calldata)
+	if err != nil {
+		return nil, err
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("empty result from quotePaymentCost")
+	}
+
+	decoded, err := feeABI.Unpack("quotePaymentCost", out)
+	if err != nil || len(decoded) < 7 {
+		return nil, fmt.Errorf("failed to decode quotePaymentCost output")
+	}
+
+	platformFee, _ := decoded[0].(*big.Int)
+	bridgeFeeNative, _ := decoded[1].(*big.Int)
+	totalSourceRequired, _ := decoded[2].(*big.Int)
+	bridgeType, _ := decoded[3].(uint8)
+	isSameChain, _ := decoded[4].(bool)
+	bridgeQuoteOK, _ := decoded[5].(bool)
+	bridgeReason, _ := decoded[6].(string)
+
+	result := &entities.OnchainCost{
+		PlatformFeeToken:         "0",
+		BridgeFeeNative:          "0",
+		TotalSourceTokenRequired: "0",
+		BridgeType:               bridgeType,
+		IsSameChain:              isSameChain,
+		BridgeQuoteOk:            bridgeQuoteOK,
+		BridgeQuoteReason:        bridgeReason,
+	}
+	if platformFee != nil {
+		result.PlatformFeeToken = platformFee.String()
+	}
+	if bridgeFeeNative != nil {
+		result.BridgeFeeNative = bridgeFeeNative.String()
+	}
+	if totalSourceRequired != nil {
+		result.TotalSourceTokenRequired = totalSourceRequired.String()
+	}
+	return result, nil
 }
 
 func (u *PaymentUsecase) buildEvmPaymentHex(payment *entities.Payment, destChainID string, minAmountOut *big.Int) string {

@@ -33,9 +33,15 @@ func (m *routePolicyRepoMemory) List(context.Context, *uuid.UUID, *uuid.UUID, ut
 	}
 	return []*entities.RoutePolicy{m.item}, 1, nil
 }
-func (m *routePolicyRepoMemory) Create(_ context.Context, p *entities.RoutePolicy) error { m.item = p; return nil }
-func (m *routePolicyRepoMemory) Update(_ context.Context, p *entities.RoutePolicy) error { m.item = p; return nil }
-func (m *routePolicyRepoMemory) Delete(context.Context, uuid.UUID) error                 { return nil }
+func (m *routePolicyRepoMemory) Create(_ context.Context, p *entities.RoutePolicy) error {
+	m.item = p
+	return nil
+}
+func (m *routePolicyRepoMemory) Update(_ context.Context, p *entities.RoutePolicy) error {
+	m.item = p
+	return nil
+}
+func (m *routePolicyRepoMemory) Delete(context.Context, uuid.UUID) error { return nil }
 
 type layerZeroRepoMemory struct {
 	item *entities.LayerZeroConfig
@@ -56,9 +62,15 @@ func (m *layerZeroRepoMemory) List(context.Context, *uuid.UUID, *uuid.UUID, *boo
 	}
 	return []*entities.LayerZeroConfig{m.item}, 1, nil
 }
-func (m *layerZeroRepoMemory) Create(_ context.Context, c *entities.LayerZeroConfig) error { m.item = c; return nil }
-func (m *layerZeroRepoMemory) Update(_ context.Context, c *entities.LayerZeroConfig) error { m.item = c; return nil }
-func (m *layerZeroRepoMemory) Delete(context.Context, uuid.UUID) error                      { return nil }
+func (m *layerZeroRepoMemory) Create(_ context.Context, c *entities.LayerZeroConfig) error {
+	m.item = c
+	return nil
+}
+func (m *layerZeroRepoMemory) Update(_ context.Context, c *entities.LayerZeroConfig) error {
+	m.item = c
+	return nil
+}
+func (m *layerZeroRepoMemory) Delete(context.Context, uuid.UUID) error { return nil }
 
 func TestCrosschainPolicyHandler_CRUDSuccessPaths(t *testing.T) {
 	gin.SetMode(gin.TestMode)
@@ -78,7 +90,7 @@ func TestCrosschainPolicyHandler_CRUDSuccessPaths(t *testing.T) {
 	r.POST("/lz", h.CreateLayerZeroConfig)
 	r.PUT("/lz/:id", h.UpdateLayerZeroConfig)
 
-	createRouteBody := `{"sourceChainId":"` + sourceID.String() + `","destChainId":"` + destID.String() + `","defaultBridgeType":1,"fallbackMode":"auto_fallback","fallbackOrder":[1,0]}`
+	createRouteBody := `{"sourceChainId":"` + sourceID.String() + `","destChainId":"` + destID.String() + `","defaultBridgeType":1,"fallbackMode":"auto_fallback","fallbackOrder":[1,0],"perByteRate":"300","overheadBytes":"256","minFee":"1000","maxFee":"999999"}`
 	req := httptest.NewRequest(http.MethodPost, "/route", strings.NewReader(createRouteBody))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -86,9 +98,13 @@ func TestCrosschainPolicyHandler_CRUDSuccessPaths(t *testing.T) {
 	require.Equal(t, http.StatusCreated, w.Code)
 	require.Contains(t, w.Body.String(), "\"policy\"")
 	require.NotNil(t, routeRepo.item)
+	require.Equal(t, "300", routeRepo.item.PerByteRate)
+	require.Equal(t, "256", routeRepo.item.OverheadBytes)
+	require.Equal(t, "1000", routeRepo.item.MinFee)
+	require.Equal(t, "999999", routeRepo.item.MaxFee)
 
 	policyID := routeRepo.item.ID
-	updateRouteBody := `{"sourceChainId":"` + sourceID.String() + `","destChainId":"` + destID.String() + `","defaultBridgeType":2,"fallbackMode":"strict","fallbackOrder":[2]}`
+	updateRouteBody := `{"sourceChainId":"` + sourceID.String() + `","destChainId":"` + destID.String() + `","defaultBridgeType":2,"fallbackMode":"strict","fallbackOrder":[2],"perByteRate":"400","overheadBytes":"300","minFee":"500","maxFee":"1000"}`
 	req = httptest.NewRequest(http.MethodPut, "/route/"+policyID.String(), strings.NewReader(updateRouteBody))
 	req.Header.Set("Content-Type", "application/json")
 	w = httptest.NewRecorder()
@@ -96,6 +112,10 @@ func TestCrosschainPolicyHandler_CRUDSuccessPaths(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 	require.Contains(t, w.Body.String(), "\"policy\"")
 	require.Equal(t, uint8(2), routeRepo.item.DefaultBridgeType)
+	require.Equal(t, "400", routeRepo.item.PerByteRate)
+	require.Equal(t, "300", routeRepo.item.OverheadBytes)
+	require.Equal(t, "500", routeRepo.item.MinFee)
+	require.Equal(t, "1000", routeRepo.item.MaxFee)
 
 	peerHex := "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	createLZBody := `{"sourceChainId":"` + sourceID.String() + `","destChainId":"` + destID.String() + `","dstEid":30110,"peerHex":"` + peerHex + `","optionsHex":"0x0102","isActive":true}`

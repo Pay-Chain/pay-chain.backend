@@ -20,6 +20,10 @@ type RoutePolicy struct {
 	DefaultBridgeType uint8              `json:"defaultBridgeType"`
 	FallbackMode      BridgeFallbackMode `json:"fallbackMode"`
 	FallbackOrder     []uint8            `json:"fallbackOrder"`
+	PerByteRate       string             `json:"perByteRate,omitempty"`
+	OverheadBytes     string             `json:"overheadBytes,omitempty"`
+	MinFee            string             `json:"minFee,omitempty"`
+	MaxFee            string             `json:"maxFee,omitempty"`
 	CreatedAt         time.Time          `json:"createdAt"`
 	UpdatedAt         time.Time          `json:"updatedAt"`
 	DeletedAt         *time.Time         `json:"-"`

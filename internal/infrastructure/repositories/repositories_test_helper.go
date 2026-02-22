@@ -190,6 +190,10 @@ func createRoutePolicyTables(t *testing.T, db *gorm.DB) {
 		default_bridge_type INTEGER,
 		fallback_mode TEXT,
 		fallback_order TEXT,
+		per_byte_rate TEXT,
+		overhead_bytes TEXT,
+		min_fee TEXT,
+		max_fee TEXT,
 		created_at DATETIME,
 		updated_at DATETIME,
 		deleted_at DATETIME

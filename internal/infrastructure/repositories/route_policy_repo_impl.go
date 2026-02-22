@@ -101,6 +101,10 @@ func (r *routePolicyRepo) Create(ctx context.Context, policy *entities.RoutePoli
 		DefaultBridgeType: int16(policy.DefaultBridgeType),
 		FallbackMode:      mode,
 		FallbackOrder:     fallbackOrder,
+		PerByteRate:       nullableNumeric(policy.PerByteRate),
+		OverheadBytes:     nullableNumeric(policy.OverheadBytes),
+		MinFee:            nullableNumeric(policy.MinFee),
+		MaxFee:            nullableNumeric(policy.MaxFee),
 		CreatedAt:         time.Now(),
 		UpdatedAt:         time.Now(),
 	}
@@ -122,6 +126,10 @@ func (r *routePolicyRepo) Update(ctx context.Context, policy *entities.RoutePoli
 			"default_bridge_type": int16(policy.DefaultBridgeType),
 			"fallback_mode":       mode,
 			"fallback_order":      fallbackOrder,
+			"per_byte_rate":       nullableNumeric(policy.PerByteRate),
+			"overhead_bytes":      nullableNumeric(policy.OverheadBytes),
+			"min_fee":             nullableNumeric(policy.MinFee),
+			"max_fee":             nullableNumeric(policy.MaxFee),
 			"updated_at":          time.Now(),
 		})
 	if result.Error != nil {
@@ -152,9 +160,28 @@ func toRoutePolicyEntity(m *models.RoutePolicy) *entities.RoutePolicy {
 		DefaultBridgeType: uint8(m.DefaultBridgeType),
 		FallbackMode:      entities.BridgeFallbackMode(m.FallbackMode),
 		FallbackOrder:     parseFallbackOrder(m.FallbackOrder),
+		PerByteRate:       derefString(m.PerByteRate),
+		OverheadBytes:     derefString(m.OverheadBytes),
+		MinFee:            derefString(m.MinFee),
+		MaxFee:            derefString(m.MaxFee),
 		CreatedAt:         m.CreatedAt,
 		UpdatedAt:         m.UpdatedAt,
 	}
+}
+
+func nullableNumeric(v string) *string {
+	s := strings.TrimSpace(v)
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
+func derefString(v *string) string {
+	if v == nil {
+		return ""
+	}
+	return *v
 }
 
 func marshalFallbackOrder(order []uint8) string {

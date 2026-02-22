@@ -14,6 +14,10 @@ type RoutePolicy struct {
 	DefaultBridgeType int16     `gorm:"type:smallint;not null;default:0"`
 	FallbackMode      string    `gorm:"type:varchar(32);not null;default:'strict'"`
 	FallbackOrder     string    `gorm:"type:jsonb;not null;default:'[0]'"`
+	PerByteRate       *string   `gorm:"type:numeric(78,0)"`
+	OverheadBytes     *string   `gorm:"type:numeric(78,0)"`
+	MinFee            *string   `gorm:"type:numeric(78,0)"`
+	MaxFee            *string   `gorm:"type:numeric(78,0)"`
 	CreatedAt         time.Time
 	UpdatedAt         time.Time
 	DeletedAt         gorm.DeletedAt `gorm:"index"`

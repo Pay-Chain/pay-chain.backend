@@ -23,8 +23,12 @@ func TestAuthHandler_RefreshToken_UsesLegacyCookieSessionID(t *testing.T) {
 	var seenSessionID string
 	h := NewAuthHandler(
 		authServiceStub{
-			registerFn:    func(context.Context, *entities.CreateUserInput) (*entities.User, string, error) { return nil, "", errors.New("unused") },
-			loginFn:       func(context.Context, *entities.LoginInput) (*entities.AuthResponse, error) { return nil, errors.New("unused") },
+			registerFn: func(context.Context, *entities.CreateUserInput) (*entities.User, string, error) {
+				return nil, "", errors.New("unused")
+			},
+			loginFn: func(context.Context, *entities.LoginInput) (*entities.AuthResponse, error) {
+				return nil, errors.New("unused")
+			},
 			verifyEmailFn: func(context.Context, string) error { return errors.New("unused") },
 			refreshTokenFn: func(_ context.Context, refreshToken string) (*jwt.TokenPair, error) {
 				if refreshToken != "ok-refresh" {
@@ -72,8 +76,12 @@ func TestAuthHandler_RefreshToken_StrictMode_UntrustedProxySkipsSessionLookup(t 
 
 	h := NewAuthHandler(
 		authServiceStub{
-			registerFn:    func(context.Context, *entities.CreateUserInput) (*entities.User, string, error) { return nil, "", errors.New("unused") },
-			loginFn:       func(context.Context, *entities.LoginInput) (*entities.AuthResponse, error) { return nil, errors.New("unused") },
+			registerFn: func(context.Context, *entities.CreateUserInput) (*entities.User, string, error) {
+				return nil, "", errors.New("unused")
+			},
+			loginFn: func(context.Context, *entities.LoginInput) (*entities.AuthResponse, error) {
+				return nil, errors.New("unused")
+			},
 			verifyEmailFn: func(context.Context, string) error { return errors.New("unused") },
 			refreshTokenFn: func(context.Context, string) (*jwt.TokenPair, error) {
 				return nil, errors.New("should not be called")
@@ -84,7 +92,9 @@ func TestAuthHandler_RefreshToken_StrictMode_UntrustedProxySkipsSessionLookup(t 
 		},
 		sessionStoreStub{
 			createFn: func(context.Context, string, *redis.SessionData, time.Duration) error { return errors.New("unused") },
-			getFn:    func(context.Context, string) (*redis.SessionData, error) { return &redis.SessionData{RefreshToken: "x"}, nil },
+			getFn: func(context.Context, string) (*redis.SessionData, error) {
+				return &redis.SessionData{RefreshToken: "x"}, nil
+			},
 			deleteFn: func(context.Context, string) error { return nil },
 		},
 	)
@@ -105,7 +115,7 @@ func TestAuthHandler_RefreshToken_StrictMode_UntrustedProxySkipsSessionLookup(t 
 
 func TestTokenHandler_ListSupportedTokens_SearchQueryBranch(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	h := NewTokenHandler(newTokenRepoStub(), newChainRepoStub())
+	h := NewTokenHandler(newTokenRepoStub(), newChainRepoStub(), nil)
 	r := gin.New()
 	r.GET("/tokens", h.ListSupportedTokens)
 
@@ -124,8 +134,12 @@ func TestAuthHandler_RefreshToken_LegacyBodyWithoutTokenAndNoCookie(t *testing.T
 
 	h := NewAuthHandler(
 		authServiceStub{
-			registerFn:    func(context.Context, *entities.CreateUserInput) (*entities.User, string, error) { return nil, "", errors.New("unused") },
-			loginFn:       func(context.Context, *entities.LoginInput) (*entities.AuthResponse, error) { return nil, errors.New("unused") },
+			registerFn: func(context.Context, *entities.CreateUserInput) (*entities.User, string, error) {
+				return nil, "", errors.New("unused")
+			},
+			loginFn: func(context.Context, *entities.LoginInput) (*entities.AuthResponse, error) {
+				return nil, errors.New("unused")
+			},
 			verifyEmailFn: func(context.Context, string) error { return errors.New("unused") },
 			refreshTokenFn: func(context.Context, string) (*jwt.TokenPair, error) {
 				return nil, errors.New("should not be called")
@@ -160,8 +174,12 @@ func TestAuthHandler_RefreshToken_HeaderSessionMiss_FallbackToBody(t *testing.T)
 
 	h := NewAuthHandler(
 		authServiceStub{
-			registerFn:    func(context.Context, *entities.CreateUserInput) (*entities.User, string, error) { return nil, "", errors.New("unused") },
-			loginFn:       func(context.Context, *entities.LoginInput) (*entities.AuthResponse, error) { return nil, errors.New("unused") },
+			registerFn: func(context.Context, *entities.CreateUserInput) (*entities.User, string, error) {
+				return nil, "", errors.New("unused")
+			},
+			loginFn: func(context.Context, *entities.LoginInput) (*entities.AuthResponse, error) {
+				return nil, errors.New("unused")
+			},
 			verifyEmailFn: func(context.Context, string) error { return errors.New("unused") },
 			refreshTokenFn: func(_ context.Context, refreshToken string) (*jwt.TokenPair, error) {
 				if refreshToken != "from-body" {

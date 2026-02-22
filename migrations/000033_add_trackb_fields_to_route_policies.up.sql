@@ -1,0 +1,6 @@
+ALTER TABLE route_policies
+    ADD COLUMN IF NOT EXISTS per_byte_rate NUMERIC(78,0),
+    ADD COLUMN IF NOT EXISTS overhead_bytes NUMERIC(78,0),
+    ADD COLUMN IF NOT EXISTS min_fee NUMERIC(78,0),
+    ADD COLUMN IF NOT EXISTS max_fee NUMERIC(78,0);
+

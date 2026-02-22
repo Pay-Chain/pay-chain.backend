@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"math/big"
 	"net/http"
 	"strconv"
 	"strings"
@@ -68,6 +69,10 @@ func (h *CrosschainPolicyHandler) CreateRoutePolicy(c *gin.Context) {
 		DefaultBridgeType *uint8  `json:"defaultBridgeType" binding:"required"`
 		FallbackMode      string  `json:"fallbackMode"`
 		FallbackOrder     []uint8 `json:"fallbackOrder"`
+		PerByteRate       string  `json:"perByteRate"`
+		OverheadBytes     string  `json:"overheadBytes"`
+		MinFee            string  `json:"minFee"`
+		MaxFee            string  `json:"maxFee"`
 	}
 	if err := c.ShouldBindJSON(&input); err != nil {
 		response.Error(c, domainerrors.BadRequest(err.Error()))
@@ -109,6 +114,30 @@ func (h *CrosschainPolicyHandler) CreateRoutePolicy(c *gin.Context) {
 		response.Error(c, domainerrors.BadRequest(err.Error()))
 		return
 	}
+	perByteRate, err := normalizeUnsignedInteger(input.PerByteRate)
+	if err != nil {
+		response.Error(c, domainerrors.BadRequest("invalid perByteRate"))
+		return
+	}
+	overheadBytes, err := normalizeUnsignedInteger(input.OverheadBytes)
+	if err != nil {
+		response.Error(c, domainerrors.BadRequest("invalid overheadBytes"))
+		return
+	}
+	minFee, err := normalizeUnsignedInteger(input.MinFee)
+	if err != nil {
+		response.Error(c, domainerrors.BadRequest("invalid minFee"))
+		return
+	}
+	maxFee, err := normalizeUnsignedInteger(input.MaxFee)
+	if err != nil {
+		response.Error(c, domainerrors.BadRequest("invalid maxFee"))
+		return
+	}
+	if err := validateMinMaxFee(minFee, maxFee); err != nil {
+		response.Error(c, err)
+		return
+	}
 
 	item := &entities.RoutePolicy{
 		ID:                utils.GenerateUUIDv7(),
@@ -117,6 +146,10 @@ func (h *CrosschainPolicyHandler) CreateRoutePolicy(c *gin.Context) {
 		DefaultBridgeType: *input.DefaultBridgeType,
 		FallbackMode:      mode,
 		FallbackOrder:     order,
+		PerByteRate:       perByteRate,
+		OverheadBytes:     overheadBytes,
+		MinFee:            minFee,
+		MaxFee:            maxFee,
 		CreatedAt:         time.Now(),
 		UpdatedAt:         time.Now(),
 	}
@@ -145,6 +178,10 @@ func (h *CrosschainPolicyHandler) UpdateRoutePolicy(c *gin.Context) {
 		DefaultBridgeType *uint8  `json:"defaultBridgeType" binding:"required"`
 		FallbackMode      string  `json:"fallbackMode"`
 		FallbackOrder     []uint8 `json:"fallbackOrder"`
+		PerByteRate       string  `json:"perByteRate"`
+		OverheadBytes     string  `json:"overheadBytes"`
+		MinFee            string  `json:"minFee"`
+		MaxFee            string  `json:"maxFee"`
 	}
 	if err := c.ShouldBindJSON(&input); err != nil {
 		response.Error(c, domainerrors.BadRequest(err.Error()))
@@ -186,12 +223,40 @@ func (h *CrosschainPolicyHandler) UpdateRoutePolicy(c *gin.Context) {
 		response.Error(c, domainerrors.BadRequest(err.Error()))
 		return
 	}
+	perByteRate, err := normalizeUnsignedInteger(input.PerByteRate)
+	if err != nil {
+		response.Error(c, domainerrors.BadRequest("invalid perByteRate"))
+		return
+	}
+	overheadBytes, err := normalizeUnsignedInteger(input.OverheadBytes)
+	if err != nil {
+		response.Error(c, domainerrors.BadRequest("invalid overheadBytes"))
+		return
+	}
+	minFee, err := normalizeUnsignedInteger(input.MinFee)
+	if err != nil {
+		response.Error(c, domainerrors.BadRequest("invalid minFee"))
+		return
+	}
+	maxFee, err := normalizeUnsignedInteger(input.MaxFee)
+	if err != nil {
+		response.Error(c, domainerrors.BadRequest("invalid maxFee"))
+		return
+	}
+	if err := validateMinMaxFee(minFee, maxFee); err != nil {
+		response.Error(c, err)
+		return
+	}
 
 	existing.SourceChainID = sourceChainID
 	existing.DestChainID = destChainID
 	existing.DefaultBridgeType = *input.DefaultBridgeType
 	existing.FallbackMode = mode
 	existing.FallbackOrder = order
+	existing.PerByteRate = perByteRate
+	existing.OverheadBytes = overheadBytes
+	existing.MinFee = minFee
+	existing.MaxFee = maxFee
 	existing.UpdatedAt = time.Now()
 
 	if err := h.routePolicyRepo.Update(c.Request.Context(), existing); err != nil {
@@ -445,4 +510,35 @@ func normalizeHex(v string) string {
 		return "0x" + raw
 	}
 	return raw
+}
+
+func normalizeUnsignedInteger(v string) (string, error) {
+	raw := strings.TrimSpace(v)
+	if raw == "" {
+		return "", nil
+	}
+	for _, ch := range raw {
+		if ch < '0' || ch > '9' {
+			return "", domainerrors.BadRequest("must be unsigned integer")
+		}
+	}
+	return raw, nil
+}
+
+func validateMinMaxFee(minFee, maxFee string) error {
+	if strings.TrimSpace(minFee) == "" || strings.TrimSpace(maxFee) == "" {
+		return nil
+	}
+	minValue, ok := new(big.Int).SetString(minFee, 10)
+	if !ok {
+		return domainerrors.BadRequest("invalid minFee")
+	}
+	maxValue, ok := new(big.Int).SetString(maxFee, 10)
+	if !ok {
+		return domainerrors.BadRequest("invalid maxFee")
+	}
+	if maxValue.Cmp(minValue) < 0 {
+		return domainerrors.BadRequest("maxFee must be greater than or equal to minFee")
+	}
+	return nil
 }
