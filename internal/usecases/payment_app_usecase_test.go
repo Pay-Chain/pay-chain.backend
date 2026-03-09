@@ -69,6 +69,67 @@ func TestPaymentAppUsecase_CreatePaymentApp_PrivacyModeAutoFillsPrivacyFields(t 
 	mockChainRepo.On("GetByChainID", context.Background(), "8453").Return(nil, errors.New("not found")).Maybe()
 	mockChainRepo.On("GetByChainID", context.Background(), "eip155:8453").Return(nil, errors.New("not found")).Maybe()
 
+	input := &entities.CreatePaymentAppInput{
+		SourceChainID:       "eip155:8453",
+		DestChainID:         "eip155:137",
+		SourceTokenAddress:  "0x1",
+		DestTokenAddress:    "0x2",
+		Amount:              "1",
+		Decimals:            6,
+		SenderWalletAddress: "0x00000000000000000000000000000000000000ab",
+		ReceiverAddress:     "0x000000000000000000000000000000000000dEaD",
+		Mode:                &mode,
+	}
+	_, err := uc.CreatePaymentApp(context.Background(), input)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid source chain")
+	if assert.NotNil(t, input.PrivacyIntentID) {
+		assert.NotEmpty(t, *input.PrivacyIntentID)
+	}
+	if assert.NotNil(t, input.PrivacyStealthReceiver) {
+		assert.NotEmpty(t, *input.PrivacyStealthReceiver)
+		assert.NotEqual(t, input.ReceiverAddress, *input.PrivacyStealthReceiver)
+	}
+}
+
+func TestPaymentAppUsecase_CreatePaymentApp_PrivacyMode_RejectStealthEqualsReceiver(t *testing.T) {
+	mockUserRepo := new(MockUserRepository)
+	mockWalletRepo := new(MockWalletRepository)
+	mockChainRepo := new(MockChainRepository)
+
+	uc := usecases.NewPaymentAppUsecase(nil, mockUserRepo, mockWalletRepo, mockChainRepo)
+	mode := "privacy"
+	receiver := "0x000000000000000000000000000000000000dEaD"
+	stealth := receiver
+	intent := "intent-manual"
+
+	_, err := uc.CreatePaymentApp(context.Background(), &entities.CreatePaymentAppInput{
+		SourceChainID:          "eip155:8453",
+		DestChainID:            "eip155:137",
+		SourceTokenAddress:     "0x1",
+		DestTokenAddress:       "0x2",
+		Amount:                 "1",
+		Decimals:               6,
+		SenderWalletAddress:    "0x00000000000000000000000000000000000000ab",
+		ReceiverAddress:        receiver,
+		Mode:                   &mode,
+		PrivacyIntentID:        &intent,
+		PrivacyStealthReceiver: &stealth,
+	})
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "privacyStealthReceiver must differ from receiverAddress")
+}
+
+func TestPaymentAppUsecase_CreatePaymentApp_PrivacyMode_RejectInvalidReceiver(t *testing.T) {
+	mockUserRepo := new(MockUserRepository)
+	mockWalletRepo := new(MockWalletRepository)
+	mockChainRepo := new(MockChainRepository)
+
+	uc := usecases.NewPaymentAppUsecase(nil, mockUserRepo, mockWalletRepo, mockChainRepo)
+	mode := "privacy"
+
 	_, err := uc.CreatePaymentApp(context.Background(), &entities.CreatePaymentAppInput{
 		SourceChainID:       "eip155:8453",
 		DestChainID:         "eip155:137",
@@ -76,13 +137,13 @@ func TestPaymentAppUsecase_CreatePaymentApp_PrivacyModeAutoFillsPrivacyFields(t 
 		DestTokenAddress:    "0x2",
 		Amount:              "1",
 		Decimals:            6,
-		SenderWalletAddress: "0xabc",
-		ReceiverAddress:     "0xdef",
+		SenderWalletAddress: "0x00000000000000000000000000000000000000ab",
+		ReceiverAddress:     "receiver-not-evm",
 		Mode:                &mode,
 	})
 
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid source chain")
+	assert.Contains(t, err.Error(), "receiverAddress must be valid EVM address when mode=privacy")
 }
 
 func TestPaymentAppUsecase_CreatePaymentApp_InvalidDestChain(t *testing.T) {

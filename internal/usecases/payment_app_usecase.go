@@ -3,9 +3,12 @@ package usecases
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/google/uuid"
 	"payment-kita.backend/internal/domain/entities"
 	"payment-kita.backend/internal/domain/repositories"
@@ -38,18 +41,12 @@ func NewPaymentAppUsecase(
 func (u *PaymentAppUsecase) CreatePaymentApp(ctx context.Context, input *entities.CreatePaymentAppInput) (*entities.CreatePaymentResponse, error) {
 	mode := normalizePaymentMode(input.Mode)
 	if mode == PaymentModePrivacy {
-		receiver := strings.TrimSpace(input.ReceiverAddress)
-		if receiver == "" {
-			return nil, fmt.Errorf("receiverAddress is required when mode=privacy")
+		intentID, stealthReceiver, err := preparePrivacyRouting(input)
+		if err != nil {
+			return nil, err
 		}
-		if input.PrivacyStealthReceiver == nil || strings.TrimSpace(*input.PrivacyStealthReceiver) == "" {
-			stealth := receiver
-			input.PrivacyStealthReceiver = &stealth
-		}
-		if input.PrivacyIntentID == nil || strings.TrimSpace(*input.PrivacyIntentID) == "" {
-			autoIntentID := utils.GenerateUUIDv7().String()
-			input.PrivacyIntentID = &autoIntentID
-		}
+		input.PrivacyIntentID = &intentID
+		input.PrivacyStealthReceiver = &stealthReceiver
 	}
 	if _, err := normalizeBridgeOption(input.BridgeOption); err != nil {
 		return nil, fmt.Errorf("invalid bridge option: %w", err)
@@ -161,4 +158,73 @@ func walletNamePrefix(addr string) string {
 		return "wallet"
 	}
 	return addr
+}
+
+func preparePrivacyRouting(input *entities.CreatePaymentAppInput) (intentID string, stealthReceiver string, err error) {
+	receiverRaw := strings.TrimSpace(input.ReceiverAddress)
+	if receiverRaw == "" {
+		return "", "", fmt.Errorf("receiverAddress is required when mode=privacy")
+	}
+	if !common.IsHexAddress(receiverRaw) {
+		return "", "", fmt.Errorf("receiverAddress must be valid EVM address when mode=privacy")
+	}
+	finalReceiver := common.HexToAddress(normalizeEvmAddress(receiverRaw))
+
+	intentID = ""
+	if input.PrivacyIntentID != nil {
+		intentID = strings.TrimSpace(*input.PrivacyIntentID)
+	}
+	if intentID == "" {
+		intentID = utils.GenerateUUIDv7().String()
+	}
+
+	if input.PrivacyStealthReceiver != nil {
+		stealthRaw := strings.TrimSpace(*input.PrivacyStealthReceiver)
+		if stealthRaw != "" {
+			if !common.IsHexAddress(stealthRaw) {
+				return "", "", fmt.Errorf("privacyStealthReceiver must be valid EVM address when mode=privacy")
+			}
+			stealth := common.HexToAddress(normalizeEvmAddress(stealthRaw))
+			if stealth == finalReceiver {
+				return "", "", fmt.Errorf("privacyStealthReceiver must differ from receiverAddress")
+			}
+			return intentID, stealth.Hex(), nil
+		}
+	}
+
+	escrowStealth := prepareEscrowStealthAddress(input, intentID)
+	if escrowStealth == finalReceiver {
+		return "", "", fmt.Errorf("privacyStealthReceiver must differ from receiverAddress")
+	}
+	if escrowStealth == (common.Address{}) {
+		return "", "", fmt.Errorf("failed to derive escrow stealth address")
+	}
+	return intentID, escrowStealth.Hex(), nil
+}
+
+func prepareEscrowStealthAddress(input *entities.CreatePaymentAppInput, intentID string) common.Address {
+	seed := strings.Join([]string{
+		"privacy-escrow-v2",
+		strings.TrimSpace(input.SenderWalletAddress),
+		strings.TrimSpace(input.ReceiverAddress),
+		strings.TrimSpace(input.SourceChainID),
+		strings.TrimSpace(input.DestChainID),
+		strings.TrimSpace(input.SourceTokenAddress),
+		strings.TrimSpace(input.DestTokenAddress),
+		strings.TrimSpace(input.Amount),
+		intentID,
+	}, "|")
+	salt := crypto.Keccak256Hash([]byte(seed))
+
+	factoryRaw := strings.TrimSpace(os.Getenv("PRIVACY_ESCROW_FACTORY"))
+	initCodeHashRaw := strings.TrimSpace(os.Getenv("PRIVACY_ESCROW_INIT_CODE_HASH"))
+	if common.IsHexAddress(factoryRaw) && len(initCodeHashRaw) == 66 {
+		initCodeHash := common.Hex2Bytes(strings.TrimPrefix(initCodeHashRaw, "0x"))
+		if len(initCodeHash) == 32 {
+			return crypto.CreateAddress2(common.HexToAddress(factoryRaw), salt, initCodeHash)
+		}
+	}
+
+	placeholder := crypto.Keccak256Hash([]byte("payment-kita-escrow-placeholder"), salt.Bytes())
+	return common.BytesToAddress(placeholder.Bytes()[12:])
 }

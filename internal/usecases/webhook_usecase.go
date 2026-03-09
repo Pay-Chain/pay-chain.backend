@@ -97,6 +97,7 @@ func (u *WebhookUsecase) ProcessIndexerWebhook(ctx context.Context, eventType st
 				PaymentID: paymentUUID,
 				EventType: entities.PaymentEventType(eventType),
 				TxHash:    paymentData.SourceTxHash,
+				Metadata:  string(data),
 			})
 		})
 

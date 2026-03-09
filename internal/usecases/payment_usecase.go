@@ -3,6 +3,7 @@ package usecases
 import (
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -1416,8 +1417,91 @@ func (u *PaymentUsecase) GetPaymentPrivacyStatus(ctx context.Context, paymentID 
 	}, nil
 }
 
+func (u *PaymentUsecase) BuildRetryPrivacyRecoveryTx(
+	ctx context.Context,
+	paymentID uuid.UUID,
+	onchainPaymentID string,
+) (*entities.PaymentPrivacyRecoveryTx, error) {
+	return u.buildPrivacyRecoveryTx(ctx, paymentID, onchainPaymentID, entities.PrivacyRecoveryActionRetry)
+}
+
+func (u *PaymentUsecase) BuildClaimPrivacyRecoveryTx(
+	ctx context.Context,
+	paymentID uuid.UUID,
+	onchainPaymentID string,
+) (*entities.PaymentPrivacyRecoveryTx, error) {
+	return u.buildPrivacyRecoveryTx(ctx, paymentID, onchainPaymentID, entities.PrivacyRecoveryActionClaim)
+}
+
+func (u *PaymentUsecase) BuildRefundPrivacyRecoveryTx(
+	ctx context.Context,
+	paymentID uuid.UUID,
+	onchainPaymentID string,
+) (*entities.PaymentPrivacyRecoveryTx, error) {
+	return u.buildPrivacyRecoveryTx(ctx, paymentID, onchainPaymentID, entities.PrivacyRecoveryActionRefund)
+}
+
+func (u *PaymentUsecase) buildPrivacyRecoveryTx(
+	ctx context.Context,
+	paymentID uuid.UUID,
+	onchainPaymentID string,
+	action entities.PrivacyRecoveryAction,
+) (*entities.PaymentPrivacyRecoveryTx, error) {
+	payment, err := u.paymentRepo.GetByID(ctx, paymentID)
+	if err != nil {
+		return nil, err
+	}
+
+	events, err := u.paymentEventRepo.GetByPaymentID(ctx, paymentID)
+	if err != nil {
+		return nil, err
+	}
+
+	stage, isPrivacy, signals, reason := derivePaymentPrivacyLifecycle(payment, events)
+	if !isPrivacy {
+		return nil, domainerrors.BadRequest("payment is not in privacy flow")
+	}
+	if err := validatePrivacyRecoveryStage(stage, action); err != nil {
+		return nil, err
+	}
+
+	paymentIDBytes32, normalizedPaymentID, err := resolveOnchainPaymentID(events, onchainPaymentID)
+	if err != nil {
+		return nil, domainerrors.BadRequest(err.Error())
+	}
+
+	methodSig, methodSelector, err := privacyRecoveryMethodSpec(action)
+	if err != nil {
+		return nil, domainerrors.BadRequest(err.Error())
+	}
+	calldata := methodSelector + hex.EncodeToString(paymentIDBytes32[:])
+
+	gatewayContract, err := u.contractRepo.GetActiveContract(ctx, payment.SourceChainID, entities.ContractTypeGateway)
+	if err != nil {
+		return nil, fmt.Errorf("active gateway contract not found: %w", err)
+	}
+	sourceChain, err := u.chainRepo.GetByID(ctx, payment.SourceChainID)
+	if err != nil {
+		return nil, fmt.Errorf("source chain not found: %w", err)
+	}
+
+	return &entities.PaymentPrivacyRecoveryTx{
+		Action:           action,
+		PaymentID:        paymentID,
+		OnchainPaymentID: normalizedPaymentID,
+		Stage:            stage,
+		ChainID:          sourceChain.GetCAIP2ID(),
+		ContractAddress:  gatewayContract.ContractAddress,
+		Method:           methodSig,
+		Calldata:         calldata,
+		Value:            "0",
+		Signals:          dedupeSignals(signals),
+		Reason:           reason,
+	}, nil
+}
+
 func derivePaymentPrivacyLifecycle(payment *entities.Payment, events []*entities.PaymentEvent) (string, bool, []string, string) {
-	signals := make([]string, 0, 8)
+	signals := make([]string, 0, 12)
 	hasDestSettlement := payment.DestTxHash.Valid && strings.TrimSpace(payment.DestTxHash.String) != ""
 	if hasDestSettlement {
 		signals = append(signals, "dest_tx_hash_present")
@@ -1428,6 +1512,11 @@ func derivePaymentPrivacyLifecycle(payment *entities.Payment, events []*entities
 	hasPrivacySignal := strings.Contains(failureUpper, "PRIVACY")
 	hasForwardFailure := strings.Contains(failureUpper, "PRIVACY_FORWARD_FAILED")
 	hasForwardCompletedSignal := false
+	hasForwardRequestedSignal := false
+	hasPrivacyPreparedSignal := false
+	hasRetryRequestedSignal := false
+	hasEscrowClaimedSignal := false
+	hasEscrowRefundedSignal := false
 	hasStealthSettlementSignal := false
 
 	if hasPrivacySignal {
@@ -1446,9 +1535,31 @@ func derivePaymentPrivacyLifecycle(payment *entities.Payment, events []*entities
 			hasPrivacySignal = true
 			signals = append(signals, "event_contains_privacy")
 		}
+		if strings.Contains(blob, "PRIVACYPAYMENTCREATED") || strings.Contains(blob, "PRIVACY_PAYMENT_CREATED") {
+			hasPrivacyPreparedSignal = true
+			signals = append(signals, "privacy_prepared")
+		}
+		if strings.Contains(blob, "PRIVACYFORWARDREQUESTED") || strings.Contains(blob, "PRIVACY_FORWARD_REQUESTED") {
+			hasForwardRequestedSignal = true
+			signals = append(signals, "privacy_forward_requested")
+		}
+		if strings.Contains(blob, "PRIVACYFORWARDRETRYREQUESTED") || strings.Contains(blob, "PRIVACY_FORWARD_RETRY_REQUESTED") {
+			hasRetryRequestedSignal = true
+			signals = append(signals, "privacy_forward_retry_requested")
+		}
 		if strings.Contains(blob, "PRIVACYFORWARDCOMPLETED") || strings.Contains(blob, "PRIVACY_FORWARD_COMPLETED") {
 			hasForwardCompletedSignal = true
 			signals = append(signals, "privacy_forward_completed")
+		}
+		if strings.Contains(blob, "PRIVACYESCROWCLAIMED") || strings.Contains(blob, "PRIVACY_ESCROW_CLAIMED") ||
+			strings.Contains(blob, "PRIVACYCLAIMED") || strings.Contains(blob, "PRIVACY_CLAIMED") {
+			hasEscrowClaimedSignal = true
+			signals = append(signals, "privacy_escrow_claimed")
+		}
+		if strings.Contains(blob, "PRIVACYESCROWREFUNDED") || strings.Contains(blob, "PRIVACY_ESCROW_REFUNDED") ||
+			strings.Contains(blob, "PRIVACYREFUNDED") || strings.Contains(blob, "PRIVACY_REFUNDED") {
+			hasEscrowRefundedSignal = true
+			signals = append(signals, "privacy_escrow_refunded")
 		}
 		if evType == "DESTINATION_TX_HASH" || evType == "PAYMENT_EXECUTED" || strings.Contains(blob, "STEALTH") {
 			hasStealthSettlementSignal = true
@@ -1459,7 +1570,21 @@ func derivePaymentPrivacyLifecycle(payment *entities.Payment, events []*entities
 		}
 	}
 
+	if hasEscrowClaimedSignal || hasEscrowRefundedSignal {
+		return entities.PrivacyLifecycleResolved, true, dedupeSignals(signals), ""
+	}
+
 	if hasForwardFailure {
+		if hasRetryRequestedSignal {
+			return entities.PrivacyLifecycleForwardFailedRetrying, true, dedupeSignals(signals), failure
+		}
+		if payment.Status == entities.PaymentStatusFailed || strings.Contains(failureUpper, "REFUND") {
+			return entities.PrivacyLifecycleRefundable, true, dedupeSignals(signals), failure
+		}
+		return entities.PrivacyLifecycleClaimable, true, dedupeSignals(signals), failure
+	}
+
+	if hasRetryRequestedSignal {
 		return entities.PrivacyLifecycleForwardFailedRetrying, true, dedupeSignals(signals), failure
 	}
 
@@ -1467,9 +1592,13 @@ func derivePaymentPrivacyLifecycle(payment *entities.Payment, events []*entities
 		return entities.PrivacyLifecycleForwardedFinal, true, dedupeSignals(signals), ""
 	}
 
+	if hasForwardRequestedSignal {
+		return entities.PrivacyLifecycleSettledToStealth, true, dedupeSignals(signals), ""
+	}
+
 	if payment.Status == entities.PaymentStatusCompleted && (hasDestSettlement || hasStealthSettlementSignal) {
 		if hasPrivacySignal {
-			return entities.PrivacyLifecycleForwardedFinal, true, dedupeSignals(signals), ""
+			return entities.PrivacyLifecycleSettledToStealth, true, dedupeSignals(signals), "privacy forward confirmation not observed yet"
 		}
 		return entities.PrivacyLifecycleNotPrivacy, false, dedupeSignals(signals), "payment completed without privacy markers"
 	}
@@ -1482,6 +1611,9 @@ func derivePaymentPrivacyLifecycle(payment *entities.Payment, events []*entities
 	}
 
 	if payment.Status == entities.PaymentStatusPending {
+		if hasPrivacyPreparedSignal {
+			return entities.PrivacyLifecyclePendingOnSource, true, dedupeSignals(signals), ""
+		}
 		if hasPrivacySignal {
 			return entities.PrivacyLifecyclePendingOnSource, true, dedupeSignals(signals), ""
 		}
@@ -1493,6 +1625,139 @@ func derivePaymentPrivacyLifecycle(payment *entities.Payment, events []*entities
 	}
 
 	return entities.PrivacyLifecycleUnknown, false, dedupeSignals(signals), "insufficient privacy lifecycle signals"
+}
+
+func validatePrivacyRecoveryStage(stage string, action entities.PrivacyRecoveryAction) error {
+	switch action {
+	case entities.PrivacyRecoveryActionRetry:
+		if stage != entities.PrivacyLifecycleForwardFailedRetrying &&
+			stage != entities.PrivacyLifecycleClaimable &&
+			stage != entities.PrivacyLifecycleRefundable {
+			return domainerrors.BadRequest("retry is only allowed after forward failure")
+		}
+	case entities.PrivacyRecoveryActionClaim:
+		if stage != entities.PrivacyLifecycleClaimable &&
+			stage != entities.PrivacyLifecycleForwardFailedRetrying &&
+			stage != entities.PrivacyLifecycleSettledToStealth {
+			return domainerrors.BadRequest("claim is not available for current privacy stage")
+		}
+	case entities.PrivacyRecoveryActionRefund:
+		if stage != entities.PrivacyLifecycleRefundable &&
+			stage != entities.PrivacyLifecycleForwardFailedRetrying {
+			return domainerrors.BadRequest("refund is not available for current privacy stage")
+		}
+	default:
+		return domainerrors.BadRequest("invalid privacy recovery action")
+	}
+	return nil
+}
+
+func parseOnchainPaymentID(raw string) ([32]byte, string, error) {
+	var out [32]byte
+
+	trimmed := strings.TrimSpace(raw)
+	trimmed = strings.TrimPrefix(strings.ToLower(trimmed), "0x")
+	if len(trimmed) != 64 {
+		return out, "", fmt.Errorf("onchainPaymentId must be 32-byte hex")
+	}
+	decoded, err := hex.DecodeString(trimmed)
+	if err != nil {
+		return out, "", fmt.Errorf("onchainPaymentId must be valid hex")
+	}
+	copy(out[:], decoded)
+	return out, "0x" + hex.EncodeToString(out[:]), nil
+}
+
+func resolveOnchainPaymentID(events []*entities.PaymentEvent, raw string) ([32]byte, string, error) {
+	trimmedInput := strings.TrimSpace(raw)
+	if trimmedInput != "" {
+		return parseOnchainPaymentID(trimmedInput)
+	}
+
+	for i := len(events) - 1; i >= 0; i-- {
+		candidate := extractOnchainPaymentIDFromMetadata(events[i].Metadata, 0)
+		if candidate == "" {
+			continue
+		}
+		parsed, normalized, err := parseOnchainPaymentID(candidate)
+		if err == nil {
+			return parsed, normalized, nil
+		}
+	}
+
+	var empty [32]byte
+	return empty, "", fmt.Errorf("onchainPaymentId is required (not found in request or event metadata)")
+}
+
+func extractOnchainPaymentIDFromMetadata(metadata interface{}, depth int) string {
+	if metadata == nil || depth > 4 {
+		return ""
+	}
+
+	switch v := metadata.(type) {
+	case string:
+		trimmed := strings.TrimSpace(v)
+		if trimmed == "" {
+			return ""
+		}
+		if looksLikeBytes32Hex(trimmed) {
+			return trimmed
+		}
+		var decoded interface{}
+		if json.Unmarshal([]byte(trimmed), &decoded) == nil {
+			return extractOnchainPaymentIDFromMetadata(decoded, depth+1)
+		}
+		return ""
+	case map[string]interface{}:
+		keys := []string{
+			"onchainPaymentId", "onchain_payment_id",
+			"paymentIdHex", "payment_id_hex",
+			"paymentIdBytes32", "payment_id_bytes32",
+			"onchainPaymentID", "onchain_paymentID",
+		}
+		for _, key := range keys {
+			if rawValue, ok := v[key]; ok {
+				if candidate := extractOnchainPaymentIDFromMetadata(rawValue, depth+1); candidate != "" {
+					return candidate
+				}
+			}
+		}
+		for _, rawValue := range v {
+			if candidate := extractOnchainPaymentIDFromMetadata(rawValue, depth+1); candidate != "" {
+				return candidate
+			}
+		}
+	case []interface{}:
+		for _, rawValue := range v {
+			if candidate := extractOnchainPaymentIDFromMetadata(rawValue, depth+1); candidate != "" {
+				return candidate
+			}
+		}
+	}
+	return ""
+}
+
+func looksLikeBytes32Hex(value string) bool {
+	trimmed := strings.TrimSpace(strings.ToLower(value))
+	trimmed = strings.TrimPrefix(trimmed, "0x")
+	if len(trimmed) != 64 {
+		return false
+	}
+	_, err := hex.DecodeString(trimmed)
+	return err == nil
+}
+
+func privacyRecoveryMethodSpec(action entities.PrivacyRecoveryAction) (methodSig string, selector string, err error) {
+	switch action {
+	case entities.PrivacyRecoveryActionRetry:
+		return "retryPrivacyForward(bytes32)", computeSelectorHex("retryPrivacyForward(bytes32)"), nil
+	case entities.PrivacyRecoveryActionClaim:
+		return "claimPrivacyEscrow(bytes32)", computeSelectorHex("claimPrivacyEscrow(bytes32)"), nil
+	case entities.PrivacyRecoveryActionRefund:
+		return "refundPrivacyEscrow(bytes32)", computeSelectorHex("refundPrivacyEscrow(bytes32)"), nil
+	default:
+		return "", "", fmt.Errorf("unknown privacy recovery action")
+	}
 }
 
 func dedupeSignals(signals []string) []string {

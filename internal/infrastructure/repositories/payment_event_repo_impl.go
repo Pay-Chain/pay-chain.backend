@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -27,7 +28,7 @@ func NewPaymentEventRepository(db *gorm.DB) *PaymentEventRepository {
 
 // Create creates a new payment event
 func (r *PaymentEventRepository) Create(ctx context.Context, event *entities.PaymentEvent) error {
-	meta := "{}"
+	meta := normalizeEventMetadataForStorage(event.Metadata)
 	createdAt := event.CreatedAt
 	if createdAt.IsZero() {
 		createdAt = time.Now()
@@ -132,10 +133,10 @@ func (r *PaymentEventRepository) GetByPaymentID(ctx context.Context, paymentID u
 			PaymentID:   m.PaymentID,
 			EventType:   entities.PaymentEventType(m.EventType),
 			TxHash:      m.TxHash,
-			ChainID:     nil,
-			BlockNumber: 0,
-			// Metadata:    ...,
-			CreatedAt: m.CreatedAt,
+			ChainID:     m.ChainID,
+			BlockNumber: m.BlockNumber,
+			Metadata:    parseEventMetadataFromStorage(m.Metadata),
+			CreatedAt:   m.CreatedAt,
 		}
 		events = append(events, event)
 	}
@@ -161,8 +162,42 @@ func (r *PaymentEventRepository) GetLatestByPaymentID(ctx context.Context, payme
 		PaymentID:   m.PaymentID,
 		EventType:   entities.PaymentEventType(m.EventType),
 		TxHash:      m.TxHash,
-		ChainID:     nil,
-		BlockNumber: 0,
+		ChainID:     m.ChainID,
+		BlockNumber: m.BlockNumber,
+		Metadata:    parseEventMetadataFromStorage(m.Metadata),
 		CreatedAt:   m.CreatedAt,
 	}, nil
+}
+
+func normalizeEventMetadataForStorage(metadata interface{}) string {
+	if metadata == nil {
+		return "{}"
+	}
+	if raw, ok := metadata.(string); ok {
+		trimmed := strings.TrimSpace(raw)
+		if trimmed == "" {
+			return "{}"
+		}
+		if json.Valid([]byte(trimmed)) {
+			return trimmed
+		}
+	}
+	encoded, err := json.Marshal(metadata)
+	if err != nil || len(encoded) == 0 {
+		return "{}"
+	}
+	return string(encoded)
+}
+
+func parseEventMetadataFromStorage(raw string) interface{} {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" || trimmed == "{}" {
+		return nil
+	}
+
+	var decoded interface{}
+	if err := json.Unmarshal([]byte(trimmed), &decoded); err != nil {
+		return trimmed
+	}
+	return decoded
 }

@@ -19,6 +19,9 @@ type PaymentService interface {
 	GetPaymentsByUser(ctx context.Context, userID uuid.UUID, page, limit int) ([]*entities.Payment, int, error)
 	GetPaymentEvents(ctx context.Context, paymentID uuid.UUID) ([]*entities.PaymentEvent, error)
 	GetPaymentPrivacyStatus(ctx context.Context, paymentID uuid.UUID) (*entities.PaymentPrivacyStatus, error)
+	BuildRetryPrivacyRecoveryTx(ctx context.Context, paymentID uuid.UUID, onchainPaymentID string) (*entities.PaymentPrivacyRecoveryTx, error)
+	BuildClaimPrivacyRecoveryTx(ctx context.Context, paymentID uuid.UUID, onchainPaymentID string) (*entities.PaymentPrivacyRecoveryTx, error)
+	BuildRefundPrivacyRecoveryTx(ctx context.Context, paymentID uuid.UUID, onchainPaymentID string) (*entities.PaymentPrivacyRecoveryTx, error)
 }
 
 // PaymentHandler handles payment endpoints
@@ -161,4 +164,95 @@ func (h *PaymentHandler) GetPaymentPrivacyStatus(c *gin.Context) {
 	}
 
 	response.Success(c, http.StatusOK, gin.H{"privacyStatus": privacyStatus})
+}
+
+// RetryPrivacyForward builds tx payload for retryPrivacyForward(bytes32)
+// POST /api/v1/payments/:id/privacy/retry
+func (h *PaymentHandler) RetryPrivacyForward(c *gin.Context) {
+	id, ok := parsePaymentIDParam(c)
+	if !ok {
+		return
+	}
+
+	var req entities.PaymentPrivacyRecoveryRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, domainerrors.BadRequest(err.Error()))
+		return
+	}
+
+	txData, err := h.paymentUsecase.BuildRetryPrivacyRecoveryTx(c.Request.Context(), id, req.OnchainPaymentID)
+	if err != nil {
+		if err == domainerrors.ErrNotFound {
+			response.Error(c, domainerrors.NotFound("Payment not found"))
+			return
+		}
+		response.Error(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, gin.H{"txData": txData})
+}
+
+// ClaimPrivacyEscrow builds tx payload for claimPrivacyEscrow(bytes32)
+// POST /api/v1/payments/:id/privacy/claim
+func (h *PaymentHandler) ClaimPrivacyEscrow(c *gin.Context) {
+	id, ok := parsePaymentIDParam(c)
+	if !ok {
+		return
+	}
+
+	var req entities.PaymentPrivacyRecoveryRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, domainerrors.BadRequest(err.Error()))
+		return
+	}
+
+	txData, err := h.paymentUsecase.BuildClaimPrivacyRecoveryTx(c.Request.Context(), id, req.OnchainPaymentID)
+	if err != nil {
+		if err == domainerrors.ErrNotFound {
+			response.Error(c, domainerrors.NotFound("Payment not found"))
+			return
+		}
+		response.Error(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, gin.H{"txData": txData})
+}
+
+// RefundPrivacyEscrow builds tx payload for refundPrivacyEscrow(bytes32)
+// POST /api/v1/payments/:id/privacy/refund
+func (h *PaymentHandler) RefundPrivacyEscrow(c *gin.Context) {
+	id, ok := parsePaymentIDParam(c)
+	if !ok {
+		return
+	}
+
+	var req entities.PaymentPrivacyRecoveryRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, domainerrors.BadRequest(err.Error()))
+		return
+	}
+
+	txData, err := h.paymentUsecase.BuildRefundPrivacyRecoveryTx(c.Request.Context(), id, req.OnchainPaymentID)
+	if err != nil {
+		if err == domainerrors.ErrNotFound {
+			response.Error(c, domainerrors.NotFound("Payment not found"))
+			return
+		}
+		response.Error(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, gin.H{"txData": txData})
+}
+
+func parsePaymentIDParam(c *gin.Context) (uuid.UUID, bool) {
+	idStr := c.Param("id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		response.Error(c, domainerrors.BadRequest("Invalid payment ID"))
+		return uuid.Nil, false
+	}
+	return id, true
 }

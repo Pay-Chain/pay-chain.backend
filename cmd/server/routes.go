@@ -54,6 +54,9 @@ func registerAPIV1Routes(r *gin.Engine, d routeDeps) {
 			payments.GET("", d.paymentHandler.ListPayments)
 			payments.GET("/:id/events", d.paymentHandler.GetPaymentEvents)
 			payments.GET("/:id/privacy-status", d.paymentHandler.GetPaymentPrivacyStatus)
+			payments.POST("/:id/privacy/retry", d.paymentHandler.RetryPrivacyForward)
+			payments.POST("/:id/privacy/claim", d.paymentHandler.ClaimPrivacyEscrow)
+			payments.POST("/:id/privacy/refund", d.paymentHandler.RefundPrivacyEscrow)
 		}
 
 		// Payment Request routes (protected for merchants)

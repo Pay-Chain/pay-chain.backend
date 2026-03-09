@@ -35,6 +35,17 @@ const (
 	PrivacyLifecycleSettledToStealth      = "privacy_settled_to_stealth"
 	PrivacyLifecycleForwardedFinal        = "privacy_forwarded_final"
 	PrivacyLifecycleForwardFailedRetrying = "privacy_forward_failed_retrying"
+	PrivacyLifecycleClaimable             = "privacy_claimable"
+	PrivacyLifecycleRefundable            = "privacy_refundable"
+	PrivacyLifecycleResolved              = "privacy_resolved"
+)
+
+type PrivacyRecoveryAction string
+
+const (
+	PrivacyRecoveryActionRetry  PrivacyRecoveryAction = "retry"
+	PrivacyRecoveryActionClaim  PrivacyRecoveryAction = "claim"
+	PrivacyRecoveryActionRefund PrivacyRecoveryAction = "refund"
 )
 
 // Payment represents a payment entity
@@ -191,6 +202,24 @@ type PaymentPrivacyStatus struct {
 	IsPrivacyCandidate bool      `json:"isPrivacyCandidate"`
 	Signals            []string  `json:"signals,omitempty"`
 	Reason             string    `json:"reason,omitempty"`
+}
+
+type PaymentPrivacyRecoveryRequest struct {
+	OnchainPaymentID string `json:"onchainPaymentId,omitempty"`
+}
+
+type PaymentPrivacyRecoveryTx struct {
+	Action           PrivacyRecoveryAction `json:"action"`
+	PaymentID        uuid.UUID             `json:"paymentId"`
+	OnchainPaymentID string                `json:"onchainPaymentId"`
+	Stage            string                `json:"stage"`
+	ChainID          string                `json:"chainId"`
+	ContractAddress  string                `json:"contractAddress"`
+	Method           string                `json:"method"`
+	Calldata         string                `json:"calldata"`
+	Value            string                `json:"value"`
+	Signals          []string              `json:"signals,omitempty"`
+	Reason           string                `json:"reason,omitempty"`
 }
 
 type CreatePaymentAppInput struct {
