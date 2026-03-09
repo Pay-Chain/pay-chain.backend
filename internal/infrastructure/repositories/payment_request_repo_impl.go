@@ -7,8 +7,8 @@ import (
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
-	"pay-chain.backend/internal/domain/entities"
-	"pay-chain.backend/internal/infrastructure/models"
+	"payment-kita.backend/internal/domain/entities"
+	"payment-kita.backend/internal/infrastructure/models"
 )
 
 // PaymentRequestRepositoryImpl implements PaymentRequestRepository

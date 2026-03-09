@@ -11,10 +11,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
-	"pay-chain.backend/internal/domain/entities"
-	domainerrors "pay-chain.backend/internal/domain/errors"
-	"pay-chain.backend/internal/usecases"
-	"pay-chain.backend/pkg/utils"
+	"payment-kita.backend/internal/domain/entities"
+	domainerrors "payment-kita.backend/internal/domain/errors"
+	"payment-kita.backend/internal/usecases"
+	"payment-kita.backend/pkg/utils"
 )
 
 type cfgChainRepoStub struct {

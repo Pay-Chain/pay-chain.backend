@@ -52,7 +52,7 @@ func TestRegisterHealthRoute(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if body["status"] != "ok" || body["service"] != "pay-chain-backend" || body["version"] != "0.2.0" {
+	if body["status"] != "ok" || body["service"] != "payment-kita-backend" || body["version"] != "0.2.0" {
 		t.Fatalf("unexpected health payload: %+v", body)
 	}
 }

@@ -12,8 +12,8 @@ import (
 	"github.com/google/uuid"
 	goredis "github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
-	"pay-chain.backend/pkg/jwt"
-	"pay-chain.backend/pkg/redis"
+	"payment-kita.backend/pkg/jwt"
+	"payment-kita.backend/pkg/redis"
 )
 
 func TestAuthMiddleware_SessionBranches(t *testing.T) {

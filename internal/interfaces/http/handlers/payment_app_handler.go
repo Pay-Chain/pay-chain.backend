@@ -2,10 +2,11 @@ package handlers
 
 import (
 	"context"
-	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"pay-chain.backend/internal/domain/entities"
+	domainerrors "payment-kita.backend/internal/domain/errors"
+	"payment-kita.backend/internal/domain/entities"
+	"payment-kita.backend/internal/interfaces/http/response"
 )
 
 type PaymentAppService interface {
@@ -26,7 +27,7 @@ func NewPaymentAppHandler(paymentAppUsecase PaymentAppService) *PaymentAppHandle
 func (h *PaymentAppHandler) CreatePaymentApp(c *gin.Context) {
 	var input entities.CreatePaymentAppInput
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		response.Error(c, domainerrors.BadRequest(err.Error()))
 		return
 	}
 
@@ -34,11 +35,11 @@ func (h *PaymentAppHandler) CreatePaymentApp(c *gin.Context) {
 	// resolves User logic based on `SenderWalletAddress` in the input.
 	// DualAuthMiddleware ensures the request is authenticated/authorized to reach here.
 
-	response, err := h.paymentAppUsecase.CreatePaymentApp(c.Request.Context(), &input)
+	result, err := h.paymentAppUsecase.CreatePaymentApp(c.Request.Context(), &input)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		response.Error(c, err)
 		return
 	}
 
-	c.JSON(http.StatusCreated, response)
+	response.Success(c, 201, result)
 }

@@ -15,11 +15,11 @@ func TestOnchainAdapterUsecase_CallHelpers_DecodeErrorMatrix(t *testing.T) {
 	addr := common.HexToAddress("0x1111111111111111111111111111111111111111").Hex()
 
 	client := newTestEVMClient(t, []string{"0x"})
-	_, err := u.callHasAdapter(ctx, client, addr, FallbackPayChainRouterAdminABI, dest, 0)
+	_, err := u.callHasAdapter(ctx, client, addr, FallbackPaymentKitaRouterAdminABI, dest, 0)
 	require.Error(t, err)
 
 	client = newTestEVMClient(t, []string{"0x"})
-	_, err = u.callGetAdapter(ctx, client, addr, FallbackPayChainRouterAdminABI, dest, 0)
+	_, err = u.callGetAdapter(ctx, client, addr, FallbackPaymentKitaRouterAdminABI, dest, 0)
 	require.Error(t, err)
 
 	client = newTestEVMClient(t, []string{"0x"})

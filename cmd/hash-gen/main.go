@@ -5,7 +5,7 @@ import (
 	"log"
 	"os"
 
-	"pay-chain.backend/pkg/crypto"
+	"payment-kita.backend/pkg/crypto"
 )
 
 var (

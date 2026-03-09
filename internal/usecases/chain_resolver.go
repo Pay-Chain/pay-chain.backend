@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"pay-chain.backend/internal/domain/entities"
-	"pay-chain.backend/internal/domain/repositories"
+	"payment-kita.backend/internal/domain/entities"
+	"payment-kita.backend/internal/domain/repositories"
 )
 
 type ChainResolver struct {

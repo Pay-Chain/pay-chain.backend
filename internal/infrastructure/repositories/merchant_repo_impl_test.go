@@ -8,8 +8,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"github.com/volatiletech/null/v8"
-	"pay-chain.backend/internal/domain/entities"
-	domainerrors "pay-chain.backend/internal/domain/errors"
+	"payment-kita.backend/internal/domain/entities"
+	domainerrors "payment-kita.backend/internal/domain/errors"
 )
 
 func TestMerchantRepository_CreateGetUpdateStatusDelete(t *testing.T) {

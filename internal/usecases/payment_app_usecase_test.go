@@ -8,8 +8,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	"pay-chain.backend/internal/domain/entities"
-	"pay-chain.backend/internal/usecases"
+	"payment-kita.backend/internal/domain/entities"
+	"payment-kita.backend/internal/usecases"
 )
 
 func TestPaymentAppUsecase_CreatePaymentApp_InvalidSourceChain(t *testing.T) {
@@ -31,6 +31,56 @@ func TestPaymentAppUsecase_CreatePaymentApp_InvalidSourceChain(t *testing.T) {
 		SenderWalletAddress: "0xabc",
 		ReceiverAddress:     "0xdef",
 	})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid source chain")
+}
+
+func TestPaymentAppUsecase_CreatePaymentApp_InvalidBridgeOption(t *testing.T) {
+	mockUserRepo := new(MockUserRepository)
+	mockWalletRepo := new(MockWalletRepository)
+	mockChainRepo := new(MockChainRepository)
+
+	uc := usecases.NewPaymentAppUsecase(nil, mockUserRepo, mockWalletRepo, mockChainRepo)
+	bridgeOption := uint8(9)
+
+	_, err := uc.CreatePaymentApp(context.Background(), &entities.CreatePaymentAppInput{
+		SourceChainID:       "eip155:8453",
+		DestChainID:         "eip155:137",
+		SourceTokenAddress:  "0x1",
+		DestTokenAddress:    "0x2",
+		Amount:              "1",
+		Decimals:            6,
+		SenderWalletAddress: "0xabc",
+		ReceiverAddress:     "0xdef",
+		BridgeOption:        &bridgeOption,
+	})
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid bridge option")
+}
+
+func TestPaymentAppUsecase_CreatePaymentApp_PrivacyModeAutoFillsPrivacyFields(t *testing.T) {
+	mockUserRepo := new(MockUserRepository)
+	mockWalletRepo := new(MockWalletRepository)
+	mockChainRepo := new(MockChainRepository)
+
+	uc := usecases.NewPaymentAppUsecase(nil, mockUserRepo, mockWalletRepo, mockChainRepo)
+	mode := "privacy"
+	mockChainRepo.On("GetByChainID", context.Background(), "8453").Return(nil, errors.New("not found")).Maybe()
+	mockChainRepo.On("GetByChainID", context.Background(), "eip155:8453").Return(nil, errors.New("not found")).Maybe()
+
+	_, err := uc.CreatePaymentApp(context.Background(), &entities.CreatePaymentAppInput{
+		SourceChainID:       "eip155:8453",
+		DestChainID:         "eip155:137",
+		SourceTokenAddress:  "0x1",
+		DestTokenAddress:    "0x2",
+		Amount:              "1",
+		Decimals:            6,
+		SenderWalletAddress: "0xabc",
+		ReceiverAddress:     "0xdef",
+		Mode:                &mode,
+	})
+
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid source chain")
 }

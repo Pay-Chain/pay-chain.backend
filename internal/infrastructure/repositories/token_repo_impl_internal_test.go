@@ -8,8 +8,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"github.com/volatiletech/null/v8"
-	"pay-chain.backend/internal/domain/entities"
-	"pay-chain.backend/internal/infrastructure/models"
+	"payment-kita.backend/internal/domain/entities"
+	"payment-kita.backend/internal/infrastructure/models"
 )
 
 func TestTokenRepository_ToEntityAndToModel_InternalBranches(t *testing.T) {

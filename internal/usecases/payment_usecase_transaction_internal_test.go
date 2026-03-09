@@ -7,9 +7,9 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
-	"pay-chain.backend/internal/domain/entities"
-	domainerrors "pay-chain.backend/internal/domain/errors"
-	"pay-chain.backend/internal/infrastructure/blockchain"
+	"payment-kita.backend/internal/domain/entities"
+	domainerrors "payment-kita.backend/internal/domain/errors"
+	"payment-kita.backend/internal/infrastructure/blockchain"
 )
 
 func TestPaymentUsecase_BuildTransactionData_Branches(t *testing.T) {
@@ -130,7 +130,9 @@ func TestPaymentUsecase_BuildTransactionData_Branches(t *testing.T) {
 		out, err := u.buildTransactionData(payment, contract)
 		require.Nil(t, out)
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "failed to resolve bridge fee quote")
+		var appErr *domainerrors.AppError
+		require.ErrorAs(t, err, &appErr)
+		require.Contains(t, appErr.Message, "failed to resolve bridge fee quote")
 	})
 
 	t.Run("evm cross chain invalid source amount", func(t *testing.T) {
@@ -153,7 +155,9 @@ func TestPaymentUsecase_BuildTransactionData_Branches(t *testing.T) {
 		out, err := u.buildTransactionData(payment, contract)
 		require.Nil(t, out)
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "invalid source amount for bridge fee quote")
+		var appErr *domainerrors.AppError
+		require.ErrorAs(t, err, &appErr)
+		require.Contains(t, appErr.Message, "invalid source amount for bridge fee quote")
 	})
 
 	t.Run("evm chain with unknown network still returns payload", func(t *testing.T) {

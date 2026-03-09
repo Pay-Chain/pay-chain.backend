@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -14,7 +15,7 @@ func generatePasswordHash(password string, cost int) (string, error) {
 }
 
 func main() {
-	password := "AdminPayChain2026!"
+	password := "AdminPaymentKita2026!"
 	hash, _ := generatePasswordHash(password, 14)
 	fmt.Println(hash)
 }

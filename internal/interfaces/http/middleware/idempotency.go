@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"pay-chain.backend/pkg/redis"
+	"payment-kita.backend/pkg/redis"
 )
 
 const (

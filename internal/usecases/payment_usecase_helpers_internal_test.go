@@ -8,7 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
-	"pay-chain.backend/internal/domain/entities"
+	"payment-kita.backend/internal/domain/entities"
 )
 
 func TestPaymentUsecase_Helpers(t *testing.T) {
@@ -114,33 +114,8 @@ func TestPaymentUsecase_BuildHex_HookErrorBranches(t *testing.T) {
 			SourceAmount:       "1000",
 		}
 
-		call := 0
 		newABIType = func(string, string, []abi.ArgumentMarshaling) (abi.Type, error) {
-			call++
-			switch call {
-			case 1:
-				return origNewType("bytes", "", nil)
-			case 2:
-				return abi.Type{}, errors.New("address type failed")
-			default:
-				return origNewType("uint256", "", nil)
-			}
-		}
-		assert.Empty(t, u.buildEvmPaymentHex(basePayment, "eip155:8453", big.NewInt(0)))
-
-		call = 0
-		newABIType = func(string, string, []abi.ArgumentMarshaling) (abi.Type, error) {
-			call++
-			switch call {
-			case 1:
-				return origNewType("bytes", "", nil)
-			case 2:
-				return origNewType("address", "", nil)
-			case 3:
-				return abi.Type{}, errors.New("uint type failed")
-			default:
-				return origNewType("bytes", "", nil)
-			}
+			return abi.Type{}, errors.New("address type failed")
 		}
 		assert.Empty(t, u.buildEvmPaymentHex(basePayment, "eip155:8453", big.NewInt(0)))
 	})

@@ -12,7 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/require"
-	"pay-chain.backend/internal/infrastructure/blockchain"
+	"payment-kita.backend/internal/infrastructure/blockchain"
 )
 
 type rpcResponse struct {

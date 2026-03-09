@@ -12,8 +12,8 @@ import (
 	"github.com/google/uuid"
 	goredis "github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
-	"pay-chain.backend/pkg/jwt"
-	"pay-chain.backend/pkg/redis"
+	"payment-kita.backend/pkg/jwt"
+	"payment-kita.backend/pkg/redis"
 )
 
 func TestAuthMiddleware_SessionAndBearerBranchMatrix(t *testing.T) {
@@ -34,7 +34,7 @@ func TestAuthMiddleware_SessionAndBearerBranchMatrix(t *testing.T) {
 	jwtService := jwt.NewJWTService("secret", time.Minute, time.Hour)
 
 	userID := uuid.New()
-	pair, err := jwtService.GenerateTokenPair(userID, "matrix@paychain.io", "USER")
+	pair, err := jwtService.GenerateTokenPair(userID, "matrix@paymentkita.io", "USER")
 	require.NoError(t, err)
 
 	// session with empty access token to force bearer fallback when non-strict.
@@ -107,9 +107,9 @@ func TestAuthMiddleware_SessionTokenPrecedenceOverBearer(t *testing.T) {
 	require.NoError(t, err)
 
 	userID := uuid.New()
-	sessionPair, err := jwtService.GenerateTokenPair(userID, "session@paychain.io", "USER")
+	sessionPair, err := jwtService.GenerateTokenPair(userID, "session@paymentkita.io", "USER")
 	require.NoError(t, err)
-	bearerPair, err := jwtService.GenerateTokenPair(uuid.New(), "bearer@paychain.io", "USER")
+	bearerPair, err := jwtService.GenerateTokenPair(uuid.New(), "bearer@paymentkita.io", "USER")
 	require.NoError(t, err)
 
 	require.NoError(t, sessionStore.CreateSession(t.Context(), "sid-precedence", &redis.SessionData{
@@ -150,9 +150,9 @@ func TestAuthMiddleware_SessionInvalidToken_NoBearerFallback(t *testing.T) {
 	require.NoError(t, err)
 
 	userID := uuid.New()
-	sessionPair, err := jwtService.GenerateTokenPair(userID, "session@paychain.io", "USER")
+	sessionPair, err := jwtService.GenerateTokenPair(userID, "session@paymentkita.io", "USER")
 	require.NoError(t, err)
-	bearerPair, err := jwtService.GenerateTokenPair(uuid.New(), "bearer@paychain.io", "USER")
+	bearerPair, err := jwtService.GenerateTokenPair(uuid.New(), "bearer@paymentkita.io", "USER")
 	require.NoError(t, err)
 
 	require.NoError(t, sessionStore.CreateSession(t.Context(), "sid-invalid-precedence", &redis.SessionData{

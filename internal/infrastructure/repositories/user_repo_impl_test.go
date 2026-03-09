@@ -7,8 +7,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
-	"pay-chain.backend/internal/domain/entities"
-	domainerrors "pay-chain.backend/internal/domain/errors"
+	"payment-kita.backend/internal/domain/entities"
+	domainerrors "payment-kita.backend/internal/domain/errors"
 )
 
 func TestUserRepository_CRUDAndList(t *testing.T) {
@@ -20,7 +20,7 @@ func TestUserRepository_CRUDAndList(t *testing.T) {
 	now := time.Now()
 	u := &entities.User{
 		ID:           uuid.New(),
-		Email:        "a@paychain.io",
+		Email:        "a@paymentkita.io",
 		Name:         "Alice",
 		PasswordHash: "hash",
 		Role:         entities.UserRoleAdmin,
@@ -66,7 +66,7 @@ func TestUserRepository_NotFoundBranches(t *testing.T) {
 	_, err := repo.GetByID(ctx, id)
 	require.ErrorIs(t, err, domainerrors.ErrNotFound)
 
-	_, err = repo.GetByEmail(ctx, "missing@paychain.io")
+	_, err = repo.GetByEmail(ctx, "missing@paymentkita.io")
 	require.ErrorIs(t, err, domainerrors.ErrNotFound)
 
 	err = repo.Update(ctx, &entities.User{ID: id, Name: "x", Role: entities.UserRoleUser, KYCStatus: entities.KYCNotStarted})
@@ -88,7 +88,7 @@ func TestUserRepository_Update_WithKYCVerifiedAt_AndDBErrorBranch(t *testing.T) 
 	now := time.Now()
 	u := &entities.User{
 		ID:           uuid.New(),
-		Email:        "b@paychain.io",
+		Email:        "b@paymentkita.io",
 		Name:         "Bob",
 		PasswordHash: "hash",
 		Role:         entities.UserRoleUser,
@@ -123,7 +123,7 @@ func TestUserRepository_DBErrorBranches(t *testing.T) {
 	_, err := repo.GetByID(ctx, uuid.New())
 	require.Error(t, err)
 
-	_, err = repo.GetByEmail(ctx, "x@paychain.io")
+	_, err = repo.GetByEmail(ctx, "x@paymentkita.io")
 	require.Error(t, err)
 
 	err = repo.UpdatePassword(ctx, uuid.New(), "hash")

@@ -7,7 +7,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/stretchr/testify/assert"
-	"pay-chain.backend/internal/domain/entities"
+	"payment-kita.backend/internal/domain/entities"
 )
 
 func TestPaymentUsecase_BuildEvmPaymentHex_SlippageSelector(t *testing.T) {
@@ -20,20 +20,18 @@ func TestPaymentUsecase_BuildEvmPaymentHex_SlippageSelector(t *testing.T) {
 		SourceAmount:       "1000",
 	}
 
-	// Case 1: No slippage (minAmountOut == 0) -> Standard CreatePaymentSelector
+	// Case 1: No slippage (minAmountOut == 0)
 	hex1 := u.buildEvmPaymentHex(p, "eip155:42161", big.NewInt(0))
 	assert.NotEmpty(t, hex1)
-	// CreatePaymentSelector = 0x83f7cae3
-	assert.True(t, strings.HasPrefix(hex1, "0x83f7cae3"), "Expected standard selector 0x83f7cae3, got %s", hex1[:10])
+	assert.True(t, strings.HasPrefix(hex1, CreatePaymentSelector), "Expected selector %s, got %s", CreatePaymentSelector, hex1[:10])
 
-	// Case 2: With slippage (minAmountOut > 0) -> CreatePaymentWithSlippageSelector
+	// Case 2: With slippage (minAmountOut > 0) still uses V2 createPayment selector.
 	hex2 := u.buildEvmPaymentHex(p, "eip155:42161", big.NewInt(900))
 	assert.NotEmpty(t, hex2)
-	// CreatePaymentWithSlippageSelector = 0xb28c3d9b
-	assert.True(t, strings.HasPrefix(hex2, "0xb28c3d9b"), "Expected slippage selector 0xb28c3d9b, got %s", hex2[:10])
+	assert.True(t, strings.HasPrefix(hex2, CreatePaymentSelector), "Expected selector %s, got %s", CreatePaymentSelector, hex2[:10])
 
-	// Verify length difference (slippage hex should be longer by 32 bytes for minAmountOut)
+	// V2 payload size should be stable because minDestAmountOut is always part of tuple.
 	bytes1, _ := hexutil.Decode(hex1)
 	bytes2, _ := hexutil.Decode(hex2)
-	assert.Equal(t, len(bytes1)+32, len(bytes2), "Slippage payload should have one more uint256 argument")
+	assert.Equal(t, len(bytes1), len(bytes2), "V2 payload length should be consistent")
 }

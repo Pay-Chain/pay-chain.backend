@@ -8,7 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
-	domainerrors "pay-chain.backend/internal/domain/errors"
+	domainerrors "payment-kita.backend/internal/domain/errors"
 )
 
 func TestSuccess(t *testing.T) {

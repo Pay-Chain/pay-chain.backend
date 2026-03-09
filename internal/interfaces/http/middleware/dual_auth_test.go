@@ -23,11 +23,11 @@ import (
 	goredis "github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	"pay-chain.backend/internal/domain/entities"
-	"pay-chain.backend/internal/interfaces/http/middleware"
-	"pay-chain.backend/internal/usecases"
-	"pay-chain.backend/pkg/jwt"
-	redispkg "pay-chain.backend/pkg/redis"
+	"payment-kita.backend/internal/domain/entities"
+	"payment-kita.backend/internal/interfaces/http/middleware"
+	"payment-kita.backend/internal/usecases"
+	"payment-kita.backend/pkg/jwt"
+	redispkg "payment-kita.backend/pkg/redis"
 )
 
 type errorReadCloser struct{}

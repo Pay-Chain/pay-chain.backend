@@ -5,9 +5,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	domainerrors "pay-chain.backend/internal/domain/errors"
-	"pay-chain.backend/internal/domain/repositories"
-	"pay-chain.backend/internal/interfaces/http/response"
+	domainerrors "payment-kita.backend/internal/domain/errors"
+	"payment-kita.backend/internal/domain/repositories"
+	"payment-kita.backend/internal/interfaces/http/response"
 )
 
 // AdminHandler handles admin endpoints

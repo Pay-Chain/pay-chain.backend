@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"pay-chain.backend/internal/domain/entities"
+	"payment-kita.backend/internal/domain/entities"
 )
 
 func TestBuildBridgeOrderFromPolicy_Strict(t *testing.T) {

@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"pay-chain.backend/internal/config"
+	"payment-kita.backend/internal/config"
 )
 
 func TestNewConnection_PingFailure(t *testing.T) {

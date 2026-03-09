@@ -14,9 +14,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	"pay-chain.backend/internal/domain/entities"
-	"pay-chain.backend/internal/infrastructure/blockchain"
-	uc "pay-chain.backend/internal/usecases"
+	"payment-kita.backend/internal/domain/entities"
+	"payment-kita.backend/internal/infrastructure/blockchain"
+	uc "payment-kita.backend/internal/usecases"
 )
 
 type rpcReqOA struct {
@@ -162,7 +162,10 @@ func TestOnchainAdapterUsecase_GetStatus_AllBridgeAdapters(t *testing.T) {
 	]`)
 	ccipABI := mustParseABI(t, `[
 		{"inputs":[{"internalType":"string","name":"chainId","type":"string"}],"name":"chainSelectors","outputs":[{"internalType":"uint64","name":"","type":"uint64"}],"stateMutability":"view","type":"function"},
-		{"inputs":[{"internalType":"string","name":"chainId","type":"string"}],"name":"destinationAdapters","outputs":[{"internalType":"bytes","name":"","type":"bytes"}],"stateMutability":"view","type":"function"}
+		{"inputs":[{"internalType":"string","name":"chainId","type":"string"}],"name":"destinationAdapters","outputs":[{"internalType":"bytes","name":"","type":"bytes"}],"stateMutability":"view","type":"function"},
+		{"inputs":[{"internalType":"string","name":"chainId","type":"string"}],"name":"destinationGasLimits","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+		{"inputs":[{"internalType":"string","name":"chainId","type":"string"}],"name":"destinationExtraArgs","outputs":[{"internalType":"bytes","name":"","type":"bytes"}],"stateMutability":"view","type":"function"},
+		{"inputs":[{"internalType":"string","name":"chainId","type":"string"}],"name":"destinationFeeTokens","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"}
 	]`)
 	layerZeroABI := mustParseABI(t, `[
 		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"}],"name":"isRouteConfigured","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},
@@ -193,6 +196,9 @@ func TestOnchainAdapterUsecase_GetStatus_AllBridgeAdapters(t *testing.T) {
 		encodeOut(t, hyperABI.Methods["destinationContracts"], hyperDest),
 		encodeOut(t, ccipABI.Methods["chainSelectors"], uint64(4949039107694359620)),
 		encodeOut(t, ccipABI.Methods["destinationAdapters"], ccipDest),
+		encodeOut(t, ccipABI.Methods["destinationGasLimits"], common.Big1),
+		encodeOut(t, ccipABI.Methods["destinationExtraArgs"], []byte{0x97, 0x10, 0xa9, 0xd0}),
+		encodeOut(t, ccipABI.Methods["destinationFeeTokens"], common.HexToAddress("0x0000000000000000000000000000000000000000")),
 		encodeOut(t, layerZeroABI.Methods["isRouteConfigured"], true),
 		encodeOut(t, layerZeroABI.Methods["dstEids"], uint32(30110)),
 		encodeOut(t, layerZeroABI.Methods["peers"], lzPeer),

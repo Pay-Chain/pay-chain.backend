@@ -1,4 +1,4 @@
-module pay-chain.backend
+module payment-kita.backend
 
 go 1.24.0
 

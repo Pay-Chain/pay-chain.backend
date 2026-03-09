@@ -2,13 +2,15 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
-	domainerrors "pay-chain.backend/internal/domain/errors"
-	"pay-chain.backend/internal/interfaces/http/response"
-	"pay-chain.backend/internal/usecases"
+	domainerrors "payment-kita.backend/internal/domain/errors"
+	"payment-kita.backend/internal/interfaces/http/response"
+	"payment-kita.backend/internal/usecases"
 )
 
 type OnchainAdapterHandler struct {
@@ -19,8 +21,10 @@ type onchainAdapterService interface {
 	RegisterAdapter(ctx context.Context, sourceChainInput, destChainInput string, bridgeType uint8, adapterAddress string) (string, error)
 	SetDefaultBridgeType(ctx context.Context, sourceChainInput, destChainInput string, bridgeType uint8) (string, error)
 	SetHyperbridgeConfig(ctx context.Context, sourceChainInput, destChainInput string, stateMachineIDHex, destinationContractHex string) (string, []string, error)
-	SetCCIPConfig(ctx context.Context, sourceChainInput, destChainInput string, chainSelector *uint64, destinationAdapterHex string) (string, []string, error)
+	SetCCIPConfig(ctx context.Context, input usecases.CCIPConfigInput) (string, []string, error)
 	SetLayerZeroConfig(ctx context.Context, sourceChainInput, destChainInput string, dstEid *uint32, peerHex, optionsHex string) (string, []string, error)
+	ConfigureLayerZeroE2E(ctx context.Context, input usecases.LayerZeroE2EConfigureInput) (*usecases.LayerZeroE2EConfigureResult, error)
+	GetLayerZeroE2EStatus(ctx context.Context, input usecases.LayerZeroE2EStatusInput) (*usecases.LayerZeroE2EStatusResult, error)
 	GenericInteract(ctx context.Context, sourceChainInput, contractAddress, method, abiStr string, args []interface{}) (interface{}, bool, error)
 }
 
@@ -124,23 +128,51 @@ func (h *OnchainAdapterHandler) SetHyperbridgeConfig(c *gin.Context) {
 
 func (h *OnchainAdapterHandler) SetCCIPConfig(c *gin.Context) {
 	var input struct {
-		SourceChainID         string  `json:"sourceChainId" binding:"required"`
-		DestChainID           string  `json:"destChainId" binding:"required"`
-		ChainSelector         *uint64 `json:"chainSelector"`
-		DestinationAdapterHex string  `json:"destinationAdapterHex"`
+		SourceChainID              string  `json:"sourceChainId" binding:"required"`
+		DestChainID                string  `json:"destChainId" binding:"required"`
+		ChainSelectorRaw           any     `json:"chainSelector"`
+		DestinationAdapterHex      string  `json:"destinationAdapterHex"`
+		DestinationGasLimitRaw     any     `json:"destinationGasLimit"`
+		DestinationExtraArgsHex    string  `json:"destinationExtraArgsHex"`
+		DestinationFeeTokenAddress string  `json:"destinationFeeTokenAddress"`
+		DestinationReceiverAddress string  `json:"destinationReceiverAddress"`
+		SourceChainSelectorRaw     any     `json:"sourceChainSelector"`
+		TrustedSenderHex           string  `json:"trustedSenderHex"`
+		AllowSourceChain           *bool   `json:"allowSourceChain"`
 	}
 	if err := c.ShouldBindJSON(&input); err != nil {
 		response.Error(c, domainerrors.BadRequest(err.Error()))
 		return
 	}
+	chainSelector, err := parseOptionalUint64(input.ChainSelectorRaw)
+	if err != nil {
+		response.Error(c, domainerrors.BadRequest("invalid chainSelector"))
+		return
+	}
+	destinationGasLimit, err := parseOptionalUint64(input.DestinationGasLimitRaw)
+	if err != nil {
+		response.Error(c, domainerrors.BadRequest("invalid destinationGasLimit"))
+		return
+	}
+	sourceChainSelector, err := parseOptionalUint64(input.SourceChainSelectorRaw)
+	if err != nil {
+		response.Error(c, domainerrors.BadRequest("invalid sourceChainSelector"))
+		return
+	}
 
-	adapter, txHashes, err := h.usecase.SetCCIPConfig(
-		c.Request.Context(),
-		input.SourceChainID,
-		input.DestChainID,
-		input.ChainSelector,
-		input.DestinationAdapterHex,
-	)
+	adapter, txHashes, err := h.usecase.SetCCIPConfig(c.Request.Context(), usecases.CCIPConfigInput{
+		SourceChainInput:        input.SourceChainID,
+		DestChainInput:          input.DestChainID,
+		ChainSelector:           chainSelector,
+		DestinationAdapterHex:   input.DestinationAdapterHex,
+		DestinationGasLimit:     destinationGasLimit,
+		DestinationExtraArgsHex: input.DestinationExtraArgsHex,
+		DestinationFeeToken:     input.DestinationFeeTokenAddress,
+		DestinationReceiver:     input.DestinationReceiverAddress,
+		SourceChainSelector:     sourceChainSelector,
+		TrustedSenderHex:        input.TrustedSenderHex,
+		AllowSourceChain:        input.AllowSourceChain,
+	})
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -151,6 +183,41 @@ func (h *OnchainAdapterHandler) SetCCIPConfig(c *gin.Context) {
 		"txHashes":       txHashes,
 		"destChainId":    input.DestChainID,
 	})
+}
+
+func parseOptionalUint64(raw any) (*uint64, error) {
+	if raw == nil {
+		return nil, nil
+	}
+	switch v := raw.(type) {
+	case string:
+		s := strings.TrimSpace(v)
+		if s == "" {
+			return nil, nil
+		}
+		n, err := strconv.ParseUint(s, 10, 64)
+		if err != nil {
+			return nil, err
+		}
+		out := uint64(n)
+		return &out, nil
+	case float64:
+		// JSON numbers decoded into interface{} become float64 by default.
+		if v < 0 || v > float64(^uint64(0)) || v != float64(uint64(v)) {
+			return nil, strconv.ErrRange
+		}
+		out := uint64(v)
+		return &out, nil
+	case json.Number:
+		n, err := strconv.ParseUint(strings.TrimSpace(v.String()), 10, 64)
+		if err != nil {
+			return nil, err
+		}
+		out := uint64(n)
+		return &out, nil
+	default:
+		return nil, strconv.ErrSyntax
+	}
 }
 
 func (h *OnchainAdapterHandler) SetLayerZeroConfig(c *gin.Context) {
@@ -184,6 +251,99 @@ func (h *OnchainAdapterHandler) SetLayerZeroConfig(c *gin.Context) {
 		"txHashes":       txHashes,
 		"destChainId":    input.DestChainID,
 	})
+}
+
+func (h *OnchainAdapterHandler) ConfigureLayerZeroE2E(c *gin.Context) {
+	var input struct {
+		SourceChainID string `json:"sourceChainId" binding:"required"`
+		DestChainID   string `json:"destChainId" binding:"required"`
+		Source        struct {
+			RegisterAdapterIfMissing bool   `json:"registerAdapterIfMissing"`
+			SetDefaultBridgeType     bool   `json:"setDefaultBridgeType"`
+			SenderAddress            string `json:"senderAddress"`
+			DstEID                   uint32 `json:"dstEid"`
+			DstPeerHex               string `json:"dstPeerHex"`
+			OptionsHex               string `json:"optionsHex"`
+			RegisterDelegate         bool   `json:"registerDelegate"`
+			AuthorizeVaultSpender    bool   `json:"authorizeVaultSpender"`
+		} `json:"source"`
+		Destination struct {
+			ReceiverAddress         string `json:"receiverAddress"`
+			SrcEID                  uint32 `json:"srcEid"`
+			SrcSenderHex            string `json:"srcSenderHex"`
+			VaultAddress            string `json:"vaultAddress"`
+			GatewayAddress          string `json:"gatewayAddress"`
+			AuthorizeVaultSpender   bool   `json:"authorizeVaultSpender"`
+			AuthorizeGatewayAdapter bool   `json:"authorizeGatewayAdapter"`
+		} `json:"destination"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		response.Error(c, domainerrors.BadRequest(err.Error()))
+		return
+	}
+
+	result, err := h.usecase.ConfigureLayerZeroE2E(c.Request.Context(), usecases.LayerZeroE2EConfigureInput{
+		SourceChainInput: input.SourceChainID,
+		DestChainInput:   input.DestChainID,
+		Source: usecases.LayerZeroConfigureSourceInput{
+			RegisterAdapterIfMissing: input.Source.RegisterAdapterIfMissing,
+			SetDefaultBridgeType:     input.Source.SetDefaultBridgeType,
+			SenderAddress:            input.Source.SenderAddress,
+			DstEID:                   input.Source.DstEID,
+			DstPeerHex:               input.Source.DstPeerHex,
+			OptionsHex:               input.Source.OptionsHex,
+			RegisterDelegate:         input.Source.RegisterDelegate,
+			AuthorizeVaultSpender:    input.Source.AuthorizeVaultSpender,
+		},
+		Destination: usecases.LayerZeroConfigureDestinationInput{
+			ReceiverAddress:         input.Destination.ReceiverAddress,
+			SrcEID:                  input.Destination.SrcEID,
+			SrcSenderHex:            input.Destination.SrcSenderHex,
+			VaultAddress:            input.Destination.VaultAddress,
+			GatewayAddress:          input.Destination.GatewayAddress,
+			AuthorizeVaultSpender:   input.Destination.AuthorizeVaultSpender,
+			AuthorizeGatewayAdapter: input.Destination.AuthorizeGatewayAdapter,
+		},
+	})
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, http.StatusOK, gin.H{"result": result})
+}
+
+func (h *OnchainAdapterHandler) GetLayerZeroE2EStatus(c *gin.Context) {
+	sourceChainID := c.Query("sourceChainId")
+	destChainID := c.Query("destChainId")
+	if sourceChainID == "" || destChainID == "" {
+		response.Error(c, domainerrors.BadRequest("sourceChainId and destChainId are required"))
+		return
+	}
+
+	srcEID := uint32(0)
+	if raw := c.Query("destinationSrcEid"); raw != "" {
+		parsed, err := strconv.ParseUint(raw, 10, 32)
+		if err != nil {
+			response.Error(c, domainerrors.BadRequest("destinationSrcEid must be uint32"))
+			return
+		}
+		srcEID = uint32(parsed)
+	}
+
+	status, err := h.usecase.GetLayerZeroE2EStatus(c.Request.Context(), usecases.LayerZeroE2EStatusInput{
+		SourceChainInput:           sourceChainID,
+		DestChainInput:             destChainID,
+		DestinationReceiverAddress: c.Query("destinationReceiverAddress"),
+		DestinationSrcEID:          srcEID,
+		DestinationSrcSenderHex:    c.Query("destinationSrcSenderHex"),
+		DestinationVaultAddress:    c.Query("destinationVaultAddress"),
+		DestinationGatewayAddress:  c.Query("destinationGatewayAddress"),
+	})
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, http.StatusOK, gin.H{"status": status})
 }
 
 func (h *OnchainAdapterHandler) Interact(c *gin.Context) {

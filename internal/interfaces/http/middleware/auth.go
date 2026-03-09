@@ -9,8 +9,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"pay-chain.backend/pkg/jwt"
-	"pay-chain.backend/pkg/redis"
+	"payment-kita.backend/pkg/jwt"
+	"payment-kita.backend/pkg/redis"
 )
 
 const (

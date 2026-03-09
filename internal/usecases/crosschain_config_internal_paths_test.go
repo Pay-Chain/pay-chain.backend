@@ -12,10 +12,10 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
-	"pay-chain.backend/internal/domain/entities"
-	domainerrors "pay-chain.backend/internal/domain/errors"
-	"pay-chain.backend/internal/infrastructure/blockchain"
-	"pay-chain.backend/pkg/utils"
+	"payment-kita.backend/internal/domain/entities"
+	domainerrors "payment-kita.backend/internal/domain/errors"
+	"payment-kita.backend/internal/infrastructure/blockchain"
+	"payment-kita.backend/pkg/utils"
 )
 
 type ccChainRepoStub struct {
@@ -130,9 +130,9 @@ type rpcReqInternal struct {
 
 func buildCrosschainRPCTestServer(t *testing.T, adapter0, adapter1, adapter2 common.Address) *httptest.Server {
 	t.Helper()
-	defaultMethodID := "0x" + hex.EncodeToString(FallbackPayChainGatewayABI.Methods["defaultBridgeTypes"].ID)
-	hasMethodID := "0x" + hex.EncodeToString(FallbackPayChainRouterAdminABI.Methods["hasAdapter"].ID)
-	getMethodID := "0x" + hex.EncodeToString(FallbackPayChainRouterAdminABI.Methods["getAdapter"].ID)
+	defaultMethodID := "0x" + hex.EncodeToString(FallbackPaymentKitaGatewayABI.Methods["defaultBridgeTypes"].ID)
+	hasMethodID := "0x" + hex.EncodeToString(FallbackPaymentKitaRouterAdminABI.Methods["hasAdapter"].ID)
+	getMethodID := "0x" + hex.EncodeToString(FallbackPaymentKitaRouterAdminABI.Methods["getAdapter"].ID)
 	hyperConfiguredMethodID := "0x" + hex.EncodeToString(FallbackHyperbridgeSenderAdminABI.Methods["isChainConfigured"].ID)
 	hyperStateMachineMethodID := "0x" + hex.EncodeToString(FallbackHyperbridgeSenderAdminABI.Methods["stateMachineIds"].ID)
 	hyperDestinationMethodID := "0x" + hex.EncodeToString(FallbackHyperbridgeSenderAdminABI.Methods["destinationContracts"].ID)
@@ -170,16 +170,16 @@ func buildCrosschainRPCTestServer(t *testing.T, adapter0, adapter1, adapter2 com
 			}
 			switch methodID {
 			case defaultMethodID:
-				out, _ := FallbackPayChainGatewayABI.Methods["defaultBridgeTypes"].Outputs.Pack(uint8(0))
+				out, _ := FallbackPaymentKitaGatewayABI.Methods["defaultBridgeTypes"].Outputs.Pack(uint8(0))
 				resp["result"] = "0x" + hex.EncodeToString(out)
 			case hasMethodID:
-				unpacked, _ := FallbackPayChainRouterAdminABI.Methods["hasAdapter"].Inputs.Unpack(common.FromHex(callData)[4:])
+				unpacked, _ := FallbackPaymentKitaRouterAdminABI.Methods["hasAdapter"].Inputs.Unpack(common.FromHex(callData)[4:])
 				bridgeType, _ := unpacked[1].(uint8)
 				has := bridgeType <= 2
-				out, _ := FallbackPayChainRouterAdminABI.Methods["hasAdapter"].Outputs.Pack(has)
+				out, _ := FallbackPaymentKitaRouterAdminABI.Methods["hasAdapter"].Outputs.Pack(has)
 				resp["result"] = "0x" + hex.EncodeToString(out)
 			case getMethodID:
-				unpacked, _ := FallbackPayChainRouterAdminABI.Methods["getAdapter"].Inputs.Unpack(common.FromHex(callData)[4:])
+				unpacked, _ := FallbackPaymentKitaRouterAdminABI.Methods["getAdapter"].Inputs.Unpack(common.FromHex(callData)[4:])
 				bridgeType, _ := unpacked[1].(uint8)
 				addr := common.Address{}
 				if bridgeType == 0 {
@@ -189,7 +189,7 @@ func buildCrosschainRPCTestServer(t *testing.T, adapter0, adapter1, adapter2 com
 				} else if bridgeType == 2 {
 					addr = adapter2
 				}
-				out, _ := FallbackPayChainRouterAdminABI.Methods["getAdapter"].Outputs.Pack(addr)
+				out, _ := FallbackPaymentKitaRouterAdminABI.Methods["getAdapter"].Outputs.Pack(addr)
 				resp["result"] = "0x" + hex.EncodeToString(out)
 			case hyperConfiguredMethodID:
 				out, _ := FallbackHyperbridgeSenderAdminABI.Methods["isChainConfigured"].Outputs.Pack(true)

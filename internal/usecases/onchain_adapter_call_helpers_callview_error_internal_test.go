@@ -7,7 +7,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/require"
-	"pay-chain.backend/internal/infrastructure/blockchain"
+	"payment-kita.backend/internal/infrastructure/blockchain"
 )
 
 func TestOnchainAdapterUsecase_CallHelpers_CallViewErrorBranches(t *testing.T) {
@@ -19,15 +19,15 @@ func TestOnchainAdapterUsecase_CallHelpers_CallViewErrorBranches(t *testing.T) {
 		return nil, errors.New("call view failed")
 	})
 
-	_, err := u.callDefaultBridgeType(ctx, client, addr, FallbackPayChainGatewayABI, dest)
+	_, err := u.callDefaultBridgeType(ctx, client, addr, FallbackPaymentKitaGatewayABI, dest)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "call view failed")
 
-	_, err = u.callHasAdapter(ctx, client, addr, FallbackPayChainRouterAdminABI, dest, 0)
+	_, err = u.callHasAdapter(ctx, client, addr, FallbackPaymentKitaRouterAdminABI, dest, 0)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "call view failed")
 
-	_, err = u.callGetAdapter(ctx, client, addr, FallbackPayChainRouterAdminABI, dest, 0)
+	_, err = u.callGetAdapter(ctx, client, addr, FallbackPaymentKitaRouterAdminABI, dest, 0)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "call view failed")
 

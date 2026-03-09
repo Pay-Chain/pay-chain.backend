@@ -2,8 +2,8 @@ package main
 
 import (
 	"github.com/gin-gonic/gin"
-	"pay-chain.backend/internal/interfaces/http/handlers"
-	"pay-chain.backend/internal/interfaces/http/middleware"
+	"payment-kita.backend/internal/interfaces/http/handlers"
+	"payment-kita.backend/internal/interfaces/http/middleware"
 )
 
 type routeDeps struct {
@@ -53,6 +53,7 @@ func registerAPIV1Routes(r *gin.Engine, d routeDeps) {
 			payments.GET("/:id", d.paymentHandler.GetPayment)
 			payments.GET("", d.paymentHandler.ListPayments)
 			payments.GET("/:id/events", d.paymentHandler.GetPaymentEvents)
+			payments.GET("/:id/privacy-status", d.paymentHandler.GetPaymentPrivacyStatus)
 		}
 
 		// Payment Request routes (protected for merchants)
@@ -208,6 +209,8 @@ func registerAPIV1Routes(r *gin.Engine, d routeDeps) {
 			admin.POST("/onchain-adapters/hyperbridge-config", d.onchainAdapterHandler.SetHyperbridgeConfig)
 			admin.POST("/onchain-adapters/ccip-config", d.onchainAdapterHandler.SetCCIPConfig)
 			admin.POST("/onchain-adapters/layerzero-config", d.onchainAdapterHandler.SetLayerZeroConfig)
+			admin.POST("/onchain-adapters/layerzero-configure-e2e", d.onchainAdapterHandler.ConfigureLayerZeroE2E)
+			admin.GET("/onchain-adapters/layerzero-e2e-status", d.onchainAdapterHandler.GetLayerZeroE2EStatus)
 			admin.POST("/contracts/interact", d.onchainAdapterHandler.Interact)
 			admin.GET("/contracts/config-check", d.contractConfigAuditHandler.Check)
 			admin.GET("/contracts/:id/config-check", d.contractConfigAuditHandler.CheckByContract)

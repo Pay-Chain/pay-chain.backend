@@ -17,15 +17,15 @@ func TestOnchainAdapterUsecase_CallHelpers_UnpackErrorBranches(t *testing.T) {
 	badOut := "0x01"
 
 	client := newTestEVMClient(t, []string{badOut})
-	_, err := u.callDefaultBridgeType(ctx, client, addr, FallbackPayChainGatewayABI, dest)
+	_, err := u.callDefaultBridgeType(ctx, client, addr, FallbackPaymentKitaGatewayABI, dest)
 	require.Error(t, err)
 
 	client = newTestEVMClient(t, []string{badOut})
-	_, err = u.callHasAdapter(ctx, client, addr, FallbackPayChainRouterAdminABI, dest, 0)
+	_, err = u.callHasAdapter(ctx, client, addr, FallbackPaymentKitaRouterAdminABI, dest, 0)
 	require.Error(t, err)
 
 	client = newTestEVMClient(t, []string{badOut})
-	_, err = u.callGetAdapter(ctx, client, addr, FallbackPayChainRouterAdminABI, dest, 0)
+	_, err = u.callGetAdapter(ctx, client, addr, FallbackPaymentKitaRouterAdminABI, dest, 0)
 	require.Error(t, err)
 
 	client = newTestEVMClient(t, []string{badOut})

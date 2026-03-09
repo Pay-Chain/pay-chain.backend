@@ -14,10 +14,10 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
-	"pay-chain.backend/internal/config"
-	"pay-chain.backend/internal/domain/entities"
-	domainrepo "pay-chain.backend/internal/domain/repositories"
-	"pay-chain.backend/internal/usecases"
+	"payment-kita.backend/internal/config"
+	"payment-kita.backend/internal/domain/entities"
+	domainrepo "payment-kita.backend/internal/domain/repositories"
+	"payment-kita.backend/internal/usecases"
 )
 
 func TestParseUserID(t *testing.T) {
@@ -78,7 +78,7 @@ func TestMain_ExitsOnDBConnectionFailure(t *testing.T) {
 		"DB_PORT=1",
 		"DB_USER=postgres",
 		"DB_PASSWORD=postgres",
-		"DB_NAME=paychain",
+		"DB_NAME=paymentkita",
 		"DB_SSLMODE=disable",
 	)
 	err := cmd.Run()
@@ -270,7 +270,7 @@ func TestRunAdminAPIKey_UsesDefaultInjectedFunctionsWhenNil(t *testing.T) {
 			cfg.Database.Port = -1
 			cfg.Database.User = "postgres"
 			cfg.Database.Password = "postgres"
-			cfg.Database.DBName = "paychain"
+			cfg.Database.DBName = "paymentkita"
 			cfg.Database.SSLMode = "disable"
 			return cfg
 		},
@@ -382,7 +382,7 @@ func TestDefaultAdminAPIKeyDeps_PrepareBranch(t *testing.T) {
 	cfg.Database.Port = -1
 	cfg.Database.User = "postgres"
 	cfg.Database.Password = "postgres"
-	cfg.Database.DBName = "paychain"
+	cfg.Database.DBName = "paymentkita"
 	cfg.Database.SSLMode = "disable"
 
 	_, _, err := deps.prepare(cfg)

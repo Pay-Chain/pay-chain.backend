@@ -27,9 +27,9 @@ func TestOnchainAdapterUsecase_CallHelpers_Success(t *testing.T) {
 	lzOptions := []byte{0x01, 0x02}
 
 	client := newTestEVMClient(t, []string{
-		mustEncodeOutputFromABI(t, FallbackPayChainGatewayABI, "defaultBridgeTypes", uint8(1)),
-		mustEncodeOutputFromABI(t, FallbackPayChainRouterAdminABI, "hasAdapter", true),
-		mustEncodeOutputFromABI(t, FallbackPayChainRouterAdminABI, "getAdapter", adapterAddr),
+		mustEncodeOutputFromABI(t, FallbackPaymentKitaGatewayABI, "defaultBridgeTypes", uint8(1)),
+		mustEncodeOutputFromABI(t, FallbackPaymentKitaRouterAdminABI, "hasAdapter", true),
+		mustEncodeOutputFromABI(t, FallbackPaymentKitaRouterAdminABI, "getAdapter", adapterAddr),
 		mustEncodeOutputFromABI(t, FallbackHyperbridgeSenderAdminABI, "isChainConfigured", true),
 		mustEncodeOutputFromABI(t, FallbackHyperbridgeSenderAdminABI, "stateMachineIds", hyperBytes),
 		mustEncodeOutputFromABI(t, FallbackCCIPSenderAdminABI, "chainSelectors", uint64(12345)),
@@ -40,15 +40,15 @@ func TestOnchainAdapterUsecase_CallHelpers_Success(t *testing.T) {
 		mustEncodeOutputFromABI(t, FallbackLayerZeroSenderAdminABI, "enforcedOptions", lzOptions),
 	})
 
-	vBridge, err := u.callDefaultBridgeType(context.Background(), client, routerAddr.Hex(), FallbackPayChainGatewayABI, dest)
+	vBridge, err := u.callDefaultBridgeType(context.Background(), client, routerAddr.Hex(), FallbackPaymentKitaGatewayABI, dest)
 	require.NoError(t, err)
 	require.Equal(t, uint8(1), vBridge)
 
-	vHas, err := u.callHasAdapter(context.Background(), client, routerAddr.Hex(), FallbackPayChainRouterAdminABI, dest, 1)
+	vHas, err := u.callHasAdapter(context.Background(), client, routerAddr.Hex(), FallbackPaymentKitaRouterAdminABI, dest, 1)
 	require.NoError(t, err)
 	require.True(t, vHas)
 
-	vAdapter, err := u.callGetAdapter(context.Background(), client, routerAddr.Hex(), FallbackPayChainRouterAdminABI, dest, 1)
+	vAdapter, err := u.callGetAdapter(context.Background(), client, routerAddr.Hex(), FallbackPaymentKitaRouterAdminABI, dest, 1)
 	require.NoError(t, err)
 	require.Equal(t, adapterAddr.Hex(), vAdapter)
 
@@ -88,6 +88,6 @@ func TestOnchainAdapterUsecase_CallHelpers_Success(t *testing.T) {
 func TestOnchainAdapterUsecase_CallHelpers_DecodeError(t *testing.T) {
 	u := &OnchainAdapterUsecase{}
 	client := newTestEVMClient(t, []string{"0x"})
-	_, err := u.callDefaultBridgeType(context.Background(), client, common.Address{}.Hex(), FallbackPayChainGatewayABI, "eip155:42161")
+	_, err := u.callDefaultBridgeType(context.Background(), client, common.Address{}.Hex(), FallbackPaymentKitaGatewayABI, "eip155:42161")
 	require.Error(t, err)
 }

@@ -46,5 +46,5 @@ INSERT INTO smart_contracts (
   abi
 )
 VALUES
-  (103, 'PayChainGatewayProgramID11111111111111111', 'Solana Gateway', 'GATEWAY', '1.0.0', 'Deployer...', true, '{}'::jsonb)
+  (103, 'PaymentKitaGatewayProgramID11111111111111111', 'Solana Gateway', 'GATEWAY', '1.0.0', 'Deployer...', true, '{}'::jsonb)
 ON CONFLICT (chain_id, contract_address) DO NOTHING;

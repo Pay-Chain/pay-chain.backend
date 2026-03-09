@@ -9,8 +9,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
-	"pay-chain.backend/internal/domain/entities"
-	"pay-chain.backend/internal/infrastructure/blockchain"
+	"payment-kita.backend/internal/domain/entities"
+	"payment-kita.backend/internal/infrastructure/blockchain"
 )
 
 func TestRunEVMOnchainChecks_GatewayOrRouterMissingBranches(t *testing.T) {

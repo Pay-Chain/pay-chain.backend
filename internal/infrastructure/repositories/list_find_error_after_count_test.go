@@ -7,7 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
-	"pay-chain.backend/pkg/utils"
+	"payment-kita.backend/pkg/utils"
 )
 
 func registerFindErrorAfterCount(t *testing.T, db *gorm.DB, table string) {

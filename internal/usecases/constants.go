@@ -15,14 +15,30 @@ func computeSelectorHex(sig string) string {
 
 // EVM Function Selectors — computed at init from canonical signatures.
 var (
-	// createPayment(bytes,bytes,address,address,uint256) -> 0x83f7cae3
-	CreatePaymentSelector = computeSelectorHex("createPayment(bytes,bytes,address,address,uint256)")
-
-	// createPaymentWithSlippage(bytes,bytes,address,address,uint256,uint256) — for Fix #3
-	CreatePaymentWithSlippageSelector = computeSelectorHex("createPaymentWithSlippage(bytes,bytes,address,address,uint256,uint256)")
-
-	// payRequest(bytes32) -> 0x87b13db6
+	// Legacy payment request flow selector (non-gateway usage may still reference it).
 	PayRequestSelector = computeSelectorHex("payRequest(bytes32)")
+
+	// V2 request tuple:
+	// (bytes destChainIdBytes,bytes receiverBytes,address sourceToken,address bridgeTokenSource,address destToken,
+	//  uint256 amountInSource,uint256 minBridgeAmountOut,uint256 minDestAmountOut,uint8 mode,uint8 bridgeOption)
+	PaymentRequestV2Tuple = "(bytes,bytes,address,address,address,uint256,uint256,uint256,uint8,uint8)"
+
+	// Private routing tuple: (bytes32 intentId,address stealthReceiver)
+	PrivateRoutingTuple = "(bytes32,address)"
+
+	// Final V2-only gateway selectors.
+	CreatePaymentSelector = computeSelectorHex("createPayment(" + PaymentRequestV2Tuple + ")")
+	CreatePaymentPrivateSelector = computeSelectorHex("createPaymentPrivate(" + PaymentRequestV2Tuple + "," + PrivateRoutingTuple + ")")
+	CreatePaymentDefaultBridgeSelector = computeSelectorHex("createPaymentDefaultBridge(" + PaymentRequestV2Tuple + ")")
+	PreviewApprovalSelector = computeSelectorHex("previewApproval(" + PaymentRequestV2Tuple + ")")
+	QuotePaymentCostSelector = computeSelectorHex("quotePaymentCost(" + PaymentRequestV2Tuple + ")")
+
+	// Backward-compat aliases for old constant names in tests/helpers.
+	CreatePaymentV2Selector              = CreatePaymentSelector
+	CreatePaymentPrivateV2Selector       = CreatePaymentPrivateSelector
+	CreatePaymentV2DefaultBridgeSelector = CreatePaymentDefaultBridgeSelector
+	PreviewApprovalV2Selector            = PreviewApprovalSelector
+	QuotePaymentCostV2Selector           = QuotePaymentCostSelector
 )
 
 // Fee configuration

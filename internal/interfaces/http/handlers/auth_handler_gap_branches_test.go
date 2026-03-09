@@ -12,10 +12,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
-	"pay-chain.backend/internal/domain/entities"
-	"pay-chain.backend/internal/interfaces/http/middleware"
-	"pay-chain.backend/pkg/jwt"
-	"pay-chain.backend/pkg/redis"
+	"payment-kita.backend/internal/domain/entities"
+	"payment-kita.backend/internal/interfaces/http/middleware"
+	"payment-kita.backend/pkg/jwt"
+	"payment-kita.backend/pkg/redis"
 )
 
 func TestAuthHandler_Login_Refresh_ChangePassword_GapBranches(t *testing.T) {

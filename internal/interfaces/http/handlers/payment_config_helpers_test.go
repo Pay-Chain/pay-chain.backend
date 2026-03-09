@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
-	"pay-chain.backend/internal/domain/entities"
+	"payment-kita.backend/internal/domain/entities"
 )
 
 func TestPaymentConfigHandler_ParseHelpers(t *testing.T) {

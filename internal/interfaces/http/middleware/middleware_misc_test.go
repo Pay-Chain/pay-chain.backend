@@ -8,7 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
-	loggerpkg "pay-chain.backend/pkg/logger"
+	loggerpkg "payment-kita.backend/pkg/logger"
 )
 
 func TestResponseWriter_Write(t *testing.T) {

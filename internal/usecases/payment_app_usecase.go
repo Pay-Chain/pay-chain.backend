@@ -3,12 +3,13 @@ package usecases
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
-	"pay-chain.backend/internal/domain/entities"
-	"pay-chain.backend/internal/domain/repositories"
-	"pay-chain.backend/pkg/utils"
+	"payment-kita.backend/internal/domain/entities"
+	"payment-kita.backend/internal/domain/repositories"
+	"payment-kita.backend/pkg/utils"
 )
 
 type PaymentAppUsecase struct {
@@ -35,6 +36,30 @@ func NewPaymentAppUsecase(
 }
 
 func (u *PaymentAppUsecase) CreatePaymentApp(ctx context.Context, input *entities.CreatePaymentAppInput) (*entities.CreatePaymentResponse, error) {
+	mode := normalizePaymentMode(input.Mode)
+	if mode == PaymentModePrivacy {
+		receiver := strings.TrimSpace(input.ReceiverAddress)
+		if receiver == "" {
+			return nil, fmt.Errorf("receiverAddress is required when mode=privacy")
+		}
+		if input.PrivacyStealthReceiver == nil || strings.TrimSpace(*input.PrivacyStealthReceiver) == "" {
+			stealth := receiver
+			input.PrivacyStealthReceiver = &stealth
+		}
+		if input.PrivacyIntentID == nil || strings.TrimSpace(*input.PrivacyIntentID) == "" {
+			autoIntentID := utils.GenerateUUIDv7().String()
+			input.PrivacyIntentID = &autoIntentID
+		}
+	}
+	if _, err := normalizeBridgeOption(input.BridgeOption); err != nil {
+		return nil, fmt.Errorf("invalid bridge option: %w", err)
+	}
+	if err := validatePrivacyFields(mode, input.PrivacyIntentID, input.PrivacyStealthReceiver); err != nil {
+		return nil, err
+	}
+
+	senderAddress := strings.TrimSpace(input.SenderWalletAddress)
+
 	sourceChainID, sourceCAIP2, err := u.chainResolver.ResolveFromAny(ctx, input.SourceChainID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid source chain: %w", err)
@@ -47,7 +72,7 @@ func (u *PaymentAppUsecase) CreatePaymentApp(ctx context.Context, input *entitie
 	// 2. Resolve User logic
 	var userID uuid.UUID
 
-	wallet, err := u.walletRepo.GetByAddress(ctx, sourceChainID, input.SenderWalletAddress)
+	wallet, err := u.walletRepo.GetByAddress(ctx, sourceChainID, senderAddress)
 	if err == nil && wallet != nil && wallet.UserID != nil {
 		// Case A: Wallet exists -> Use existing User
 		userID = *wallet.UserID
@@ -59,12 +84,12 @@ func (u *PaymentAppUsecase) CreatePaymentApp(ctx context.Context, input *entitie
 
 		// Create User
 		newUserID := utils.GenerateUUIDv7()
-		email := fmt.Sprintf("%s_%s@app.paychain.local", input.SenderWalletAddress[:8], newUserID.String()[:8])
+		email := fmt.Sprintf("%s_%s@app.paymentkita.local", walletPrefix(senderAddress), newUserID.String()[:8])
 
 		newUser := &entities.User{
 			ID:        newUserID,
 			Email:     email,
-			Name:      "App User " + input.SenderWalletAddress[:6],
+			Name:      "App User " + walletNamePrefix(senderAddress),
 			Role:      entities.UserRoleUser,
 			KYCStatus: entities.KYCNotStarted,
 			CreatedAt: time.Now(),
@@ -83,7 +108,7 @@ func (u *PaymentAppUsecase) CreatePaymentApp(ctx context.Context, input *entitie
 			ID:        utils.GenerateUUIDv7(),
 			UserID:    &userID,
 			ChainID:   sourceChainID,
-			Address:   input.SenderWalletAddress,
+			Address:   senderAddress,
 			Type:      "EOA",
 			IsPrimary: true,
 			CreatedAt: time.Now(),
@@ -106,7 +131,34 @@ func (u *PaymentAppUsecase) CreatePaymentApp(ctx context.Context, input *entitie
 		Decimals:           input.Decimals,
 		ReceiverAddress:    input.ReceiverAddress,
 		// ReceiverMerchantID is empty for App payments (any receiver allowed)
+		Mode:                   input.Mode,
+		BridgeOption:           input.BridgeOption,
+		BridgeTokenSource:      input.BridgeTokenSource,
+		MinBridgeAmountOut:     input.MinBridgeAmountOut,
+		MinDestAmountOut:       input.MinDestAmountOut,
+		PrivacyIntentID:        input.PrivacyIntentID,
+		PrivacyStealthReceiver: input.PrivacyStealthReceiver,
 	}
 
 	return u.paymentUsecase.CreatePayment(ctx, userID, paymentInput)
+}
+
+func walletPrefix(addr string) string {
+	if len(addr) >= 8 {
+		return addr[:8]
+	}
+	if addr == "" {
+		return "wallet"
+	}
+	return addr
+}
+
+func walletNamePrefix(addr string) string {
+	if len(addr) >= 6 {
+		return addr[:6]
+	}
+	if addr == "" {
+		return "wallet"
+	}
+	return addr
 }

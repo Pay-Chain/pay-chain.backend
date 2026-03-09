@@ -16,10 +16,10 @@ import (
 	"github.com/google/uuid"
 	goredis "github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
-	"pay-chain.backend/internal/domain/entities"
-	"pay-chain.backend/internal/usecases"
-	"pay-chain.backend/pkg/jwt"
-	"pay-chain.backend/pkg/redis"
+	"payment-kita.backend/internal/domain/entities"
+	"payment-kita.backend/internal/usecases"
+	"payment-kita.backend/pkg/jwt"
+	"payment-kita.backend/pkg/redis"
 )
 
 type internalApiKeyRepoStub struct{}
@@ -73,7 +73,7 @@ func TestAuthAndDualMiddleware_InternalCoveragePaths(t *testing.T) {
 
 	t.Run("auth middleware trusted session and expired bearer", func(t *testing.T) {
 		validJWT := jwt.NewJWTService("secret", time.Hour, time.Hour)
-		pair, _ := validJWT.GenerateTokenPair(uuid.New(), "trusted@paychain.io", "USER")
+		pair, _ := validJWT.GenerateTokenPair(uuid.New(), "trusted@paymentkita.io", "USER")
 		_ = sessionStore.CreateSession(context.Background(), "sid-internal-auth", &redis.SessionData{
 			AccessToken:  pair.AccessToken,
 			RefreshToken: pair.RefreshToken,
@@ -94,7 +94,7 @@ func TestAuthAndDualMiddleware_InternalCoveragePaths(t *testing.T) {
 		}
 
 		expiredJWT := jwt.NewJWTService("secret", -1*time.Second, time.Hour)
-		expiredPair, _ := expiredJWT.GenerateTokenPair(uuid.New(), "expired@paychain.io", "USER")
+		expiredPair, _ := expiredJWT.GenerateTokenPair(uuid.New(), "expired@paymentkita.io", "USER")
 		_ = os.Setenv("INTERNAL_PROXY_SECRET", "")
 		r2 := gin.New()
 		r2.Use(AuthMiddleware(expiredJWT, nil))
@@ -112,7 +112,7 @@ func TestAuthAndDualMiddleware_InternalCoveragePaths(t *testing.T) {
 	t.Run("dual auth trusted session body restore and optional signature branch", func(t *testing.T) {
 		_ = os.Setenv("INTERNAL_PROXY_SECRET", "proxy-secret")
 		j := jwt.NewJWTService("secret", time.Hour, time.Hour)
-		pair, _ := j.GenerateTokenPair(uuid.New(), "dual@paychain.io", "USER")
+		pair, _ := j.GenerateTokenPair(uuid.New(), "dual@paymentkita.io", "USER")
 		_ = sessionStore.CreateSession(context.Background(), "sid-internal-dual", &redis.SessionData{
 			AccessToken:  pair.AccessToken,
 			RefreshToken: pair.RefreshToken,
@@ -163,7 +163,7 @@ func TestAuthAndDualMiddleware_InternalCoveragePaths_StrictBranchAssertions(t *t
 
 	t.Run("auth trusted session and expired bearer", func(t *testing.T) {
 		validJWT := jwt.NewJWTService("secret", time.Hour, time.Hour)
-		validPair, err := validJWT.GenerateTokenPair(uuid.New(), "trusted2@paychain.io", "USER")
+		validPair, err := validJWT.GenerateTokenPair(uuid.New(), "trusted2@paymentkita.io", "USER")
 		require.NoError(t, err)
 		require.NoError(t, sessionStore.CreateSession(context.Background(), "sid-internal-auth-2", &redis.SessionData{
 			AccessToken:  validPair.AccessToken,
@@ -183,7 +183,7 @@ func TestAuthAndDualMiddleware_InternalCoveragePaths_StrictBranchAssertions(t *t
 		require.Equal(t, http.StatusNoContent, w.Code)
 
 		expiredJWT := jwt.NewJWTService("secret", -1*time.Second, time.Hour)
-		expiredPair, err := expiredJWT.GenerateTokenPair(uuid.New(), "expired2@paychain.io", "USER")
+		expiredPair, err := expiredJWT.GenerateTokenPair(uuid.New(), "expired2@paymentkita.io", "USER")
 		require.NoError(t, err)
 
 		_ = os.Setenv("INTERNAL_PROXY_SECRET", "")
@@ -202,7 +202,7 @@ func TestAuthAndDualMiddleware_InternalCoveragePaths_StrictBranchAssertions(t *t
 	t.Run("dual auth session with optional signature verification", func(t *testing.T) {
 		_ = os.Setenv("INTERNAL_PROXY_SECRET", "proxy-secret")
 		j := jwt.NewJWTService("secret", time.Hour, time.Hour)
-		pair, err := j.GenerateTokenPair(uuid.New(), "dual2@paychain.io", "USER")
+		pair, err := j.GenerateTokenPair(uuid.New(), "dual2@paymentkita.io", "USER")
 		require.NoError(t, err)
 		require.NoError(t, sessionStore.CreateSession(context.Background(), "sid-internal-dual-2", &redis.SessionData{
 			AccessToken:  pair.AccessToken,

@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/google/uuid"
-	"pay-chain.backend/internal/domain/entities"
+	"payment-kita.backend/internal/domain/entities"
 )
 
 type ApiKeyRepository interface {

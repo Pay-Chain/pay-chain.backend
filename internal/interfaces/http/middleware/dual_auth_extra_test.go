@@ -16,11 +16,11 @@ import (
 	goredis "github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	"pay-chain.backend/internal/domain/entities"
-	"pay-chain.backend/internal/interfaces/http/middleware"
-	"pay-chain.backend/internal/usecases"
-	"pay-chain.backend/pkg/jwt"
-	redispkg "pay-chain.backend/pkg/redis"
+	"payment-kita.backend/internal/domain/entities"
+	"payment-kita.backend/internal/interfaces/http/middleware"
+	"payment-kita.backend/internal/usecases"
+	"payment-kita.backend/pkg/jwt"
+	redispkg "payment-kita.backend/pkg/redis"
 )
 
 func TestDualAuthMiddleware_ExtraBranches(t *testing.T) {
@@ -50,7 +50,7 @@ func TestDualAuthMiddleware_ExtraBranches(t *testing.T) {
 	r.GET("/test", func(c *gin.Context) { c.Status(http.StatusNoContent) })
 
 	userID := uuid.New()
-	tokens, _ := jwtService.GenerateTokenPair(userID, "session@paychain.io", "USER")
+	tokens, _ := jwtService.GenerateTokenPair(userID, "session@paymentkita.io", "USER")
 	if err := sessionStore.CreateSession(context.Background(), "sid-ok", &redispkg.SessionData{
 		AccessToken:  tokens.AccessToken,
 		RefreshToken: tokens.RefreshToken,
@@ -132,8 +132,8 @@ func TestDualAuthMiddleware_SessionTokenPrecedenceOverBearer(t *testing.T) {
 	}
 
 	sessionUserID := uuid.New()
-	sessionTokens, _ := jwtService.GenerateTokenPair(sessionUserID, "session@paychain.io", "USER")
-	bearerTokens, _ := jwtService.GenerateTokenPair(uuid.New(), "bearer@paychain.io", "USER")
+	sessionTokens, _ := jwtService.GenerateTokenPair(sessionUserID, "session@paymentkita.io", "USER")
+	bearerTokens, _ := jwtService.GenerateTokenPair(uuid.New(), "bearer@paymentkita.io", "USER")
 	if err := sessionStore.CreateSession(context.Background(), "sid-priority", &redispkg.SessionData{
 		AccessToken:  sessionTokens.AccessToken,
 		RefreshToken: sessionTokens.RefreshToken,
@@ -176,8 +176,8 @@ func TestDualAuthMiddleware_SessionInvalidToken_NoBearerFallback(t *testing.T) {
 	}
 
 	sessionUserID := uuid.New()
-	sessionTokens, _ := jwtService.GenerateTokenPair(sessionUserID, "session@paychain.io", "USER")
-	bearerTokens, _ := jwtService.GenerateTokenPair(uuid.New(), "bearer@paychain.io", "USER")
+	sessionTokens, _ := jwtService.GenerateTokenPair(sessionUserID, "session@paymentkita.io", "USER")
+	bearerTokens, _ := jwtService.GenerateTokenPair(uuid.New(), "bearer@paymentkita.io", "USER")
 	if err := sessionStore.CreateSession(context.Background(), "sid-priority-invalid", &redispkg.SessionData{
 		AccessToken:  sessionTokens.AccessToken + "-broken",
 		RefreshToken: sessionTokens.RefreshToken,
@@ -251,7 +251,7 @@ func TestDualAuthMiddleware_StrictMode_BlocksBearerFallback(t *testing.T) {
 	jwtService := jwt.NewJWTService("secret", time.Hour, time.Hour*24)
 
 	userID := uuid.New()
-	tokens, _ := jwtService.GenerateTokenPair(userID, "strict@paychain.io", "USER")
+	tokens, _ := jwtService.GenerateTokenPair(userID, "strict@paymentkita.io", "USER")
 
 	prevSecret := os.Getenv("INTERNAL_PROXY_SECRET")
 	defer func() { _ = os.Setenv("INTERNAL_PROXY_SECRET", prevSecret) }()
@@ -292,7 +292,7 @@ func TestDualAuthMiddleware_TrustedSession_WithBodyAndOptionalSignatureValidatio
 	}
 
 	userID := uuid.New()
-	tokens, _ := jwtService.GenerateTokenPair(userID, "trusted@paychain.io", "USER")
+	tokens, _ := jwtService.GenerateTokenPair(userID, "trusted@paymentkita.io", "USER")
 	if err := sessionStore.CreateSession(context.Background(), "sid-opt-sig", &redispkg.SessionData{
 		AccessToken:  tokens.AccessToken,
 		RefreshToken: tokens.RefreshToken,

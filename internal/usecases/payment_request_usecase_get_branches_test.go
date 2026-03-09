@@ -7,8 +7,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
-	"pay-chain.backend/internal/domain/entities"
-	"pay-chain.backend/internal/usecases"
+	"payment-kita.backend/internal/domain/entities"
+	"payment-kita.backend/internal/usecases"
 )
 
 func TestPaymentRequestUsecase_GetPaymentRequest_ChainResolutionBranches(t *testing.T) {

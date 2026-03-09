@@ -8,7 +8,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/require"
-	"pay-chain.backend/internal/infrastructure/blockchain"
+	"payment-kita.backend/internal/infrastructure/blockchain"
 )
 
 func TestContractConfigAudit_CallViewHelpers_WithInjectedClient(t *testing.T) {

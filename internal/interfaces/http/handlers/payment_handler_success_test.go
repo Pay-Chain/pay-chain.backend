@@ -11,16 +11,17 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"pay-chain.backend/internal/domain/entities"
-	domainerrors "pay-chain.backend/internal/domain/errors"
-	"pay-chain.backend/internal/interfaces/http/middleware"
+	"payment-kita.backend/internal/domain/entities"
+	domainerrors "payment-kita.backend/internal/domain/errors"
+	"payment-kita.backend/internal/interfaces/http/middleware"
 )
 
 type paymentServiceStub struct {
-	createFn func(ctx context.Context, userID uuid.UUID, input *entities.CreatePaymentInput) (*entities.CreatePaymentResponse, error)
-	getFn    func(ctx context.Context, id uuid.UUID) (*entities.Payment, error)
-	listFn   func(ctx context.Context, userID uuid.UUID, page, limit int) ([]*entities.Payment, int, error)
-	eventsFn func(ctx context.Context, paymentID uuid.UUID) ([]*entities.PaymentEvent, error)
+	createFn  func(ctx context.Context, userID uuid.UUID, input *entities.CreatePaymentInput) (*entities.CreatePaymentResponse, error)
+	getFn     func(ctx context.Context, id uuid.UUID) (*entities.Payment, error)
+	listFn    func(ctx context.Context, userID uuid.UUID, page, limit int) ([]*entities.Payment, int, error)
+	eventsFn  func(ctx context.Context, paymentID uuid.UUID) ([]*entities.PaymentEvent, error)
+	privacyFn func(ctx context.Context, paymentID uuid.UUID) (*entities.PaymentPrivacyStatus, error)
 }
 
 func (s paymentServiceStub) CreatePayment(ctx context.Context, userID uuid.UUID, input *entities.CreatePaymentInput) (*entities.CreatePaymentResponse, error) {
@@ -34,6 +35,12 @@ func (s paymentServiceStub) GetPaymentsByUser(ctx context.Context, userID uuid.U
 }
 func (s paymentServiceStub) GetPaymentEvents(ctx context.Context, paymentID uuid.UUID) ([]*entities.PaymentEvent, error) {
 	return s.eventsFn(ctx, paymentID)
+}
+func (s paymentServiceStub) GetPaymentPrivacyStatus(ctx context.Context, paymentID uuid.UUID) (*entities.PaymentPrivacyStatus, error) {
+	if s.privacyFn == nil {
+		return &entities.PaymentPrivacyStatus{PaymentID: paymentID, Stage: entities.PrivacyLifecycleUnknown}, nil
+	}
+	return s.privacyFn(ctx, paymentID)
 }
 
 func TestPaymentHandler_SuccessAndErrorMappings(t *testing.T) {
@@ -49,7 +56,7 @@ func TestPaymentHandler_SuccessAndErrorMappings(t *testing.T) {
 			if input.Amount == "boom" {
 				return nil, errors.New("create boom")
 			}
-				return &entities.CreatePaymentResponse{PaymentID: paymentID, Status: entities.PaymentStatusPending}, nil
+			return &entities.CreatePaymentResponse{PaymentID: paymentID, Status: entities.PaymentStatusPending}, nil
 		},
 		getFn: func(_ context.Context, id uuid.UUID) (*entities.Payment, error) {
 			if id == paymentID {
@@ -69,6 +76,12 @@ func TestPaymentHandler_SuccessAndErrorMappings(t *testing.T) {
 			}
 			return nil, errors.New("events boom")
 		},
+		privacyFn: func(_ context.Context, id uuid.UUID) (*entities.PaymentPrivacyStatus, error) {
+			if id == paymentID {
+				return &entities.PaymentPrivacyStatus{PaymentID: id, Stage: entities.PrivacyLifecyclePendingOnSource, IsPrivacyCandidate: true}, nil
+			}
+			return nil, domainerrors.ErrNotFound
+		},
 	}
 
 	h := NewPaymentHandler(service)
@@ -81,6 +94,7 @@ func TestPaymentHandler_SuccessAndErrorMappings(t *testing.T) {
 	r.GET("/payments/:id", h.GetPayment)
 	r.GET("/payments", withUser, h.ListPayments)
 	r.GET("/payments/:id/events", h.GetPaymentEvents)
+	r.GET("/payments/:id/privacy-status", h.GetPaymentPrivacyStatus)
 
 	// Create success
 	createBody := []byte(`{"sourceChainId":"eip155:8453","destChainId":"eip155:42161","sourceTokenAddress":"0xabc","destTokenAddress":"0xdef","amount":"1","decimals":6,"receiverAddress":"0x123"}`)
@@ -158,5 +172,21 @@ func TestPaymentHandler_SuccessAndErrorMappings(t *testing.T) {
 	r.ServeHTTP(w, req)
 	if w.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d body=%s", w.Code, w.Body.String())
+	}
+
+	// Privacy status success
+	req = httptest.NewRequest(http.MethodGet, "/payments/"+paymentID.String()+"/privacy-status", nil)
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+
+	// Privacy status not found mapping
+	req = httptest.NewRequest(http.MethodGet, "/payments/"+uuid.NewString()+"/privacy-status", nil)
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d body=%s", w.Code, w.Body.String())
 	}
 }

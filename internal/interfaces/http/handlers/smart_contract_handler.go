@@ -9,11 +9,11 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/volatiletech/null/v8"
-	"pay-chain.backend/internal/domain/entities"
-	domainerrors "pay-chain.backend/internal/domain/errors"
-	"pay-chain.backend/internal/domain/repositories"
-	"pay-chain.backend/internal/interfaces/http/response"
-	"pay-chain.backend/pkg/utils"
+	"payment-kita.backend/internal/domain/entities"
+	domainerrors "payment-kita.backend/internal/domain/errors"
+	"payment-kita.backend/internal/domain/repositories"
+	"payment-kita.backend/internal/interfaces/http/response"
+	"payment-kita.backend/pkg/utils"
 )
 
 // SmartContractHandler handles smart contract endpoints

@@ -1,4 +1,4 @@
-.PHONY: run build test migrate-up migrate-down generate-models lint clean
+.PHONY: run build test migrate-up migrate-down generate-models lint clean smoke-phase6
 
 # Load .env file if it exists
 ifneq (,$(wildcard ./.env))
@@ -51,7 +51,7 @@ lint:
 
 # Docker
 docker-build:
-	docker build -t pay-chain-backend:latest -f docker/Dockerfile .
+	docker build -t payment-kita-backend:latest -f docker/Dockerfile .
 
 docker-run:
 	docker-compose -f docker/docker-compose.yml up -d
@@ -63,3 +63,6 @@ docker-stop:
 clean:
 	rm -rf bin/
 	rm -rf coverage.out coverage.html
+
+smoke-phase6:
+	./scripts/phase6_smoke.sh

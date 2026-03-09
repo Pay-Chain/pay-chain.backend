@@ -28,7 +28,7 @@ func registerHealthRoute(r *gin.Engine) {
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{
 			"status":  "ok",
-			"service": "pay-chain-backend",
+			"service": "payment-kita-backend",
 			"version": "0.2.0",
 		})
 	})

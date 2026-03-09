@@ -10,8 +10,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
-	"pay-chain.backend/internal/domain/entities"
-	domainerrors "pay-chain.backend/internal/domain/errors"
+	"payment-kita.backend/internal/domain/entities"
+	domainerrors "payment-kita.backend/internal/domain/errors"
 )
 
 type adminUserRepoStub struct {
@@ -86,7 +86,7 @@ func TestAdminHandler_ListAndUpdateStatus(t *testing.T) {
 				if search != "abc" {
 					t.Fatalf("unexpected search %s", search)
 				}
-				return []*entities.User{{ID: uuid.New(), Email: "u@paychain.io"}}, nil
+				return []*entities.User{{ID: uuid.New(), Email: "u@paymentkita.io"}}, nil
 			},
 		},
 		&adminMerchantRepoStub{
@@ -112,7 +112,7 @@ func TestAdminHandler_ListAndUpdateStatus(t *testing.T) {
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	require.Equal(t, http.StatusOK, w.Code)
-	require.Contains(t, w.Body.String(), "u@paychain.io")
+	require.Contains(t, w.Body.String(), "u@paymentkita.io")
 
 	req = httptest.NewRequest(http.MethodGet, "/merchants", nil)
 	w = httptest.NewRecorder()

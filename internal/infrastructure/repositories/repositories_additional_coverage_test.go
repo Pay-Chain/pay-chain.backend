@@ -7,8 +7,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
-	"pay-chain.backend/internal/domain/entities"
-	domainerrors "pay-chain.backend/internal/domain/errors"
+	"payment-kita.backend/internal/domain/entities"
+	domainerrors "payment-kita.backend/internal/domain/errors"
 )
 
 func TestNewUnitOfWork_CreatesImplementation(t *testing.T) {
@@ -99,7 +99,7 @@ func TestEmailVerificationRepository_CRUDFlow(t *testing.T) {
 
 	user := &entities.User{
 		ID:           uuid.New(),
-		Email:        "verify@paychain.io",
+		Email:        "verify@paymentkita.io",
 		Name:         "Verify User",
 		PasswordHash: "x",
 		Role:         entities.UserRoleUser,

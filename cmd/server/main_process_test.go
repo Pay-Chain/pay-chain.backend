@@ -50,7 +50,7 @@ func TestMainProcess_ExitsOnInvalidServerPortAfterSetup(t *testing.T) {
 		"DB_PORT=1",
 		"DB_USER=postgres",
 		"DB_PASSWORD=postgres",
-		"DB_NAME=paychain",
+		"DB_NAME=paymentkita",
 		"DB_SSLMODE=disable",
 	)
 
@@ -84,7 +84,7 @@ func TestMainProcess_ExitsOnInvalidSessionEncryptionKey(t *testing.T) {
 		"DB_PORT=1",
 		"DB_USER=postgres",
 		"DB_PASSWORD=postgres",
-		"DB_NAME=paychain",
+		"DB_NAME=paymentkita",
 		"DB_SSLMODE=disable",
 	)
 
@@ -117,7 +117,7 @@ func TestMainProcess_ExitsOnDBOpenFailure(t *testing.T) {
 		"DB_PORT=-1",
 		"DB_USER=postgres",
 		"DB_PASSWORD=postgres",
-		"DB_NAME=paychain",
+		"DB_NAME=paymentkita",
 		"DB_SSLMODE=disable",
 	)
 

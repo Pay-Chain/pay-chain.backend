@@ -14,8 +14,8 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
-	"pay-chain.backend/internal/domain/entities"
-	"pay-chain.backend/internal/infrastructure/blockchain"
+	"payment-kita.backend/internal/domain/entities"
+	"payment-kita.backend/internal/infrastructure/blockchain"
 )
 
 func TestResolveRPCURL(t *testing.T) {
@@ -337,7 +337,7 @@ func TestOnchainAdapterUsecase_AdminGetAdapterClosureBranches(t *testing.T) {
 		}
 		factory := blockchain.NewClientFactory()
 		factory.RegisterEVMClient(rpcURL, blockchain.NewEVMClientWithCallView(nil, func(context.Context, string, []byte) ([]byte, error) {
-			return FallbackPayChainRouterAdminABI.Methods["getAdapter"].Outputs.Pack(want)
+			return FallbackPaymentKitaRouterAdminABI.Methods["getAdapter"].Outputs.Pack(want)
 		}))
 		u := NewOnchainAdapterUsecase(repo, &scRepoStub{}, factory, "0xabc")
 		got, err := u.adminOps.getAdapter(ctx, sourceID, routerAddress, destCAIP2, bridgeType)

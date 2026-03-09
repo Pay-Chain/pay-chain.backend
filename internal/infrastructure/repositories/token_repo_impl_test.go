@@ -8,8 +8,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
-	domainerrors "pay-chain.backend/internal/domain/errors"
-	"pay-chain.backend/pkg/utils"
+	domainerrors "payment-kita.backend/internal/domain/errors"
+	"payment-kita.backend/pkg/utils"
 )
 
 func TestTokenRepository_CRUDAndQueries(t *testing.T) {

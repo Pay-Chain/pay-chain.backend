@@ -28,6 +28,15 @@ const (
 	PaymentEventTypeFailed            PaymentEventType = "FAILED"
 )
 
+const (
+	PrivacyLifecycleUnknown               = "privacy_unknown"
+	PrivacyLifecycleNotPrivacy            = "not_privacy"
+	PrivacyLifecyclePendingOnSource       = "privacy_pending_on_source"
+	PrivacyLifecycleSettledToStealth      = "privacy_settled_to_stealth"
+	PrivacyLifecycleForwardedFinal        = "privacy_forwarded_final"
+	PrivacyLifecycleForwardFailedRetrying = "privacy_forward_failed_retrying"
+)
+
 // Payment represents a payment entity
 type Payment struct {
 	ID                  uuid.UUID     `json:"id" gorm:"type:uuid;primary_key;default:uuid_generate_v7()"`
@@ -113,6 +122,15 @@ type CreatePaymentInput struct {
 	ReceiverMerchantID string `json:"receiverMerchantId,omitempty"`
 	MinAmountOut       string `json:"minAmountOut,omitempty"`
 	SlippageBps        int    `json:"slippageBps,omitempty"` // e.g. 50 = 0.5%
+
+	// V2 optional request surface.
+	Mode                   *string `json:"mode,omitempty"` // regular | privacy
+	BridgeOption           *uint8  `json:"bridgeOption,omitempty"`
+	BridgeTokenSource      *string `json:"bridgeTokenSource,omitempty"`
+	MinBridgeAmountOut     *string `json:"minBridgeAmountOut,omitempty"`
+	MinDestAmountOut       *string `json:"minDestAmountOut,omitempty"`
+	PrivacyIntentID        *string `json:"privacyIntentId,omitempty"`
+	PrivacyStealthReceiver *string `json:"privacyStealthReceiver,omitempty"`
 }
 
 // CreatePaymentResponse represents response for payment creation
@@ -167,6 +185,14 @@ type PaymentEvent struct {
 	CreatedAt   time.Time        `json:"createdAt"`
 }
 
+type PaymentPrivacyStatus struct {
+	PaymentID          uuid.UUID `json:"paymentId"`
+	Stage              string    `json:"stage"`
+	IsPrivacyCandidate bool      `json:"isPrivacyCandidate"`
+	Signals            []string  `json:"signals,omitempty"`
+	Reason             string    `json:"reason,omitempty"`
+}
+
 type CreatePaymentAppInput struct {
 	SourceChainID       string `json:"sourceChainId" binding:"required"`
 	DestChainID         string `json:"destChainId" binding:"required"`
@@ -178,4 +204,14 @@ type CreatePaymentAppInput struct {
 	ReceiverAddress     string `json:"receiverAddress" binding:"required"`
 	MinAmountOut        string `json:"minAmountOut,omitempty"`
 	SlippageBps         int    `json:"slippageBps,omitempty"` // e.g. 50 = 0.5%
+
+	// V2 optional fields (Phase A foundation).
+	// These fields are intentionally nullable to keep backward compatibility with V1 payloads.
+	Mode                   *string `json:"mode,omitempty"` // regular | privacy
+	BridgeOption           *uint8  `json:"bridgeOption,omitempty"`
+	BridgeTokenSource      *string `json:"bridgeTokenSource,omitempty"`
+	MinBridgeAmountOut     *string `json:"minBridgeAmountOut,omitempty"`
+	MinDestAmountOut       *string `json:"minDestAmountOut,omitempty"`
+	PrivacyIntentID        *string `json:"privacyIntentId,omitempty"`
+	PrivacyStealthReceiver *string `json:"privacyStealthReceiver,omitempty"`
 }

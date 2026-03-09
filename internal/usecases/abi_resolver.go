@@ -9,8 +9,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/google/uuid"
-	"pay-chain.backend/internal/domain/entities"
-	"pay-chain.backend/internal/domain/repositories"
+	"payment-kita.backend/internal/domain/entities"
+	"payment-kita.backend/internal/domain/repositories"
 )
 
 // ABIResolverMixin provides common ABI resolution logic
@@ -39,6 +39,9 @@ func (u *ABIResolverMixin) ResolveABI(
 			if err != nil {
 				return nil, "", fmt.Errorf("contract %s not found: %w", contractType, err)
 			}
+			if contract == nil {
+				return nil, "", fmt.Errorf("contract %s not found", contractType)
+			}
 			return parsedABI, contract.ContractAddress, nil
 		}
 	}
@@ -46,6 +49,9 @@ func (u *ABIResolverMixin) ResolveABI(
 	contract, err := u.contractRepo.GetActiveContract(ctx, chainID, contractType)
 	if err != nil {
 		return nil, "", fmt.Errorf("contract %s not found: %w", contractType, err)
+	}
+	if contract == nil {
+		return nil, "", fmt.Errorf("contract %s not found", contractType)
 	}
 
 	if contract.ABI == nil {
@@ -71,6 +77,12 @@ func (u *ABIResolverMixin) ResolveABI(
 
 // ResolveABIWithFallback attempts to resolve ABI from DB, defaulting to hardcoded fallbacks if not found in DB
 func (u *ABIResolverMixin) ResolveABIWithFallback(ctx context.Context, chainID uuid.UUID, contractType entities.SmartContractType) (abi.ABI, error) {
+	// RECEIVER_LAYERZERO execution in admin flows uses stable admin ABI and
+	// explicit contract address from payload; avoid hard dependency on DB ABI row.
+	if contractType == entities.ContractTypeReceiverLayerZero {
+		return FallbackLayerZeroReceiverAdminABI, nil
+	}
+
 	parsed, _, err := u.ResolveABI(ctx, chainID, contractType)
 	if err == nil && parsed != nil {
 		// Validate that the ABI actually contains the expected admin methods
@@ -82,9 +94,11 @@ func (u *ABIResolverMixin) ResolveABIWithFallback(ctx context.Context, chainID u
 				fmt.Printf("[ResolveABI] ABI for %s has %d methods but missing 'setStateMachineId'. Using fallback.\n", contractType, len(parsed.Methods))
 			}
 		case entities.ContractTypeAdapterCCIP:
-			_, isValid = parsed.Methods["setChainSelector"]
+			_, hasSetChainSelector := parsed.Methods["setChainSelector"]
+			_, hasSetChainConfig := parsed.Methods["setChainConfig"]
+			isValid = hasSetChainSelector || hasSetChainConfig
 			if !isValid {
-				fmt.Printf("[ResolveABI] ABI for %s has %d methods but missing 'setChainSelector'. Using fallback.\n", contractType, len(parsed.Methods))
+				fmt.Printf("[ResolveABI] ABI for %s has %d methods but missing 'setChainSelector'/'setChainConfig'. Using fallback.\n", contractType, len(parsed.Methods))
 			}
 		case entities.ContractTypeAdapterLayerZero:
 			_, isValid = parsed.Methods["setRoute"]
@@ -107,15 +121,19 @@ func (u *ABIResolverMixin) ResolveABIWithFallback(ctx context.Context, chainID u
 	// Fallback logic
 	switch contractType {
 	case entities.ContractTypeGateway:
-		return FallbackPayChainGatewayABI, nil
+		return FallbackPaymentKitaGatewayABI, nil
+	case entities.ContractTypeVault:
+		return FallbackPaymentKitaVaultAdminABI, nil
 	case entities.ContractTypeRouter:
-		return FallbackPayChainRouterAdminABI, nil
+		return FallbackPaymentKitaRouterAdminABI, nil
 	case entities.ContractTypeAdapterHyperbridge:
 		return FallbackHyperbridgeSenderAdminABI, nil
 	case entities.ContractTypeAdapterCCIP:
 		return FallbackCCIPSenderAdminABI, nil
 	case entities.ContractTypeAdapterLayerZero:
 		return FallbackLayerZeroSenderAdminABI, nil
+	case entities.ContractTypeReceiverLayerZero:
+		return FallbackLayerZeroReceiverAdminABI, nil
 	}
 	if err != nil {
 		return abi.ABI{}, err

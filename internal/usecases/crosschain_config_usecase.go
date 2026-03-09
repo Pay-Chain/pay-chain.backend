@@ -10,11 +10,11 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"pay-chain.backend/internal/domain/entities"
-	domainerrors "pay-chain.backend/internal/domain/errors"
-	"pay-chain.backend/internal/domain/repositories"
-	"pay-chain.backend/internal/infrastructure/blockchain"
-	"pay-chain.backend/pkg/utils"
+	"payment-kita.backend/internal/domain/entities"
+	domainerrors "payment-kita.backend/internal/domain/errors"
+	"payment-kita.backend/internal/domain/repositories"
+	"payment-kita.backend/internal/infrastructure/blockchain"
+	"payment-kita.backend/pkg/utils"
 )
 
 type CrosschainRouteStatus struct {
@@ -30,17 +30,23 @@ type CrosschainRouteStatus struct {
 	CcipConfigured        bool                      `json:"ccipConfigured"`
 	LayerZeroConfigured   bool                      `json:"layerZeroConfigured"`
 	FeeQuoteHealthy       bool                      `json:"feeQuoteHealthy"`
+	QuoteSchemaMismatch   bool                      `json:"quoteSchemaMismatch"`
+	QuotePathUsed         string                    `json:"quotePathUsed,omitempty"`
+	QuoteFailureReason    string                    `json:"quoteFailureReason,omitempty"`
 	OverallStatus         string                    `json:"overallStatus"`
 	Issues                []ContractConfigCheckItem `json:"issues"`
 }
 
 type CrosschainBridgePreflight struct {
-	BridgeType   uint8           `json:"bridgeType"`
-	BridgeName   string          `json:"bridgeName"`
-	Ready        bool            `json:"ready"`
-	Checks       map[string]bool `json:"checks"`
-	ErrorCode    string          `json:"errorCode,omitempty"`
-	ErrorMessage string          `json:"errorMessage,omitempty"`
+	BridgeType          uint8           `json:"bridgeType"`
+	BridgeName          string          `json:"bridgeName"`
+	Ready               bool            `json:"ready"`
+	Checks              map[string]bool `json:"checks"`
+	QuoteSchemaMismatch bool            `json:"quoteSchemaMismatch"`
+	QuotePathUsed       string          `json:"quotePathUsed,omitempty"`
+	QuoteFailureReason  string          `json:"quoteFailureReason,omitempty"`
+	ErrorCode           string          `json:"errorCode,omitempty"`
+	ErrorMessage        string          `json:"errorMessage,omitempty"`
 }
 
 type CrosschainPreflightResult struct {
@@ -266,9 +272,12 @@ func (u *CrosschainConfigUsecase) RecheckRoute(ctx context.Context, sourceChainI
 	}
 
 	feeQuoteHealthy := false
+	quotePathUsed := ""
 	feeQuoteReason := ""
+	quoteSchemaMismatch := false
 	if adapterRegistered {
-		feeQuoteHealthy, feeQuoteReason = u.evaluateFeeQuoteHealthWithReason(ctx, sourceChain, destChain, status.DefaultBridgeType)
+		feeQuoteHealthy, quotePathUsed, feeQuoteReason = u.evaluateFeeQuoteHealthDetailed(ctx, sourceChain, destChain, status.DefaultBridgeType)
+		quoteSchemaMismatch = isQuoteSchemaMismatchReason(feeQuoteReason) || strings.Contains(strings.ToLower(strings.TrimSpace(feeQuoteReason)), "quote_failed_schema_mismatch")
 		if !feeQuoteHealthy {
 			message := "fee quote call failed for this route"
 			if strings.TrimSpace(feeQuoteReason) != "" {
@@ -300,6 +309,9 @@ func (u *CrosschainConfigUsecase) RecheckRoute(ctx context.Context, sourceChainI
 		CcipConfigured:        ccipConfigured,
 		LayerZeroConfigured:   layerZeroConfigured,
 		FeeQuoteHealthy:       feeQuoteHealthy,
+		QuoteSchemaMismatch:   quoteSchemaMismatch,
+		QuotePathUsed:         quotePathUsed,
+		QuoteFailureReason:    strings.TrimSpace(feeQuoteReason),
 		OverallStatus:         overall,
 		Issues:                issues,
 	}, nil
@@ -387,7 +399,9 @@ func (u *CrosschainConfigUsecase) buildPreflightRow(
 	row.Checks["adapterRegistered"] = hasAdapter
 	feeQuoteReason := ""
 	if hasAdapter && row.Checks["routeConfigured"] {
-		row.Checks["feeQuoteHealthy"], feeQuoteReason = u.evaluateFeeQuoteHealthWithReason(ctx, sourceChain, destChain, bridgeType)
+		row.Checks["feeQuoteHealthy"], row.QuotePathUsed, feeQuoteReason = u.evaluateFeeQuoteHealthDetailed(ctx, sourceChain, destChain, bridgeType)
+		row.QuoteFailureReason = strings.TrimSpace(feeQuoteReason)
+		row.QuoteSchemaMismatch = isQuoteSchemaMismatchReason(feeQuoteReason) || strings.Contains(strings.ToLower(strings.TrimSpace(feeQuoteReason)), "quote_failed_schema_mismatch")
 	}
 
 	if row.Checks["adapterRegistered"] && row.Checks["routeConfigured"] && row.Checks["feeQuoteHealthy"] {
@@ -605,6 +619,28 @@ func (u *CrosschainConfigUsecase) checkFeeQuoteHealth(ctx context.Context, sourc
 	return ok
 }
 
+func (u *CrosschainConfigUsecase) evaluateFeeQuoteHealthDetailed(
+	ctx context.Context,
+	sourceChain, destChain *entities.Chain,
+	bridgeType uint8,
+) (bool, string, string) {
+	ok, reason := u.evaluateFeeQuoteHealthWithReason(ctx, sourceChain, destChain, bridgeType)
+	if ok {
+		return true, "safe_or_legacy", ""
+	}
+	path := ""
+	reasonTrimmed := strings.TrimSpace(reason)
+	switch {
+	case strings.Contains(reasonTrimmed, "stage=quotePaymentFeeSafe"):
+		path = "safe"
+	case strings.Contains(reasonTrimmed, "stage=quotePaymentFee(legacy)"):
+		path = "legacy"
+	case strings.Contains(reasonTrimmed, "stage=quotePaymentFee"):
+		path = "v2"
+	}
+	return false, path, reason
+}
+
 func (u *CrosschainConfigUsecase) checkFeeQuoteHealthWithReason(
 	ctx context.Context,
 	sourceChain, destChain *entities.Chain,
@@ -617,39 +653,80 @@ func (u *CrosschainConfigUsecase) checkFeeQuoteHealthWithReason(
 	if err != nil || router == nil {
 		return false, "router contract is not configured"
 	}
-	rpcURL := resolveRPCURL(sourceChain)
-	if rpcURL == "" {
+	rpcURLs := resolveRPCURLs(sourceChain)
+	if len(rpcURLs) == 0 {
 		return false, "active rpc is not configured"
 	}
-	client, err := u.clientFactory.GetEVMClient(rpcURL)
-	if err != nil {
-		return false, err.Error()
+	lastReason := "execution reverted"
+	rpcErrors := make([]string, 0, len(rpcURLs))
+	for _, rpcURL := range rpcURLs {
+		client, cErr := u.clientFactory.GetEVMClient(rpcURL)
+		if cErr != nil {
+			lastReason = fmt.Sprintf("rpc=%s: %s", rpcURL, cErr.Error())
+			rpcErrors = append(rpcErrors, lastReason)
+			continue
+		}
+		ok, _, reason := u.checkFeeQuoteHealthWithReasonOnClient(
+			ctx,
+			client,
+			sourceChain,
+			destChain,
+			bridgeType,
+			router.ContractAddress,
+			rpcURL,
+		)
+		client.Close()
+		if ok {
+			return true, ""
+		}
+		if strings.TrimSpace(reason) != "" {
+			lastReason = reason
+			rpcErrors = append(rpcErrors, reason)
+		}
 	}
-	defer client.Close()
+	if len(rpcErrors) > 0 {
+		return false, summarizeFeeQuoteRPCFailures(rpcErrors)
+	}
+	return false, lastReason
+}
 
+func (u *CrosschainConfigUsecase) checkFeeQuoteHealthWithReasonOnClient(
+	ctx context.Context,
+	client *blockchain.EVMClient,
+	sourceChain, destChain *entities.Chain,
+	bridgeType uint8,
+	routerAddress string,
+	rpcURL string,
+) (bool, string, string) {
 	if runtimeOK, runtimeReason := u.checkAdapterRuntimeReadiness(
 		ctx,
 		client,
 		sourceChain,
 		destChain.GetCAIP2ID(),
-		router.ContractAddress,
+		routerAddress,
 		bridgeType,
 	); !runtimeOK {
-		return false, runtimeReason
+		return false, "", runtimeReason
 	}
 
-	sourceTokens, _, _ := u.tokenRepo.GetTokensByChain(ctx, sourceChain.ID, utils.PaginationParams{Page: 1, Limit: 1})
-	destTokens, _, _ := u.tokenRepo.GetTokensByChain(ctx, destChain.ID, utils.PaginationParams{Page: 1, Limit: 1})
-	sourceToken := common.Address{}
-	destToken := common.Address{}
-	if len(sourceTokens) > 0 && common.IsHexAddress(sourceTokens[0].ContractAddress) {
-		sourceToken = common.HexToAddress(sourceTokens[0].ContractAddress)
-	}
-	if len(destTokens) > 0 && common.IsHexAddress(destTokens[0].ContractAddress) {
-		destToken = common.HexToAddress(destTokens[0].ContractAddress)
+	sourceTokens, _, _ := u.tokenRepo.GetTokensByChain(ctx, sourceChain.ID, utils.PaginationParams{Page: 1, Limit: 200})
+	destTokens, _, _ := u.tokenRepo.GetTokensByChain(ctx, destChain.ID, utils.PaginationParams{Page: 1, Limit: 200})
+	tokenPairs := buildFeeQuoteTokenPairs(sourceTokens, destTokens)
+	if len(tokenPairs) == 0 {
+		return false, "", "no valid source/destination token pair for quote"
 	}
 
-	messageTupleType, _ := abi.NewType("tuple", "", []abi.ArgumentMarshaling{
+	messageTupleTypeV2, _ := abi.NewType("tuple", "", []abi.ArgumentMarshaling{
+		{Name: "paymentId", Type: "bytes32"},
+		{Name: "receiver", Type: "address"},
+		{Name: "sourceToken", Type: "address"},
+		{Name: "destToken", Type: "address"},
+		{Name: "amount", Type: "uint256"},
+		{Name: "destChainId", Type: "string"},
+		{Name: "minAmountOut", Type: "uint256"},
+		{Name: "payer", Type: "address"},
+	})
+	messageTupleTypeV1, _ := abi.NewType("tuple", "", []abi.ArgumentMarshaling{
 		{Name: "paymentId", Type: "bytes32"},
 		{Name: "receiver", Type: "address"},
 		{Name: "sourceToken", Type: "address"},
@@ -660,12 +737,27 @@ func (u *CrosschainConfigUsecase) checkFeeQuoteHealthWithReason(
 	})
 	stringType, _ := abi.NewType("string", "", nil)
 	uint8Type, _ := abi.NewType("uint8", "", nil)
-	args := abi.Arguments{
+	argsV2 := abi.Arguments{
 		{Type: stringType},
 		{Type: uint8Type},
-		{Type: messageTupleType},
+		{Type: messageTupleTypeV2},
 	}
-	type bridgeMessage struct {
+	argsV1 := abi.Arguments{
+		{Type: stringType},
+		{Type: uint8Type},
+		{Type: messageTupleTypeV1},
+	}
+	type bridgeMessageV2 struct {
+		PaymentId    [32]byte
+		Receiver     common.Address
+		SourceToken  common.Address
+		DestToken    common.Address
+		Amount       *big.Int
+		DestChainId  string
+		MinAmountOut *big.Int
+		Payer        common.Address
+	}
+	type bridgeMessageV1 struct {
 		PaymentId    [32]byte
 		Receiver     common.Address
 		SourceToken  common.Address
@@ -674,69 +766,304 @@ func (u *CrosschainConfigUsecase) checkFeeQuoteHealthWithReason(
 		DestChainId  string
 		MinAmountOut *big.Int
 	}
-	msgStruct := bridgeMessage{
-		PaymentId:    [32]byte{},
-		Receiver:     common.Address{},
-		SourceToken:  sourceToken,
-		DestToken:    destToken,
-		Amount:       big.NewInt(1),
-		DestChainId:  destChain.GetCAIP2ID(),
-		MinAmountOut: big.NewInt(0),
-	}
-	packedArgs, _ := args.Pack(destChain.GetCAIP2ID(), bridgeType, msgStruct)
-
-	// Prefer safe quote path (newer router) to get exact failure reason.
-	safeMethodSig := []byte("quotePaymentFeeSafe(string,uint8,(bytes32,address,address,address,uint256,string,uint256))")
-	safeMethodID := crypto.Keccak256(safeMethodSig)[:4]
-	safeCalldata := append(safeMethodID, packedArgs...)
-	if safeOut, safeErr := client.CallView(ctx, router.ContractAddress, safeCalldata); safeErr == nil {
-		if len(safeOut) > 0 {
-			boolType, _ := abi.NewType("bool", "", nil)
-			uint256Type, _ := abi.NewType("uint256", "", nil)
-			stringType, _ := abi.NewType("string", "", nil)
-			safeOutputs := abi.Arguments{
-				{Type: boolType},
-				{Type: uint256Type},
-				{Type: stringType},
+	lastReason := "execution reverted"
+	lastPath := ""
+	for _, pair := range tokenPairs {
+		amountCandidates := pair.amounts
+		if len(amountCandidates) == 0 {
+			amountCandidates = []*big.Int{big.NewInt(1)}
+		}
+		for _, sampleAmount := range amountCandidates {
+			msgStructV2 := bridgeMessageV2{
+				PaymentId:    [32]byte{},
+				Receiver:     common.Address{},
+				SourceToken:  pair.sourceToken,
+				DestToken:    pair.destToken,
+				Amount:       sampleAmount,
+				DestChainId:  destChain.GetCAIP2ID(),
+				MinAmountOut: big.NewInt(0),
+				Payer:        common.Address{},
 			}
-			if decoded, unpackErr := safeOutputs.Unpack(safeOut); unpackErr == nil && len(decoded) == 3 {
-				ok, _ := decoded[0].(bool)
-				reason, _ := decoded[2].(string)
-				if ok {
-					return true, ""
+			msgStructV1 := bridgeMessageV1{
+				PaymentId:    [32]byte{},
+				Receiver:     common.Address{},
+				SourceToken:  pair.sourceToken,
+				DestToken:    pair.destToken,
+				Amount:       sampleAmount,
+				DestChainId:  destChain.GetCAIP2ID(),
+				MinAmountOut: big.NewInt(0),
+			}
+			packedArgsV2, _ := argsV2.Pack(destChain.GetCAIP2ID(), bridgeType, msgStructV2)
+			packedArgsV1, _ := argsV1.Pack(destChain.GetCAIP2ID(), bridgeType, msgStructV1)
+
+			// Prefer safe quote path (newer router) to get exact failure reason.
+			safeMethodSig := []byte("quotePaymentFeeSafe(string,uint8,(bytes32,address,address,address,uint256,string,uint256,address))")
+			safeMethodID := crypto.Keccak256(safeMethodSig)[:4]
+			safeCalldata := append(safeMethodID, packedArgsV2...)
+			lastPath = "safe"
+			safeSchemaMismatch := false
+			if safeOut, safeErr := client.CallView(ctx, routerAddress, safeCalldata); safeErr == nil {
+				if len(safeOut) > 0 {
+					boolType, _ := abi.NewType("bool", "", nil)
+					uint256Type, _ := abi.NewType("uint256", "", nil)
+					stringType, _ := abi.NewType("string", "", nil)
+					safeOutputs := abi.Arguments{
+						{Type: boolType},
+						{Type: uint256Type},
+						{Type: stringType},
+					}
+					if decoded, unpackErr := safeOutputs.Unpack(safeOut); unpackErr == nil && len(decoded) == 3 {
+						ok, _ := decoded[0].(bool)
+						reason, _ := decoded[2].(string)
+						if ok {
+							return true, "safe", ""
+						}
+						if isQuoteSchemaMismatchReason(reason) {
+							lastReason = formatFeeQuoteAttemptReason(
+								rpcURL,
+								pair.sourceToken,
+								pair.destToken,
+								sampleAmount,
+								"quotePaymentFeeSafe",
+								"quote_failed_schema_mismatch",
+							)
+							continue
+						}
+						if reason != "execution_reverted" && strings.TrimSpace(reason) != "" {
+							lastReason = formatFeeQuoteAttemptReason(
+								rpcURL,
+								pair.sourceToken,
+								pair.destToken,
+								sampleAmount,
+								"quotePaymentFeeSafe",
+								reason,
+							)
+							continue
+						}
+					}
 				}
-				// If safe call failed with generic "execution_reverted", fall through to try real call
-				// which allows us to extract the raw revert data for custom errors.
-				if reason != "execution_reverted" && strings.TrimSpace(reason) != "" {
-					return false, reason
+			} else if decoded, decodedOK := decodeRevertDataFromError(safeErr); decodedOK {
+				lastReason = formatFeeQuoteAttemptReason(
+					rpcURL,
+					pair.sourceToken,
+					pair.destToken,
+					sampleAmount,
+					"quotePaymentFeeSafe",
+					formatDecodedRouteErrorForPreflight(decoded),
+				)
+				continue
+			} else if isQuoteSchemaMismatchReason(safeErr.Error()) {
+				safeSchemaMismatch = true
+			} else {
+				lastReason = formatFeeQuoteAttemptReason(
+					rpcURL,
+					pair.sourceToken,
+					pair.destToken,
+					sampleAmount,
+					"quotePaymentFeeSafe",
+					safeErr.Error(),
+				)
+				continue
+			}
+
+			methodSig := []byte("quotePaymentFee(string,uint8,(bytes32,address,address,address,uint256,string,uint256,address))")
+			methodID := crypto.Keccak256(methodSig)[:4]
+			calldata := append(methodID, packedArgsV2...)
+			lastPath = "v2"
+
+			out, callErr := client.CallView(ctx, routerAddress, calldata)
+			if callErr != nil {
+				// legacy fallback for older router tuple schema
+				legacySig := []byte("quotePaymentFee(string,uint8,(bytes32,address,address,address,uint256,string,uint256))")
+				legacyID := crypto.Keccak256(legacySig)[:4]
+				legacyCalldata := append(legacyID, packedArgsV1...)
+				lastPath = "legacy"
+				out, callErr = client.CallView(ctx, routerAddress, legacyCalldata)
+				if callErr != nil {
+					if decoded, decodedOK := decodeRevertDataFromError(callErr); decodedOK {
+						lastReason = formatFeeQuoteAttemptReason(
+							rpcURL,
+							pair.sourceToken,
+							pair.destToken,
+							sampleAmount,
+							"quotePaymentFee(legacy)",
+							formatDecodedRouteErrorForPreflight(decoded),
+						)
+						continue
+					}
+					if isQuoteSchemaMismatchReason(callErr.Error()) || safeSchemaMismatch {
+						lastReason = formatFeeQuoteAttemptReason(
+							rpcURL,
+							pair.sourceToken,
+							pair.destToken,
+							sampleAmount,
+							"quotePaymentFee(legacy)",
+							"quote_failed_schema_mismatch",
+						)
+						continue
+					}
+					lastReason = formatFeeQuoteAttemptReason(
+						rpcURL,
+						pair.sourceToken,
+						pair.destToken,
+						sampleAmount,
+						"quotePaymentFee(legacy)",
+						callErr.Error(),
+					)
+					continue
 				}
+			}
+			if len(out) == 0 {
+				if safeSchemaMismatch {
+					lastReason = formatFeeQuoteAttemptReason(
+						rpcURL,
+						pair.sourceToken,
+						pair.destToken,
+						sampleAmount,
+						"quotePaymentFee",
+						"quote_failed_schema_mismatch",
+					)
+					continue
+				}
+				lastReason = formatFeeQuoteAttemptReason(
+					rpcURL,
+					pair.sourceToken,
+					pair.destToken,
+					sampleAmount,
+					"quotePaymentFee",
+					"empty quote response",
+				)
+				continue
+			}
+			return true, lastPath, ""
+		}
+	}
+	return false, lastPath, lastReason
+}
+
+type feeQuoteTokenPair struct {
+	sourceToken common.Address
+	destToken   common.Address
+	amounts     []*big.Int
+}
+
+func buildFeeQuoteTokenPairs(sourceTokens []*entities.Token, destTokens []*entities.Token) []feeQuoteTokenPair {
+	type sourceTokenCandidate struct {
+		addr     common.Address
+		symbol   string
+		decimals int
+	}
+
+	toAddr := func(token *entities.Token) (common.Address, bool) {
+		if token == nil || !common.IsHexAddress(token.ContractAddress) {
+			return common.Address{}, false
+		}
+		addr := common.HexToAddress(token.ContractAddress)
+		if addr == (common.Address{}) {
+			return common.Address{}, false
+		}
+		return addr, true
+	}
+
+	buildAmountCandidates := func(decimals int) []*big.Int {
+		one := big.NewInt(1)
+		candidates := []*big.Int{new(big.Int).Set(one)}
+		if decimals > 0 && decimals <= 36 {
+			scale := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(decimals)), nil)
+			if scale.Sign() > 0 {
+				candidates = append(candidates, scale)
 			}
 		}
-	} else if decoded, decodedOK := decodeRevertDataFromError(safeErr); decodedOK {
-		return false, formatDecodedRouteErrorForPreflight(decoded)
-	}
-
-	methodSig := []byte("quotePaymentFee(string,uint8,(bytes32,address,address,address,uint256,string,uint256))")
-	methodID := crypto.Keccak256(methodSig)[:4]
-	calldata := append(methodID, packedArgs...)
-
-	out, callErr := client.CallView(ctx, router.ContractAddress, calldata)
-	if callErr != nil {
-		if decoded, decodedOK := decodeRevertDataFromError(callErr); decodedOK {
-			return false, formatDecodedRouteErrorForPreflight(decoded)
+		// Deduplicate while preserving order.
+		seen := make(map[string]struct{}, len(candidates))
+		out := make([]*big.Int, 0, len(candidates))
+		for _, c := range candidates {
+			if c == nil || c.Sign() <= 0 {
+				continue
+			}
+			key := c.String()
+			if _, ok := seen[key]; ok {
+				continue
+			}
+			seen[key] = struct{}{}
+			out = append(out, c)
 		}
-		return false, callErr.Error()
+		return out
 	}
-	if len(out) == 0 {
-		return false, "empty quote response"
+
+	sourceCandidates := make([]sourceTokenCandidate, 0, len(sourceTokens))
+	destBySymbol := make(map[string][]common.Address)
+	for _, token := range destTokens {
+		symbol := strings.TrimSpace(strings.ToUpper(token.Symbol))
+		if symbol == "" {
+			continue
+		}
+		if addr, ok := toAddr(token); ok {
+			destBySymbol[symbol] = append(destBySymbol[symbol], addr)
+		}
 	}
-	return true, ""
+	for _, token := range sourceTokens {
+		symbol := strings.TrimSpace(strings.ToUpper(token.Symbol))
+		if symbol == "" {
+			continue
+		}
+		if addr, ok := toAddr(token); ok {
+			sourceCandidates = append(sourceCandidates, sourceTokenCandidate{
+				addr:     addr,
+				symbol:   symbol,
+				decimals: token.Decimals,
+			})
+		}
+	}
+
+	pairs := make([]feeQuoteTokenPair, 0, 8)
+	seen := make(map[string]struct{})
+	addPair := func(src, dst common.Address, amounts []*big.Int) {
+		key := strings.ToLower(src.Hex()) + "->" + strings.ToLower(dst.Hex())
+		if _, ok := seen[key]; ok {
+			return
+		}
+		seen[key] = struct{}{}
+		pairs = append(pairs, feeQuoteTokenPair{sourceToken: src, destToken: dst, amounts: amounts})
+	}
+
+	for _, src := range sourceCandidates {
+		for _, dstAddr := range destBySymbol[src.symbol] {
+			addPair(src.addr, dstAddr, buildAmountCandidates(src.decimals))
+		}
+	}
+
+	// Fallback: first valid pair if symbols don't match.
+	if len(pairs) == 0 {
+		var srcFallback common.Address
+		var dstFallback common.Address
+		for _, token := range sourceTokens {
+			if addr, ok := toAddr(token); ok {
+				srcFallback = addr
+				break
+			}
+		}
+		for _, token := range destTokens {
+			if addr, ok := toAddr(token); ok {
+				dstFallback = addr
+				break
+			}
+		}
+		if srcFallback != (common.Address{}) && dstFallback != (common.Address{}) {
+			addPair(srcFallback, dstFallback, []*big.Int{big.NewInt(1)})
+		}
+	}
+
+	return pairs
 }
 
 func formatDecodedRouteErrorForPreflight(decoded RouteErrorDecoded) string {
 	name := strings.TrimSpace(decoded.Name)
 	msg := strings.TrimSpace(decoded.Message)
 	selector := strings.TrimSpace(decoded.Selector)
+	if isQuoteSchemaMismatchReason(msg) {
+		return "quote_failed_schema_mismatch"
+	}
 	if msg != "" && msg != "execution_reverted" && msg != "no route error recorded" {
 		return msg
 	}
@@ -765,6 +1092,45 @@ func formatDecodedRouteErrorForPreflight(decoded RouteErrorDecoded) string {
 		return "execution_reverted (" + selector + ")"
 	}
 	return "execution_reverted"
+}
+
+func formatFeeQuoteAttemptReason(
+	rpcURL string,
+	sourceToken common.Address,
+	destToken common.Address,
+	amount *big.Int,
+	stage string,
+	reason string,
+) string {
+	trimmedReason := strings.TrimSpace(reason)
+	if trimmedReason == "" {
+		trimmedReason = "execution reverted"
+	}
+	amountText := "0"
+	if amount != nil {
+		amountText = amount.String()
+	}
+	return fmt.Sprintf(
+		"rpc=%s stage=%s sourceToken=%s destToken=%s amount=%s reason=%s",
+		rpcURL,
+		stage,
+		sourceToken.Hex(),
+		destToken.Hex(),
+		amountText,
+		trimmedReason,
+	)
+}
+
+func summarizeFeeQuoteRPCFailures(errors []string) string {
+	if len(errors) == 0 {
+		return "execution reverted"
+	}
+	const maxItems = 3
+	items := errors
+	if len(items) > maxItems {
+		items = items[:maxItems]
+	}
+	return strings.Join(items, " | ")
 }
 
 func (u *CrosschainConfigUsecase) checkAdapterRuntimeReadiness(

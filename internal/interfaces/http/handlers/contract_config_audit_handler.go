@@ -6,9 +6,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	domainerrors "pay-chain.backend/internal/domain/errors"
-	"pay-chain.backend/internal/interfaces/http/response"
-	"pay-chain.backend/internal/usecases"
+	domainerrors "payment-kita.backend/internal/domain/errors"
+	"payment-kita.backend/internal/interfaces/http/response"
+	"payment-kita.backend/internal/usecases"
 )
 
 type ContractConfigAuditHandler struct {

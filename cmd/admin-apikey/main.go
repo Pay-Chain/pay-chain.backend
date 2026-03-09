@@ -14,11 +14,11 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
-	"pay-chain.backend/internal/config"
-	"pay-chain.backend/internal/domain/entities"
-	domainrepo "pay-chain.backend/internal/domain/repositories"
-	"pay-chain.backend/internal/infrastructure/repositories"
-	"pay-chain.backend/internal/usecases"
+	"payment-kita.backend/internal/config"
+	"payment-kita.backend/internal/domain/entities"
+	domainrepo "payment-kita.backend/internal/domain/repositories"
+	"payment-kita.backend/internal/infrastructure/repositories"
+	"payment-kita.backend/internal/usecases"
 )
 
 var openAdminAPIKeyDB = func(dsn string) (*gorm.DB, error) {

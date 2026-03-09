@@ -10,7 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
-	"pay-chain.backend/internal/usecases"
+	"payment-kita.backend/internal/usecases"
 )
 
 type onchainAdapterServiceStub struct {
@@ -18,8 +18,10 @@ type onchainAdapterServiceStub struct {
 	registerAdapter  func(context.Context, string, string, uint8, string) (string, error)
 	setDefaultBridge func(context.Context, string, string, uint8) (string, error)
 	setHyperbridge   func(context.Context, string, string, string, string) (string, []string, error)
-	setCCIP          func(context.Context, string, string, *uint64, string) (string, []string, error)
+	setCCIP          func(context.Context, usecases.CCIPConfigInput) (string, []string, error)
 	setLayerZero     func(context.Context, string, string, *uint32, string, string) (string, []string, error)
+	configureLZE2E   func(context.Context, usecases.LayerZeroE2EConfigureInput) (*usecases.LayerZeroE2EConfigureResult, error)
+	getLZE2EStatus   func(context.Context, usecases.LayerZeroE2EStatusInput) (*usecases.LayerZeroE2EStatusResult, error)
 	genericInteract  func(context.Context, string, string, string, string, []interface{}) (interface{}, bool, error)
 }
 
@@ -35,11 +37,23 @@ func (s onchainAdapterServiceStub) SetDefaultBridgeType(ctx context.Context, sou
 func (s onchainAdapterServiceStub) SetHyperbridgeConfig(ctx context.Context, sourceChainInput, destChainInput, stateMachineIDHex, destinationContractHex string) (string, []string, error) {
 	return s.setHyperbridge(ctx, sourceChainInput, destChainInput, stateMachineIDHex, destinationContractHex)
 }
-func (s onchainAdapterServiceStub) SetCCIPConfig(ctx context.Context, sourceChainInput, destChainInput string, chainSelector *uint64, destinationAdapterHex string) (string, []string, error) {
-	return s.setCCIP(ctx, sourceChainInput, destChainInput, chainSelector, destinationAdapterHex)
+func (s onchainAdapterServiceStub) SetCCIPConfig(ctx context.Context, input usecases.CCIPConfigInput) (string, []string, error) {
+	return s.setCCIP(ctx, input)
 }
 func (s onchainAdapterServiceStub) SetLayerZeroConfig(ctx context.Context, sourceChainInput, destChainInput string, dstEid *uint32, peerHex, optionsHex string) (string, []string, error) {
 	return s.setLayerZero(ctx, sourceChainInput, destChainInput, dstEid, peerHex, optionsHex)
+}
+func (s onchainAdapterServiceStub) ConfigureLayerZeroE2E(ctx context.Context, input usecases.LayerZeroE2EConfigureInput) (*usecases.LayerZeroE2EConfigureResult, error) {
+	if s.configureLZE2E == nil {
+		return &usecases.LayerZeroE2EConfigureResult{Status: "SUCCESS"}, nil
+	}
+	return s.configureLZE2E(ctx, input)
+}
+func (s onchainAdapterServiceStub) GetLayerZeroE2EStatus(ctx context.Context, input usecases.LayerZeroE2EStatusInput) (*usecases.LayerZeroE2EStatusResult, error) {
+	if s.getLZE2EStatus == nil {
+		return &usecases.LayerZeroE2EStatusResult{Ready: true}, nil
+	}
+	return s.getLZE2EStatus(ctx, input)
 }
 func (s onchainAdapterServiceStub) GenericInteract(ctx context.Context, sourceChainInput, contractAddress, method, abiStr string, args []interface{}) (interface{}, bool, error) {
 	return s.genericInteract(ctx, sourceChainInput, contractAddress, method, abiStr, args)
@@ -62,7 +76,7 @@ func TestOnchainAdapterHandler_SuccessPaths(t *testing.T) {
 			setHyperbridge: func(_ context.Context, _, _ string, _, _ string) (string, []string, error) {
 				return "0xhyper", []string{"0x1", "0x2"}, nil
 			},
-			setCCIP: func(_ context.Context, _, _ string, _ *uint64, _ string) (string, []string, error) {
+			setCCIP: func(_ context.Context, _ usecases.CCIPConfigInput) (string, []string, error) {
 				return "0xccip", []string{"0x3"}, nil
 			},
 			setLayerZero: func(_ context.Context, _, _ string, _ *uint32, _, _ string) (string, []string, error) {
@@ -81,6 +95,8 @@ func TestOnchainAdapterHandler_SuccessPaths(t *testing.T) {
 	r.POST("/hyperbridge", h.SetHyperbridgeConfig)
 	r.POST("/ccip", h.SetCCIPConfig)
 	r.POST("/layerzero", h.SetLayerZeroConfig)
+	r.POST("/layerzero-e2e", h.ConfigureLayerZeroE2E)
+	r.GET("/layerzero-e2e-status", h.GetLayerZeroE2EStatus)
 
 	req := httptest.NewRequest(http.MethodGet, "/status?sourceChainId=eip155:8453&destChainId=eip155:42161", nil)
 	rec := httptest.NewRecorder()
@@ -136,6 +152,25 @@ func TestOnchainAdapterHandler_SuccessPaths(t *testing.T) {
 				"optionsHex":    "0x010203",
 			},
 		},
+		{
+			path: "/layerzero-e2e",
+			body: map[string]interface{}{
+				"sourceChainId": "eip155:8453",
+				"destChainId":   "eip155:42161",
+				"source": map[string]interface{}{
+					"registerAdapterIfMissing": true,
+					"setDefaultBridgeType":     true,
+					"senderAddress":            "0x1111111111111111111111111111111111111111",
+					"dstEid":                   30110,
+					"dstPeerHex":               "0x0000000000000000000000002222222222222222222222222222222222222222",
+				},
+				"destination": map[string]interface{}{
+					"receiverAddress": "0x3333333333333333333333333333333333333333",
+					"srcEid":          30184,
+					"srcSenderHex":    "0x0000000000000000000000001111111111111111111111111111111111111111",
+				},
+			},
+		},
 	}
 
 	for _, tc := range tests {
@@ -146,4 +181,13 @@ func TestOnchainAdapterHandler_SuccessPaths(t *testing.T) {
 		r.ServeHTTP(rec, req)
 		require.Equal(t, http.StatusOK, rec.Code, "path=%s body=%s", tc.path, rec.Body.String())
 	}
+
+	req = httptest.NewRequest(
+		http.MethodGet,
+		"/layerzero-e2e-status?sourceChainId=eip155:8453&destChainId=eip155:42161&destinationSrcEid=30184&destinationSrcSenderHex=0x0000000000000000000000001111111111111111111111111111111111111111",
+		nil,
+	)
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 }

@@ -8,9 +8,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	"pay-chain.backend/internal/domain/entities"
-	"pay-chain.backend/internal/infrastructure/blockchain"
-	"pay-chain.backend/internal/usecases"
+	"payment-kita.backend/internal/domain/entities"
+	"payment-kita.backend/internal/infrastructure/blockchain"
+	"payment-kita.backend/internal/usecases"
 )
 
 func TestCreatePayment_Success(t *testing.T) {

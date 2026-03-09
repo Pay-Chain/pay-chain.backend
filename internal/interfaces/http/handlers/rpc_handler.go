@@ -7,9 +7,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"pay-chain.backend/internal/domain/entities"
-	"pay-chain.backend/internal/domain/repositories"
-	"pay-chain.backend/pkg/utils"
+	"payment-kita.backend/internal/domain/entities"
+	"payment-kita.backend/internal/domain/repositories"
+	"payment-kita.backend/pkg/utils"
 )
 
 // RpcHandler handles RPC endpoints

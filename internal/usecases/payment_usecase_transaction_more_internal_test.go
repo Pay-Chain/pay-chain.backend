@@ -9,8 +9,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
-	"pay-chain.backend/internal/domain/entities"
-	"pay-chain.backend/internal/infrastructure/blockchain"
+	"payment-kita.backend/internal/domain/entities"
+	domainerrors "payment-kita.backend/internal/domain/errors"
+	"payment-kita.backend/internal/infrastructure/blockchain"
 )
 
 func TestPaymentUsecase_BuildTransactionData_MoreBranches(t *testing.T) {
@@ -94,7 +95,9 @@ func TestPaymentUsecase_BuildTransactionData_MoreBranches(t *testing.T) {
 		out, err := u.buildTransactionData(payment, contract)
 		require.Nil(t, out)
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "failed to resolve bridge fee quote")
+		var appErr *domainerrors.AppError
+		require.ErrorAs(t, err, &appErr)
+		require.Contains(t, appErr.Message, "failed to resolve bridge fee quote")
 	})
 
 	t.Run("source and dest chain resolved from repo when relation missing", func(t *testing.T) {
@@ -134,7 +137,7 @@ func TestPaymentUsecase_BuildTransactionData_MoreBranches(t *testing.T) {
 		require.Nil(t, out)
 	})
 
-	t.Run("approval path propagates calculateOnchainApprovalAmount error", func(t *testing.T) {
+	t.Run("approval path falls back to source amount when approval quote fails", func(t *testing.T) {
 		sourceID := uuid.New()
 		u := &PaymentUsecase{
 			contractRepo: &scRepoStub{getActiveFn: func(context.Context, uuid.UUID, entities.SmartContractType) (*entities.SmartContract, error) {
@@ -153,9 +156,13 @@ func TestPaymentUsecase_BuildTransactionData_MoreBranches(t *testing.T) {
 			DestChain:          &entities.Chain{ChainID: "8453", Type: entities.ChainTypeEVM},
 		}
 		out, err := u.buildTransactionData(payment, contract)
-		require.Nil(t, out)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "invalid source amount")
+		require.NoError(t, err)
+		require.NotNil(t, out)
+		m, ok := out.(map[string]interface{})
+		require.True(t, ok)
+		approval, ok := m["approval"].(map[string]string)
+		require.True(t, ok)
+		require.Equal(t, "not-number", approval["amount"])
 	})
 
 	t.Run("cross-chain with approval success includes tx value and approval", func(t *testing.T) {

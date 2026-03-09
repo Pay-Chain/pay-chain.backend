@@ -1177,4 +1177,4 @@ redis: 2026/02/18 08:31:37 pool.go:426: redis: connection pool: failed to dial a
 --- PASS: TestDecodeRouteErrorData_InsufficientNativeFeePayload (0.00s)
 --- PASS: TestDecodeRouteErrorData_KnownCustomSelectorWithPayload (0.00s)
 PASS
-ok  	pay-chain.backend/internal/usecases	8.938s
+ok  	payment-kita.backend/internal/usecases	8.938s

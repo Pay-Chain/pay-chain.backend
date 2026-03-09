@@ -35,6 +35,11 @@ func TestFormatDecodedRouteErrorForPreflight(t *testing.T) {
 			decoded: RouteErrorDecoded{Message: "execution_reverted"},
 			want:    "execution_reverted",
 		},
+		{
+			name:    "schema mismatch reason normalization",
+			decoded: RouteErrorDecoded{Message: "function selector was not recognized and there's no fallback function"},
+			want:    "quote_failed_schema_mismatch",
+		},
 	}
 
 	for _, tt := range tests {
@@ -48,4 +53,3 @@ func TestFormatDecodedRouteErrorForPreflight(t *testing.T) {
 		})
 	}
 }
-

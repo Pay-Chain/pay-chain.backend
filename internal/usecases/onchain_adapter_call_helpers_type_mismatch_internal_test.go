@@ -23,14 +23,14 @@ func TestOnchainAdapterUsecase_CallHelpers_InvalidReturnTypeBranches(t *testing.
 	dest := "eip155:42161"
 	addr := common.HexToAddress("0x1111111111111111111111111111111111111111").Hex()
 
-	origGatewayABI := FallbackPayChainGatewayABI
-	origRouterABI := FallbackPayChainRouterAdminABI
+	origGatewayABI := FallbackPaymentKitaGatewayABI
+	origRouterABI := FallbackPaymentKitaRouterAdminABI
 	origHyperABI := FallbackHyperbridgeSenderAdminABI
 	origCCIPABI := FallbackCCIPSenderAdminABI
 	origLZABI := FallbackLayerZeroSenderAdminABI
 	t.Cleanup(func() {
-		FallbackPayChainGatewayABI = origGatewayABI
-		FallbackPayChainRouterAdminABI = origRouterABI
+		FallbackPaymentKitaGatewayABI = origGatewayABI
+		FallbackPaymentKitaRouterAdminABI = origRouterABI
 		FallbackHyperbridgeSenderAdminABI = origHyperABI
 		FallbackCCIPSenderAdminABI = origCCIPABI
 		FallbackLayerZeroSenderAdminABI = origLZABI
@@ -39,11 +39,11 @@ func TestOnchainAdapterUsecase_CallHelpers_InvalidReturnTypeBranches(t *testing.
 	gatewayMismatch := mustParseABI(`[
 		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"}],"name":"defaultBridgeTypes","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"}
 	]`)
-	FallbackPayChainGatewayABI = gatewayMismatch
+	FallbackPaymentKitaGatewayABI = gatewayMismatch
 	client := newTestEVMClient(t, []string{
 		mustEncodeOutMismatch(t, gatewayMismatch, "defaultBridgeTypes", true),
 	})
-	_, err := u.callDefaultBridgeType(ctx, client, addr, FallbackPayChainGatewayABI, dest)
+	_, err := u.callDefaultBridgeType(ctx, client, addr, FallbackPaymentKitaGatewayABI, dest)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid defaultBridgeTypes return type")
 
@@ -51,15 +51,15 @@ func TestOnchainAdapterUsecase_CallHelpers_InvalidReturnTypeBranches(t *testing.
 		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"},{"internalType":"uint8","name":"bridgeType","type":"uint8"}],"name":"hasAdapter","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
 		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"},{"internalType":"uint8","name":"bridgeType","type":"uint8"}],"name":"getAdapter","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}
 	]`)
-	FallbackPayChainRouterAdminABI = routerMismatch
+	FallbackPaymentKitaRouterAdminABI = routerMismatch
 	client = newTestEVMClient(t, []string{
 		mustEncodeOutMismatch(t, routerMismatch, "hasAdapter", big.NewInt(1)),
 		mustEncodeOutMismatch(t, routerMismatch, "getAdapter", big.NewInt(1)),
 	})
-	_, err = u.callHasAdapter(ctx, client, addr, FallbackPayChainRouterAdminABI, dest, 0)
+	_, err = u.callHasAdapter(ctx, client, addr, FallbackPaymentKitaRouterAdminABI, dest, 0)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid hasAdapter return type")
-	_, err = u.callGetAdapter(ctx, client, addr, FallbackPayChainRouterAdminABI, dest, 0)
+	_, err = u.callGetAdapter(ctx, client, addr, FallbackPaymentKitaRouterAdminABI, dest, 0)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid getAdapter return type")
 

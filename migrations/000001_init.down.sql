@@ -1,5 +1,5 @@
 -- 000001_init.down.sql
--- Rollback Pay-Chain Database Schema
+-- Rollback Payment-Kita Database Schema
 
 -- Drop tables in reverse order
 DROP TABLE IF EXISTS merchant_fee_tiers;

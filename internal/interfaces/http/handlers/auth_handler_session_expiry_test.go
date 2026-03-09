@@ -11,9 +11,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
-	"pay-chain.backend/internal/domain/entities"
-	"pay-chain.backend/pkg/jwt"
-	"pay-chain.backend/pkg/redis"
+	"payment-kita.backend/internal/domain/entities"
+	"payment-kita.backend/pkg/jwt"
+	"payment-kita.backend/pkg/redis"
 )
 
 func TestAuthHandler_GetSessionExpiry_NoSession(t *testing.T) {
@@ -55,7 +55,7 @@ func TestAuthHandler_GetSessionExpiry_CookieFallbackAndInvalidSession(t *testing
 
 	userID := uuid.New()
 	jwtSvc := jwt.NewJWTService("test-secret", 15*time.Minute, 24*time.Hour)
-	pair, err := jwtSvc.GenerateTokenPair(userID, "cookie@paychain.io", string(entities.UserRoleUser))
+	pair, err := jwtSvc.GenerateTokenPair(userID, "cookie@paymentkita.io", string(entities.UserRoleUser))
 	require.NoError(t, err)
 
 	h := NewAuthHandler(

@@ -1,5 +1,5 @@
 -- 000001_init.up.sql
--- Pay-Chain Database Schema
+-- Payment-Kita Database Schema
 
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";

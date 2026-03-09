@@ -16,16 +16,16 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
-	"pay-chain.backend/internal/config"
-	"pay-chain.backend/internal/infrastructure/blockchain"
-	"pay-chain.backend/internal/infrastructure/jobs"
-	"pay-chain.backend/internal/infrastructure/repositories"
-	"pay-chain.backend/internal/interfaces/http/handlers"
-	"pay-chain.backend/internal/interfaces/http/middleware"
-	"pay-chain.backend/internal/usecases"
-	"pay-chain.backend/pkg/jwt"
-	"pay-chain.backend/pkg/logger"
-	"pay-chain.backend/pkg/redis"
+	"payment-kita.backend/internal/config"
+	"payment-kita.backend/internal/infrastructure/blockchain"
+	"payment-kita.backend/internal/infrastructure/jobs"
+	"payment-kita.backend/internal/infrastructure/repositories"
+	"payment-kita.backend/internal/interfaces/http/handlers"
+	"payment-kita.backend/internal/interfaces/http/middleware"
+	"payment-kita.backend/internal/usecases"
+	"payment-kita.backend/pkg/jwt"
+	"payment-kita.backend/pkg/logger"
+	"payment-kita.backend/pkg/redis"
 )
 
 var (
@@ -230,7 +230,7 @@ func runMainProcess() error {
 	}()
 
 	// Start server
-	log.Printf("🚀 Pay-Chain Backend starting on port %s", cfg.Server.Port)
+	log.Printf("🚀 Payment-Kita Backend starting on port %s", cfg.Server.Port)
 	log.Printf("📚 API: http://localhost:%s/api/v1", cfg.Server.Port)
 	log.Printf("❤️ Health: http://localhost:%s/health", cfg.Server.Port)
 

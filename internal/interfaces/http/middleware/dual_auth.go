@@ -11,9 +11,9 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"pay-chain.backend/internal/usecases"
-	"pay-chain.backend/pkg/jwt"
-	"pay-chain.backend/pkg/redis"
+	"payment-kita.backend/internal/usecases"
+	"payment-kita.backend/pkg/jwt"
+	"payment-kita.backend/pkg/redis"
 )
 
 // DualAuthMiddleware handles both JWT and API Key authentication

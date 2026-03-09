@@ -129,7 +129,7 @@ To prevent inconsistent states between the Database and Message Queue (RabbitMQ)
 ### Redis Usage Rules
 *   **Not Source of Truth**: Redis is for caching only. Persistent data must reside in the Database.
 *   **Keys**:
-    *   MUST be namespaced: `paychain:{env}:{feature}:{id}`.
+    *   MUST be namespaced: `paymentkita:{env}:{feature}:{id}`.
     *   MUST have a TTL (Time To Live).
 *   **Access**: Wrapped in a dedicated Cache Service, never raw commands in handlers.
 

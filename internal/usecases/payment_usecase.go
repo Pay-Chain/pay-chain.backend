@@ -17,11 +17,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/lib/pq"
 	"github.com/volatiletech/null/v8"
-	"pay-chain.backend/internal/domain/entities"
-	domainerrors "pay-chain.backend/internal/domain/errors"
-	"pay-chain.backend/internal/domain/repositories"
-	"pay-chain.backend/internal/infrastructure/blockchain"
-	"pay-chain.backend/pkg/utils"
+	"payment-kita.backend/internal/domain/entities"
+	domainerrors "payment-kita.backend/internal/domain/errors"
+	"payment-kita.backend/internal/domain/repositories"
+	"payment-kita.backend/internal/infrastructure/blockchain"
+	"payment-kita.backend/pkg/utils"
 )
 
 var (
@@ -397,10 +397,8 @@ func (u *PaymentUsecase) CreatePayment(ctx context.Context, userID uuid.UUID, in
 		payment.DestAmount = null.StringFrom(feeBreakdown.NetAmount)
 	}
 
-	// Save payment
-	// Wrap critical DB operations in transaction (payment only).
+	// Save payment in transaction.
 	if err = u.uow.Do(ctx, func(txCtx context.Context) error {
-		// Save payment
 		if err := u.paymentRepo.Create(txCtx, payment); err != nil {
 			return err
 		}
@@ -409,8 +407,8 @@ func (u *PaymentUsecase) CreatePayment(ctx context.Context, userID uuid.UUID, in
 		return nil, err
 	}
 
-	// Create initial event as best-effort after payment is committed.
-	// This prevents schema drift on payment_events from breaking core payment creation.
+	// Create initial event as best-effort after payment commit.
+	// Never fail payment creation when event table has FK/schema timing issues.
 	event := &entities.PaymentEvent{
 		ID:        utils.GenerateUUIDv7(),
 		PaymentID: payment.ID,
@@ -418,24 +416,12 @@ func (u *PaymentUsecase) CreatePayment(ctx context.Context, userID uuid.UUID, in
 		ChainID:   &sourceChain.ID,
 		CreatedAt: time.Now(),
 	}
-	// Retry loop for event creation to handle potential DB replication lag or race on FK visibility.
-	for i := 0; i < 3; i++ {
-		if err := u.paymentEventRepo.Create(ctx, event); err != nil {
-			if isForeignKeyViolation(err, "payment_events_payment_id_fkey") {
-				if i < 2 {
-					time.Sleep(100 * time.Millisecond)
-					continue
-				}
-				fmt.Printf("Info: skip payment event insert due to pending payment FK visibility for %s after retries\n", payment.ID)
-			} else {
-				fmt.Printf("Warning: failed to create payment event for payment %s: %v\n", payment.ID, err)
-			}
-		}
-		break
+	if err := u.paymentEventRepo.Create(ctx, event); err != nil {
+		fmt.Printf("Warning: failed to create payment event for payment %s: %v\n", payment.ID, err)
 	}
 
 	// Build transaction data using metadata from DB
-	signatureData, sigErr := u.buildTransactionData(payment, contract)
+	signatureData, sigErr := u.buildTransactionDataWithInput(payment, contract, input)
 	if sigErr != nil {
 		return nil, sigErr
 	}
@@ -443,7 +429,7 @@ func (u *PaymentUsecase) CreatePayment(ctx context.Context, userID uuid.UUID, in
 	// Phase 3 (Track-B): expose gateway quotePaymentCost breakdown when available.
 	var onchainCost *entities.OnchainCost
 	if contract != nil && getChainTypeFromCAIP2(sourceCAIP2) == "eip155" {
-		if quoted, qErr := u.quoteGatewayPaymentCost(ctx, payment, contract.ContractAddress); qErr == nil {
+		if quoted, qErr := u.quoteGatewayPaymentCost(ctx, payment, contract.ContractAddress, input); qErr == nil {
 			onchainCost = quoted
 		}
 	}
@@ -532,6 +518,14 @@ func (u *PaymentUsecase) resolveToken(ctx context.Context, address string, chain
 
 // buildTransactionData builds transaction data for frontend based on database metadata
 func (u *PaymentUsecase) buildTransactionData(payment *entities.Payment, contract *entities.SmartContract) (interface{}, error) {
+	return u.buildTransactionDataWithInput(payment, contract, nil)
+}
+
+func (u *PaymentUsecase) buildTransactionDataWithInput(
+	payment *entities.Payment,
+	contract *entities.SmartContract,
+	input *entities.CreatePaymentInput,
+) (interface{}, error) {
 	if contract == nil {
 		return nil, nil
 	}
@@ -561,8 +555,12 @@ func (u *PaymentUsecase) buildTransactionData(payment *entities.Payment, contrac
 			minDestAmount.SetString(payment.MinDestAmount.String, 10)
 		}
 
-		createPaymentData := u.buildEvmPaymentHex(payment, destChainID, minDestAmount)
+		createPaymentData := u.buildEvmPaymentHexWithInput(payment, destChainID, minDestAmount, input)
+		if createPaymentData == "" {
+			return nil, domainerrors.BadRequest("failed to build gateway calldata")
+		}
 		txValueHex := "0x0"
+		var previewApprovalAmount string
 		sourceCAIP2 := ""
 		if payment.SourceChain != nil {
 			sourceCAIP2 = payment.SourceChain.GetCAIP2ID()
@@ -571,10 +569,43 @@ func (u *PaymentUsecase) buildTransactionData(payment *entities.Payment, contrac
 		}
 		if sourceCAIP2 != "" && sourceCAIP2 != destChainID {
 			amount := new(big.Int)
-			if _, ok := amount.SetString(payment.SourceAmount, 10); ok {
+			if _, ok := amount.SetString(payment.SourceAmount, 10); !ok {
+				return nil, domainerrors.BadRequest("invalid source amount for bridge fee quote")
+			}
+
+			// Preferred V2 preview path for native fee + approval amount.
+			preview, previewErr := u.previewGatewayApprovalV2(context.Background(), payment, contract.ContractAddress, input)
+			if previewErr == nil && preview != nil && preview.RequiredNativeFee != nil && preview.RequiredNativeFee.Sign() >= 0 {
+				txValueHex = "0x" + preview.RequiredNativeFee.Text(16)
+				if preview.ApprovalAmount != nil && preview.ApprovalAmount.Sign() > 0 {
+					previewApprovalAmount = preview.ApprovalAmount.String()
+				}
+			} else {
 				feeWei, err := u.getBridgeFeeQuote(context.Background(), sourceCAIP2, destChainID, payment.SourceTokenAddress, payment.DestTokenAddress, amount, minDestAmount)
 				if err != nil {
-					return nil, fmt.Errorf("failed to resolve bridge fee quote for %s -> %s: %w", sourceCAIP2, destChainID, err)
+					// Fallback to gateway quotePaymentCost when router quote path is temporarily unavailable.
+					if fallback, fbErr := u.quoteGatewayPaymentCost(context.Background(), payment, contract.ContractAddress, input); fbErr == nil && fallback != nil && fallback.BridgeQuoteOk {
+						fallbackFeeWei := new(big.Int)
+						if _, ok := fallbackFeeWei.SetString(strings.TrimSpace(fallback.BridgeFeeNative), 10); ok && fallbackFeeWei.Sign() >= 0 {
+							feeWei = fallbackFeeWei
+						} else {
+							return nil, domainerrors.BadRequest(fmt.Sprintf(
+								"failed to resolve bridge fee quote for %s -> %s: %v (fallback bridge fee invalid: %q)",
+								sourceCAIP2,
+								destChainID,
+								err,
+								fallback.BridgeFeeNative,
+							))
+						}
+					} else {
+						return nil, domainerrors.BadRequest(fmt.Sprintf(
+							"failed to resolve bridge fee quote for %s -> %s: primaryErr=%v fallbackErr=%v",
+							sourceCAIP2,
+							destChainID,
+							err,
+							fbErr,
+						))
+					}
 				}
 				feeWithMargin := new(big.Int).Mul(feeWei, bridgeFeeSafetyBps)
 				feeWithMargin.Div(feeWithMargin, bpsDenominator)
@@ -582,8 +613,6 @@ func (u *PaymentUsecase) buildTransactionData(payment *entities.Payment, contrac
 					feeWithMargin = new(big.Int).Set(feeWei)
 				}
 				txValueHex = "0x" + feeWithMargin.Text(16)
-			} else {
-				return nil, fmt.Errorf("invalid source amount for bridge fee quote")
 			}
 		}
 		result := map[string]interface{}{
@@ -605,9 +634,23 @@ func (u *PaymentUsecase) buildTransactionData(payment *entities.Payment, contrac
 			if vaultAddress == "" {
 				return nil, fmt.Errorf("vault contract address is not configured for source chain")
 			}
-			approvalAmount, approvalErr := u.calculateOnchainApprovalAmount(payment, contract.ContractAddress)
-			if approvalErr != nil {
-				return nil, approvalErr
+			approvalAmount := strings.TrimSpace(previewApprovalAmount)
+			if approvalAmount == "" || approvalAmount == "0" {
+				approvalAmountResolved, approvalErr := u.calculateOnchainApprovalAmount(payment, contract.ContractAddress)
+				if approvalErr != nil {
+					// Keep payment creation resilient when optional quote path is unavailable.
+					// Fallback to total charged amount (or source amount) to avoid API hard-fail.
+					approvalAmount = strings.TrimSpace(payment.TotalCharged)
+					if approvalAmount == "" || approvalAmount == "0" {
+						approvalAmount = strings.TrimSpace(payment.SourceAmount)
+					}
+					if approvalAmount == "" || approvalAmount == "0" {
+						return nil, approvalErr
+					}
+					fmt.Printf("Warning: using fallback approval amount for payment %s: %v\n", payment.ID, approvalErr)
+				} else {
+					approvalAmount = approvalAmountResolved
+				}
 			}
 			approveData := u.buildErc20ApproveHex(vaultAddress, approvalAmount)
 			approvalTx := map[string]string{
@@ -730,9 +773,9 @@ func (u *PaymentUsecase) calculateOnchainApprovalAmount(payment *entities.Paymen
 		totalCharged = new(big.Int).Set(amount)
 	}
 
-	// Track-B preferred path: quotePaymentCost(bytes,bytes,address,address,uint256,uint256)
+	// Track-B preferred path: quotePaymentCost(PaymentRequestV2)
 	// Use contract-returned totalSourceTokenRequired if available.
-	if quote, err := u.quoteGatewayPaymentCost(context.Background(), payment, gatewayAddress); err == nil && quote != nil {
+	if quote, err := u.quoteGatewayPaymentCost(context.Background(), payment, gatewayAddress, nil); err == nil && quote != nil {
 		quotedTotal := new(big.Int)
 		if _, ok := quotedTotal.SetString(quote.TotalSourceTokenRequired, 10); ok {
 			if quotedTotal.Cmp(totalCharged) < 0 {
@@ -763,9 +806,13 @@ func (u *PaymentUsecase) calculateOnchainApprovalAmount(payment *entities.Paymen
 		return "", fmt.Errorf("failed to create evm client for approval quote: %w", err)
 	}
 
-	feeABI, abiErr := u.ResolveABIWithFallback(context.Background(), payment.SourceChainID, entities.ContractTypeGateway)
-	if abiErr != nil {
-		return "", fmt.Errorf("failed to resolve gateway ABI: %w", abiErr)
+	feeABI := FallbackPaymentKitaGatewayABI
+	if u.ABIResolverMixin != nil {
+		resolvedABI, abiErr := u.ResolveABIWithFallback(context.Background(), payment.SourceChainID, entities.ContractTypeGateway)
+		if abiErr != nil {
+			return "", fmt.Errorf("failed to resolve gateway ABI: %w", abiErr)
+		}
+		feeABI = resolvedABI
 	}
 
 	// Preferred path: ask contract directly for exact total amount
@@ -825,6 +872,7 @@ func (u *PaymentUsecase) quoteGatewayPaymentCost(
 	ctx context.Context,
 	payment *entities.Payment,
 	gatewayAddress string,
+	input *entities.CreatePaymentInput,
 ) (*entities.OnchainCost, error) {
 	if payment == nil || gatewayAddress == "" {
 		return nil, fmt.Errorf("invalid payment or gateway address")
@@ -872,10 +920,14 @@ func (u *PaymentUsecase) quoteGatewayPaymentCost(
 		return nil, fmt.Errorf("invalid source amount")
 	}
 
-	feeABI, abiErr := u.ResolveABIWithFallback(ctx, payment.SourceChainID, entities.ContractTypeGateway)
-	if abiErr != nil {
-		// Optional Track-B path; keep legacy behavior when ABI unavailable.
-		return nil, nil
+	feeABI := FallbackPaymentKitaGatewayABI
+	if u.ABIResolverMixin != nil {
+		resolvedABI, abiErr := u.ResolveABIWithFallback(ctx, payment.SourceChainID, entities.ContractTypeGateway)
+		if abiErr != nil {
+			// Optional Track-B path; keep legacy behavior when ABI unavailable.
+			return nil, nil
+		}
+		feeABI = resolvedABI
 	}
 	if _, ok := feeABI.Methods["quotePaymentCost"]; !ok {
 		// Gateway deployed without Track-B quote method.
@@ -895,15 +947,64 @@ func (u *PaymentUsecase) quoteGatewayPaymentCost(
 		return nil, fmt.Errorf("failed to encode receiver bytes: %w", err)
 	}
 
-	calldata, err := feeABI.Pack(
-		"quotePaymentCost",
-		[]byte(destChainID),
-		receiverPacked,
-		common.HexToAddress(normalizeEvmAddress(payment.SourceTokenAddress)),
-		common.HexToAddress(normalizeEvmAddress(payment.DestTokenAddress)),
-		amount,
-		minAmountOut,
-	)
+	mode := normalizePaymentMode(nil)
+	if input != nil {
+		mode = normalizePaymentMode(input.Mode)
+	}
+	modeByte := uint8(0)
+	if mode == "privacy" {
+		modeByte = 1
+	}
+	bridgeOption := BridgeOptionDefaultSentinel
+	if input != nil {
+		var optErr error
+		bridgeOption, optErr = normalizeBridgeOption(input.BridgeOption)
+		if optErr != nil {
+			return nil, fmt.Errorf("invalid bridge option: %w", optErr)
+		}
+	}
+	minBridgeAmount := big.NewInt(0)
+	if input != nil && input.MinBridgeAmountOut != nil {
+		raw := strings.TrimSpace(*input.MinBridgeAmountOut)
+		if raw != "" {
+			if _, ok := minBridgeAmount.SetString(raw, 10); !ok {
+				return nil, fmt.Errorf("invalid minBridgeAmountOut")
+			}
+		}
+	}
+	if input != nil && input.MinDestAmountOut != nil {
+		raw := strings.TrimSpace(*input.MinDestAmountOut)
+		if raw != "" {
+			if _, ok := minAmountOut.SetString(raw, 10); !ok {
+				return nil, fmt.Errorf("invalid minDestAmountOut")
+			}
+		}
+	}
+	bridgeTokenSource := common.Address{}
+	if input != nil && input.BridgeTokenSource != nil {
+		raw := strings.TrimSpace(*input.BridgeTokenSource)
+		if raw != "" {
+			if !common.IsHexAddress(raw) {
+				return nil, fmt.Errorf("invalid bridgeTokenSource")
+			}
+			bridgeTokenSource = common.HexToAddress(raw)
+		}
+	}
+
+	req := paymentRequestV2TupleValue{
+		DestChainIdBytes:   []byte(destChainID),
+		ReceiverBytes:      receiverPacked,
+		SourceToken:        common.HexToAddress(normalizeEvmAddress(payment.SourceTokenAddress)),
+		BridgeTokenSource:  bridgeTokenSource,
+		DestToken:          common.HexToAddress(normalizeEvmAddress(payment.DestTokenAddress)),
+		AmountInSource:     amount,
+		MinBridgeAmountOut: minBridgeAmount,
+		MinDestAmountOut:   minAmountOut,
+		Mode:               modeByte,
+		BridgeOption:       bridgeOption,
+	}
+
+	calldata, err := feeABI.Pack("quotePaymentCost", req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to pack quotePaymentCost args: %w", err)
 	}
@@ -916,7 +1017,7 @@ func (u *PaymentUsecase) quoteGatewayPaymentCost(
 	}
 
 	decoded, err := feeABI.Unpack("quotePaymentCost", out)
-	if err != nil || len(decoded) < 7 {
+	if err != nil || len(decoded) < 6 {
 		return nil, fmt.Errorf("failed to decode quotePaymentCost output")
 	}
 
@@ -924,16 +1025,15 @@ func (u *PaymentUsecase) quoteGatewayPaymentCost(
 	bridgeFeeNative, _ := decoded[1].(*big.Int)
 	totalSourceRequired, _ := decoded[2].(*big.Int)
 	bridgeType, _ := decoded[3].(uint8)
-	isSameChain, _ := decoded[4].(bool)
-	bridgeQuoteOK, _ := decoded[5].(bool)
-	bridgeReason, _ := decoded[6].(string)
+	bridgeQuoteOK, _ := decoded[4].(bool)
+	bridgeReason, _ := decoded[5].(string)
 
 	result := &entities.OnchainCost{
 		PlatformFeeToken:         "0",
 		BridgeFeeNative:          "0",
 		TotalSourceTokenRequired: "0",
 		BridgeType:               bridgeType,
-		IsSameChain:              isSameChain,
+		IsSameChain:              strings.EqualFold(sourceChain.GetCAIP2ID(), destChainID),
 		BridgeQuoteOk:            bridgeQuoteOK,
 		BridgeQuoteReason:        bridgeReason,
 	}
@@ -949,25 +1049,194 @@ func (u *PaymentUsecase) quoteGatewayPaymentCost(
 	return result, nil
 }
 
-func (u *PaymentUsecase) buildEvmPaymentHex(payment *entities.Payment, destChainID string, minAmountOut *big.Int) string {
-	// function createPayment(bytes destChainId, bytes receiver, address sourceToken, address destToken, uint256 amount)
-	// OR createPaymentWithSlippage(..., uint256 minAmountOut)
-	// NOTE:
-	// - destChainIdBytes MUST be CAIP-2 string bytes (e.g. "eip155:8453"), not UUID raw bytes.
-	// - receiverBytes MUST be abi.encode(address) because contract decodes via abi.decode(receiverBytes, (address)).
-	stringType, err := newABIType("bytes", "", nil)
-	if err != nil {
-		return ""
+type previewApprovalResult struct {
+	ApprovalToken     common.Address
+	ApprovalAmount    *big.Int
+	RequiredNativeFee *big.Int
+}
+
+func (u *PaymentUsecase) previewGatewayApprovalV2(
+	ctx context.Context,
+	payment *entities.Payment,
+	gatewayAddress string,
+	input *entities.CreatePaymentInput,
+) (*previewApprovalResult, error) {
+	if payment == nil || gatewayAddress == "" {
+		return nil, fmt.Errorf("invalid payment or gateway address")
 	}
+	if u.chainRepo == nil || u.clientFactory == nil {
+		return nil, fmt.Errorf("previewApproval dependencies are not initialized")
+	}
+
+	sourceChain, err := u.chainRepo.GetByID(ctx, payment.SourceChainID)
+	if err != nil || sourceChain == nil {
+		return nil, fmt.Errorf("failed to resolve source chain")
+	}
+	rpcURL := strings.TrimSpace(sourceChain.RPCURL)
+	if rpcURL == "" {
+		for _, rpc := range sourceChain.RPCs {
+			if rpc.IsActive && strings.TrimSpace(rpc.URL) != "" {
+				rpcURL = rpc.URL
+				break
+			}
+		}
+	}
+	if rpcURL == "" {
+		return nil, fmt.Errorf("no active source chain rpc url")
+	}
+	client, err := u.clientFactory.GetEVMClient(rpcURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create evm client for previewApproval: %w", err)
+	}
+
+	feeABI := FallbackPaymentKitaGatewayABI
+	if u.ABIResolverMixin != nil {
+		resolvedABI, abiErr := u.ResolveABIWithFallback(ctx, payment.SourceChainID, entities.ContractTypeGateway)
+		if abiErr != nil {
+			return nil, fmt.Errorf("failed to resolve gateway ABI: %w", abiErr)
+		}
+		feeABI = resolvedABI
+	}
+	if _, ok := feeABI.Methods["previewApproval"]; !ok {
+		return nil, fmt.Errorf("previewApproval is not available on gateway ABI")
+	}
+
+	destChainID := payment.DestChainID.String()
+	if payment.DestChain != nil {
+		destChainID = payment.DestChain.GetCAIP2ID()
+	} else if chain, err := u.chainRepo.GetByID(ctx, payment.DestChainID); err == nil && chain != nil {
+		destChainID = chain.GetCAIP2ID()
+	}
+
+	minDestAmountOut := big.NewInt(0)
+	if payment.MinDestAmount.Valid {
+		if _, ok := minDestAmountOut.SetString(payment.MinDestAmount.String, 10); !ok {
+			minDestAmountOut = big.NewInt(0)
+		}
+	}
+
+	amountInSource := new(big.Int)
+	if _, ok := amountInSource.SetString(payment.SourceAmount, 10); !ok {
+		return nil, fmt.Errorf("invalid source amount")
+	}
+
+	addressType, err := newABIType("address", "", nil)
+	if err != nil {
+		return nil, err
+	}
+	receiverBytes, err := packABIArgs(
+		abi.Arguments{{Type: addressType}},
+		common.HexToAddress(normalizeEvmAddress(payment.ReceiverAddress)),
+	)
+	if err != nil {
+		receiverBytes = []byte(payment.ReceiverAddress)
+	}
+
+	mode := normalizePaymentMode(nil)
+	if input != nil {
+		mode = normalizePaymentMode(input.Mode)
+	}
+	modeByte := uint8(0)
+	if mode == "privacy" {
+		modeByte = 1
+	}
+	bridgeOption := BridgeOptionDefaultSentinel
+	if input != nil {
+		var optErr error
+		bridgeOption, optErr = normalizeBridgeOption(input.BridgeOption)
+		if optErr != nil {
+			return nil, fmt.Errorf("invalid bridge option: %w", optErr)
+		}
+	}
+	minBridgeAmount := big.NewInt(0)
+	if input != nil && input.MinBridgeAmountOut != nil {
+		raw := strings.TrimSpace(*input.MinBridgeAmountOut)
+		if raw != "" {
+			if _, ok := minBridgeAmount.SetString(raw, 10); !ok {
+				return nil, fmt.Errorf("invalid minBridgeAmountOut")
+			}
+		}
+	}
+	if input != nil && input.MinDestAmountOut != nil {
+		raw := strings.TrimSpace(*input.MinDestAmountOut)
+		if raw != "" {
+			if _, ok := minDestAmountOut.SetString(raw, 10); !ok {
+				return nil, fmt.Errorf("invalid minDestAmountOut")
+			}
+		}
+	}
+	bridgeTokenSource := common.Address{}
+	if input != nil && input.BridgeTokenSource != nil {
+		raw := strings.TrimSpace(*input.BridgeTokenSource)
+		if raw != "" {
+			if !common.IsHexAddress(raw) {
+				return nil, fmt.Errorf("invalid bridgeTokenSource")
+			}
+			bridgeTokenSource = common.HexToAddress(raw)
+		}
+	}
+
+	req := paymentRequestV2TupleValue{
+		DestChainIdBytes:   []byte(destChainID),
+		ReceiverBytes:      receiverBytes,
+		SourceToken:        common.HexToAddress(normalizeEvmAddress(payment.SourceTokenAddress)),
+		BridgeTokenSource:  bridgeTokenSource,
+		DestToken:          common.HexToAddress(normalizeEvmAddress(payment.DestTokenAddress)),
+		AmountInSource:     amountInSource,
+		MinBridgeAmountOut: minBridgeAmount,
+		MinDestAmountOut:   minDestAmountOut,
+		Mode:               modeByte,
+		BridgeOption:       bridgeOption,
+	}
+
+	calldata, err := feeABI.Pack("previewApproval", req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to pack previewApproval args: %w", err)
+	}
+	out, err := client.CallView(ctx, gatewayAddress, calldata)
+	if err != nil {
+		return nil, err
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("empty result from previewApproval")
+	}
+	decoded, err := feeABI.Unpack("previewApproval", out)
+	if err != nil || len(decoded) < 3 {
+		return nil, fmt.Errorf("failed to decode previewApproval output")
+	}
+
+	approvalToken, _ := decoded[0].(common.Address)
+	approvalAmount, _ := decoded[1].(*big.Int)
+	requiredNativeFee, _ := decoded[2].(*big.Int)
+	if approvalAmount == nil {
+		approvalAmount = big.NewInt(0)
+	}
+	if requiredNativeFee == nil {
+		requiredNativeFee = big.NewInt(0)
+	}
+
+	return &previewApprovalResult{
+		ApprovalToken:     approvalToken,
+		ApprovalAmount:    approvalAmount,
+		RequiredNativeFee: requiredNativeFee,
+	}, nil
+}
+
+func (u *PaymentUsecase) buildEvmPaymentHex(payment *entities.Payment, destChainID string, minAmountOut *big.Int) string {
+	return u.buildEvmPaymentHexWithInput(payment, destChainID, minAmountOut, nil)
+}
+
+func (u *PaymentUsecase) buildEvmPaymentHexWithInput(
+	payment *entities.Payment,
+	destChainID string,
+	minAmountOut *big.Int,
+	input *entities.CreatePaymentInput,
+) string {
+	// V2-only calldata: createPayment(PaymentRequestV2)
 	addressType, err := newABIType("address", "", nil)
 	if err != nil {
 		return ""
 	}
-	uintType, err := newABIType("uint256", "", nil)
-	if err != nil {
-		return ""
-	}
-
 	receiverBytes := []byte(payment.ReceiverAddress)
 	if strings.HasPrefix(payment.ReceiverAddress, "0x") && len(payment.ReceiverAddress) == 42 {
 		encodedAddress, err := packABIArgs(abi.Arguments{{Type: addressType}}, common.HexToAddress(normalizeEvmAddress(payment.ReceiverAddress)))
@@ -979,35 +1248,113 @@ func (u *PaymentUsecase) buildEvmPaymentHex(payment *entities.Payment, destChain
 	amount := new(big.Int)
 	amount.SetString(payment.SourceAmount, 10)
 
-	args := abi.Arguments{
-		{Type: stringType},  // bytes destChainIdBytes
-		{Type: stringType},  // bytes receiverBytes
-		{Type: addressType}, // sourceToken
-		{Type: addressType}, // destToken
-		{Type: uintType},    // amount
-	}
-
-	vals := []interface{}{
-		[]byte(destChainID),
-		receiverBytes,
-		common.HexToAddress(normalizeEvmAddress(payment.SourceTokenAddress)),
-		common.HexToAddress(normalizeEvmAddress(payment.DestTokenAddress)),
-		amount,
-	}
-
-	selector := CreatePaymentSelector
+	minDest := big.NewInt(0)
 	if minAmountOut != nil && minAmountOut.Sign() > 0 {
-		args = append(args, abi.Argument{Type: uintType}) // minAmountOut
-		vals = append(vals, minAmountOut)
-		selector = CreatePaymentWithSlippageSelector
+		minDest = new(big.Int).Set(minAmountOut)
+	}
+	if input != nil && input.MinDestAmountOut != nil {
+		raw := strings.TrimSpace(*input.MinDestAmountOut)
+		if raw != "" {
+			if _, ok := minDest.SetString(raw, 10); !ok {
+				return ""
+			}
+		}
+	}
+	minBridge := big.NewInt(0)
+	if input != nil && input.MinBridgeAmountOut != nil {
+		raw := strings.TrimSpace(*input.MinBridgeAmountOut)
+		if raw != "" {
+			if _, ok := minBridge.SetString(raw, 10); !ok {
+				return ""
+			}
+		}
+	}
+	mode := normalizePaymentMode(nil)
+	if input != nil {
+		mode = normalizePaymentMode(input.Mode)
+	}
+	modeByte := uint8(0)
+	if mode == "privacy" {
+		modeByte = 1
+	}
+	bridgeOption := BridgeOptionDefaultSentinel
+	if input != nil {
+		opt, optErr := normalizeBridgeOption(input.BridgeOption)
+		if optErr != nil {
+			return ""
+		}
+		bridgeOption = opt
+	}
+	bridgeTokenSource := common.Address{}
+	if input != nil && input.BridgeTokenSource != nil {
+		raw := strings.TrimSpace(*input.BridgeTokenSource)
+		if raw != "" {
+			if !common.IsHexAddress(raw) {
+				return ""
+			}
+			bridgeTokenSource = common.HexToAddress(raw)
+		}
 	}
 
-	packedArgs, err := packABIArgs(args, vals...)
-	if err != nil {
+	req := PaymentRequestV2Args{
+		DestChainIDBytes:   []byte(destChainID),
+		ReceiverBytes:      receiverBytes,
+		SourceToken:        common.HexToAddress(normalizeEvmAddress(payment.SourceTokenAddress)),
+		BridgeTokenSource:  bridgeTokenSource,
+		DestToken:          common.HexToAddress(normalizeEvmAddress(payment.DestTokenAddress)),
+		AmountInSource:     amount,
+		MinBridgeAmountOut: minBridge,
+		MinDestAmountOut:   minDest,
+		Mode:               modeByte,
+		BridgeOption:       bridgeOption,
+	}
+
+	isDefaultBridgeCall := input != nil && input.BridgeOption == nil
+	if mode == "privacy" {
+		if input == nil || input.PrivacyIntentID == nil || input.PrivacyStealthReceiver == nil {
+			return ""
+		}
+		privacyIntentRaw := strings.TrimSpace(*input.PrivacyIntentID)
+		stealthRaw := strings.TrimSpace(*input.PrivacyStealthReceiver)
+		if privacyIntentRaw == "" || stealthRaw == "" || !common.IsHexAddress(stealthRaw) {
+			return ""
+		}
+		intentID := parsePrivacyIntentID(privacyIntentRaw)
+		calldata, privateErr := packCreatePaymentPrivateV2Calldata(req, PrivateRoutingArgs{
+			IntentID:        intentID,
+			StealthReceiver: common.HexToAddress(stealthRaw),
+		})
+		if privateErr != nil {
+			return ""
+		}
+		return calldata
+	}
+
+	if isDefaultBridgeCall {
+		calldata, defaultErr := packCreatePaymentDefaultBridgeV2Calldata(req)
+		if defaultErr != nil {
+			return ""
+		}
+		return calldata
+	}
+
+	calldata, callErr := packCreatePaymentV2Calldata(req)
+	if callErr != nil {
 		return ""
 	}
-	selectorBytes, _ := hex.DecodeString(strings.TrimPrefix(selector, "0x"))
-	return "0x" + hex.EncodeToString(append(selectorBytes, packedArgs...))
+	return calldata
+}
+
+func parsePrivacyIntentID(raw string) [32]byte {
+	var out [32]byte
+	trimmed := strings.TrimSpace(raw)
+	if strings.HasPrefix(trimmed, "0x") && len(trimmed) == 66 {
+		copy(out[:], common.FromHex(trimmed))
+		return out
+	}
+	hash := crypto.Keccak256Hash([]byte(trimmed))
+	copy(out[:], hash.Bytes())
+	return out
 }
 
 func (u *PaymentUsecase) buildSvmPaymentBase58(payment *entities.Payment) string {
@@ -1045,6 +1392,126 @@ func (u *PaymentUsecase) GetPaymentsByUser(ctx context.Context, userID uuid.UUID
 // GetPaymentEvents gets events for a payment
 func (u *PaymentUsecase) GetPaymentEvents(ctx context.Context, paymentID uuid.UUID) ([]*entities.PaymentEvent, error) {
 	return u.paymentEventRepo.GetByPaymentID(ctx, paymentID)
+}
+
+// GetPaymentPrivacyStatus infers privacy lifecycle stage from persisted payment/events data.
+func (u *PaymentUsecase) GetPaymentPrivacyStatus(ctx context.Context, paymentID uuid.UUID) (*entities.PaymentPrivacyStatus, error) {
+	payment, err := u.paymentRepo.GetByID(ctx, paymentID)
+	if err != nil {
+		return nil, err
+	}
+
+	events, err := u.paymentEventRepo.GetByPaymentID(ctx, paymentID)
+	if err != nil {
+		return nil, err
+	}
+
+	stage, isPrivacy, signals, reason := derivePaymentPrivacyLifecycle(payment, events)
+	return &entities.PaymentPrivacyStatus{
+		PaymentID:          paymentID,
+		Stage:              stage,
+		IsPrivacyCandidate: isPrivacy,
+		Signals:            signals,
+		Reason:             reason,
+	}, nil
+}
+
+func derivePaymentPrivacyLifecycle(payment *entities.Payment, events []*entities.PaymentEvent) (string, bool, []string, string) {
+	signals := make([]string, 0, 8)
+	hasDestSettlement := payment.DestTxHash.Valid && strings.TrimSpace(payment.DestTxHash.String) != ""
+	if hasDestSettlement {
+		signals = append(signals, "dest_tx_hash_present")
+	}
+
+	failure := strings.TrimSpace(payment.FailureReason.String)
+	failureUpper := strings.ToUpper(failure)
+	hasPrivacySignal := strings.Contains(failureUpper, "PRIVACY")
+	hasForwardFailure := strings.Contains(failureUpper, "PRIVACY_FORWARD_FAILED")
+	hasForwardCompletedSignal := false
+	hasStealthSettlementSignal := false
+
+	if hasPrivacySignal {
+		signals = append(signals, "failure_reason_contains_privacy")
+	}
+	if hasForwardFailure {
+		signals = append(signals, "privacy_forward_failed")
+	}
+
+	for _, ev := range events {
+		evType := strings.ToUpper(strings.TrimSpace(string(ev.EventType)))
+		meta := strings.ToUpper(strings.TrimSpace(fmt.Sprintf("%v", ev.Metadata)))
+		blob := evType + "|" + meta
+
+		if strings.Contains(blob, "PRIVACY") {
+			hasPrivacySignal = true
+			signals = append(signals, "event_contains_privacy")
+		}
+		if strings.Contains(blob, "PRIVACYFORWARDCOMPLETED") || strings.Contains(blob, "PRIVACY_FORWARD_COMPLETED") {
+			hasForwardCompletedSignal = true
+			signals = append(signals, "privacy_forward_completed")
+		}
+		if evType == "DESTINATION_TX_HASH" || evType == "PAYMENT_EXECUTED" || strings.Contains(blob, "STEALTH") {
+			hasStealthSettlementSignal = true
+		}
+		if strings.Contains(blob, "PRIVACY_FORWARD_FAILED") {
+			hasForwardFailure = true
+			signals = append(signals, "privacy_forward_failed_event")
+		}
+	}
+
+	if hasForwardFailure {
+		return entities.PrivacyLifecycleForwardFailedRetrying, true, dedupeSignals(signals), failure
+	}
+
+	if hasForwardCompletedSignal {
+		return entities.PrivacyLifecycleForwardedFinal, true, dedupeSignals(signals), ""
+	}
+
+	if payment.Status == entities.PaymentStatusCompleted && (hasDestSettlement || hasStealthSettlementSignal) {
+		if hasPrivacySignal {
+			return entities.PrivacyLifecycleForwardedFinal, true, dedupeSignals(signals), ""
+		}
+		return entities.PrivacyLifecycleNotPrivacy, false, dedupeSignals(signals), "payment completed without privacy markers"
+	}
+
+	if hasDestSettlement || hasStealthSettlementSignal || payment.Status == entities.PaymentStatusProcessing {
+		if hasPrivacySignal {
+			return entities.PrivacyLifecycleSettledToStealth, true, dedupeSignals(signals), ""
+		}
+		return entities.PrivacyLifecycleUnknown, false, dedupeSignals(signals), "settlement signal exists but privacy markers missing"
+	}
+
+	if payment.Status == entities.PaymentStatusPending {
+		if hasPrivacySignal {
+			return entities.PrivacyLifecyclePendingOnSource, true, dedupeSignals(signals), ""
+		}
+		return entities.PrivacyLifecycleUnknown, false, dedupeSignals(signals), "payment still pending and privacy markers missing"
+	}
+
+	if hasPrivacySignal {
+		return entities.PrivacyLifecyclePendingOnSource, true, dedupeSignals(signals), ""
+	}
+
+	return entities.PrivacyLifecycleUnknown, false, dedupeSignals(signals), "insufficient privacy lifecycle signals"
+}
+
+func dedupeSignals(signals []string) []string {
+	if len(signals) == 0 {
+		return signals
+	}
+	seen := make(map[string]struct{}, len(signals))
+	unique := make([]string, 0, len(signals))
+	for _, signal := range signals {
+		if signal == "" {
+			continue
+		}
+		if _, ok := seen[signal]; ok {
+			continue
+		}
+		seen[signal] = struct{}{}
+		unique = append(unique, signal)
+	}
+	return unique
 }
 
 // getBridgeFeeQuote fetches fee from on-chain Router
@@ -1260,8 +1727,31 @@ func (u *PaymentUsecase) quoteBridgeFeeByType(
 		return nil, fmt.Errorf("adapter not registered for %s bridge type %d", destCAIP2, bridgeType)
 	}
 
-	// ABI encode quotePaymentFee(string,uint8,(bytes32,address,address,address,uint256,string,uint256))
-	messageTupleType, err := newABIType("tuple", "", []abi.ArgumentMarshaling{
+	stringType, err := newABIType("string", "", nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build ABI string type: %w", err)
+	}
+	uint8Type, err := newABIType("uint8", "", nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build ABI uint8 type: %w", err)
+	}
+	// ABI encode quotePaymentFee with BridgeMessage tuple.
+	// New schema (v2): (bytes32,address,address,address,uint256,string,uint256,address payer)
+	messageTupleTypeV2, err := newABIType("tuple", "", []abi.ArgumentMarshaling{
+		{Name: "paymentId", Type: "bytes32"},
+		{Name: "receiver", Type: "address"},
+		{Name: "sourceToken", Type: "address"},
+		{Name: "destToken", Type: "address"},
+		{Name: "amount", Type: "uint256"},
+		{Name: "destChainId", Type: "string"},
+		{Name: "minAmountOut", Type: "uint256"},
+		{Name: "payer", Type: "address"},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to build ABI tuple type: %w", err)
+	}
+	// Legacy schema (v1): without payer
+	messageTupleTypeV1, err := newABIType("tuple", "", []abi.ArgumentMarshaling{
 		{Name: "paymentId", Type: "bytes32"},
 		{Name: "receiver", Type: "address"},
 		{Name: "sourceToken", Type: "address"},
@@ -1273,21 +1763,28 @@ func (u *PaymentUsecase) quoteBridgeFeeByType(
 	if err != nil {
 		return nil, fmt.Errorf("failed to build ABI tuple type: %w", err)
 	}
-	stringType, err := newABIType("string", "", nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to build ABI string type: %w", err)
-	}
-	uint8Type, err := newABIType("uint8", "", nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to build ABI uint8 type: %w", err)
-	}
-	args := abi.Arguments{
+	argsV2 := abi.Arguments{
 		{Type: stringType},
 		{Type: uint8Type},
-		{Type: messageTupleType},
+		{Type: messageTupleTypeV2},
+	}
+	argsV1 := abi.Arguments{
+		{Type: stringType},
+		{Type: uint8Type},
+		{Type: messageTupleTypeV1},
 	}
 
-	type bridgeMessage struct {
+	type bridgeMessageV2 struct {
+		PaymentId    [32]byte
+		Receiver     common.Address
+		SourceToken  common.Address
+		DestToken    common.Address
+		Amount       *big.Int
+		DestChainId  string
+		MinAmountOut *big.Int
+		Payer        common.Address
+	}
+	type bridgeMessageV1 struct {
 		PaymentId    [32]byte
 		Receiver     common.Address
 		SourceToken  common.Address
@@ -1296,7 +1793,17 @@ func (u *PaymentUsecase) quoteBridgeFeeByType(
 		DestChainId  string
 		MinAmountOut *big.Int
 	}
-	msgStruct := bridgeMessage{
+	msgStructV2 := bridgeMessageV2{
+		PaymentId:    [32]byte{},
+		Receiver:     common.Address{},
+		SourceToken:  common.HexToAddress(normalizeEvmAddress(sourceTokenAddress)),
+		DestToken:    common.HexToAddress(normalizeEvmAddress(destTokenAddress)),
+		Amount:       amount,
+		DestChainId:  destCAIP2,
+		MinAmountOut: minAmountOut,
+		Payer:        common.Address{},
+	}
+	msgStructV1 := bridgeMessageV1{
 		PaymentId:    [32]byte{},
 		Receiver:     common.Address{},
 		SourceToken:  common.HexToAddress(normalizeEvmAddress(sourceTokenAddress)),
@@ -1306,23 +1813,30 @@ func (u *PaymentUsecase) quoteBridgeFeeByType(
 		MinAmountOut: minAmountOut,
 	}
 
-	packedArgs, err := packABIArgs(args, destCAIP2, bridgeType, msgStruct)
+	packedArgsV2, err := packABIArgs(argsV2, destCAIP2, bridgeType, msgStructV2)
+	if err != nil {
+		return nil, fmt.Errorf("failed to pack quotePaymentFee args: %w", err)
+	}
+	packedArgsV1, err := packABIArgs(argsV1, destCAIP2, bridgeType, msgStructV1)
 	if err != nil {
 		return nil, fmt.Errorf("failed to pack quotePaymentFee args: %w", err)
 	}
 
 	// 6. Call Contract
-	// Try quotePaymentFeeSafe first (non-reverting)
+	// Try quotePaymentFeeSafe first (non-reverting) with v2 schema.
 	// (bool success, uint256 fee, string reason)
-	safeSig := []byte("quotePaymentFeeSafe(string,uint8,(bytes32,address,address,address,uint256,string,uint256))")
-	safeMethodID := crypto.Keccak256(safeSig)[:4]
-	safeCalldata := append(safeMethodID, packedArgs...)
+	safeSigV2 := []byte("quotePaymentFeeSafe(string,uint8,(bytes32,address,address,address,uint256,string,uint256,address))")
+	safeMethodIDV2 := crypto.Keccak256(safeSigV2)[:4]
+	safeCalldataV2 := append(safeMethodIDV2, packedArgsV2...)
 
-	safeResult, safeErr := client.CallView(ctx, routerAddress, safeCalldata)
+	safeResult, safeErr := client.CallView(ctx, routerAddress, safeCalldataV2)
 	if safeErr == nil && len(safeResult) >= 96 {
 		ok, fee, reason, err := decodeSafeQuoteResult(safeResult)
 		if err == nil {
 			if !ok {
+				if isQuoteSchemaMismatchReason(reason) {
+					return nil, fmt.Errorf("quote failed: quote_failed_schema_mismatch")
+				}
 				return nil, fmt.Errorf("quote failed: %s", reason)
 			}
 			return fee, nil
@@ -1330,31 +1844,42 @@ func (u *PaymentUsecase) quoteBridgeFeeByType(
 		// If decoding fails, fall through to legacy method
 	}
 
-	// Fallback: use reverting quotePaymentFee for older routers
-	methodSig := []byte("quotePaymentFee(string,uint8,(bytes32,address,address,address,uint256,string,uint256))")
-	methodID := crypto.Keccak256(methodSig)[:4]
-	calldata := append(methodID, packedArgs...)
+	// Fallback order:
+	// 1) reverting quotePaymentFee with v2 schema
+	// 2) reverting quotePaymentFee with legacy v1 schema
+	methodSigV2 := []byte("quotePaymentFee(string,uint8,(bytes32,address,address,address,uint256,string,uint256,address))")
+	methodIDV2 := crypto.Keccak256(methodSigV2)[:4]
+	calldataV2 := append(methodIDV2, packedArgsV2...)
 
-	result, err := client.CallView(ctx, routerAddress, calldata)
+	result, err := client.CallView(ctx, routerAddress, calldataV2)
 	if err != nil {
-		if decoded, ok := decodeRevertDataFromError(err); ok {
-			if decoded.Selector != "" {
-				return nil, fmt.Errorf(
-					"contract call failed: %w (decoded_revert=%s selector=%s)",
-					err,
-					decoded.Message,
-					decoded.Selector,
-				)
-			}
-			return nil, fmt.Errorf("contract call failed: %w (decoded_revert=%s)", err, decoded.Message)
-		}
-		return nil, fmt.Errorf("contract call failed: %w", err)
-	}
+		methodSigV1 := []byte("quotePaymentFee(string,uint8,(bytes32,address,address,address,uint256,string,uint256))")
+		methodIDV1 := crypto.Keccak256(methodSigV1)[:4]
+		calldataV1 := append(methodIDV1, packedArgsV1...)
 
-	// 7. Decode Result (uint256)
-	if len(result) == 0 {
-		return nil, fmt.Errorf("empty result from quotePaymentFee")
+		result, err = client.CallView(ctx, routerAddress, calldataV1)
+		if err != nil {
+			if decoded, ok := decodeRevertDataFromError(err); ok {
+				if decoded.Selector != "" {
+					return nil, fmt.Errorf(
+						"contract call failed: %w (decoded_revert=%s selector=%s)",
+						err,
+						decoded.Message,
+						decoded.Selector,
+					)
+				}
+				return nil, fmt.Errorf("contract call failed: %w (decoded_revert=%s)", err, decoded.Message)
+			}
+			if isQuoteSchemaMismatchReason(err.Error()) {
+				return nil, fmt.Errorf("quote failed: quote_failed_schema_mismatch")
+			}
+			return nil, fmt.Errorf("contract call failed: %w", err)
+		}
 	}
+	if len(result) == 0 {
+		return nil, fmt.Errorf("quote failed: quote_failed_schema_mismatch (empty result from quotePaymentFee)")
+	}
+	// 7. Decode Result (uint256)
 	fee := new(big.Int).SetBytes(result)
 
 	return fee, nil
@@ -1522,58 +2047,85 @@ func (u *PaymentUsecase) getSwapQuote(
 	return nil, fmt.Errorf("invalid quote result")
 }
 
-// CheckRouteSupport checks if a route exists for a token pair on-chain
+type TokenRouteSupportStatus struct {
+	Exists       bool     `json:"exists"`
+	IsDirect     bool     `json:"isDirect"`
+	Path         []string `json:"path"`
+	Executable   bool     `json:"executable"`
+	Reasons      []string `json:"reasons,omitempty"`
+	SwapRouterV3 string   `json:"swapRouterV3,omitempty"`
+	UniversalV4  string   `json:"universalRouter,omitempty"`
+}
+
+// CheckRouteSupport checks if a route exists for a token pair on-chain.
+// Backward-compatible wrapper; use CheckRouteSupportDetailed for readiness diagnostics.
 func (u *PaymentUsecase) CheckRouteSupport(
 	ctx context.Context,
 	chainID uuid.UUID,
 	tokenIn, tokenOut string,
 ) (bool, bool, []string, error) {
+	status, err := u.CheckRouteSupportDetailed(ctx, chainID, tokenIn, tokenOut)
+	if err != nil {
+		return false, false, nil, err
+	}
+	return status.Exists, status.IsDirect, status.Path, nil
+}
+
+// CheckRouteSupportDetailed returns route registration + execution readiness signals.
+func (u *PaymentUsecase) CheckRouteSupportDetailed(
+	ctx context.Context,
+	chainID uuid.UUID,
+	tokenIn, tokenOut string,
+) (*TokenRouteSupportStatus, error) {
 	if tokenIn == tokenOut {
-		return true, true, []string{tokenIn}, nil
+		return &TokenRouteSupportStatus{
+			Exists:     true,
+			IsDirect:   true,
+			Path:       []string{tokenIn},
+			Executable: true,
+		}, nil
 	}
 
 	chain, err := u.chainRepo.GetByID(ctx, chainID)
 	if err != nil {
-		return false, false, nil, err
+		return nil, err
 	}
 
 	swapper, err := u.contractRepo.GetActiveContract(ctx, chain.ID, entities.ContractTypeTokenSwapper)
 	if err != nil {
-		return false, false, nil, fmt.Errorf("active swapper not found")
+		return nil, fmt.Errorf("active swapper not found")
 	}
 
 	client, err := u.clientFactory.GetEVMClient(chain.RPCURL)
 	if err != nil {
-		return false, false, nil, err
+		return nil, err
 	}
 
 	swapperABI, err := u.ResolveABIWithFallback(ctx, chain.ID, entities.ContractTypeTokenSwapper)
 	if err != nil {
-		return false, false, nil, err
+		return nil, err
 	}
 
 	findRouteCall, err := swapperABI.Pack("findRoute", common.HexToAddress(tokenIn), common.HexToAddress(tokenOut))
 	if err != nil {
-		return false, false, nil, err
+		return nil, err
 	}
 
 	out, err := client.CallView(ctx, swapper.ContractAddress, findRouteCall)
 	if err != nil {
-		return false, false, nil, err
+		return nil, err
 	}
 
-	// Unpack: (bool exists, bool isDirect, address[] path)
 	results, err := swapperABI.Unpack("findRoute", out)
 	if err != nil || len(results) < 3 {
-		return false, false, nil, fmt.Errorf("failed to unpack findRoute")
+		return nil, fmt.Errorf("failed to unpack findRoute")
 	}
 
 	exists, ok1 := results[0].(bool)
 	isDirect, ok2 := results[1].(bool)
 	pathAddrs, ok3 := results[2].([]common.Address)
-
 	if !ok1 || !ok2 || !ok3 {
-		return false, false, nil, fmt.Errorf("failed to type cast findRoute results")
+		return nil, fmt.Errorf("failed to type cast findRoute results")
 	}
 
 	path := make([]string, len(pathAddrs))
@@ -1581,7 +2133,61 @@ func (u *PaymentUsecase) CheckRouteSupport(
 		path[i] = addr.Hex()
 	}
 
-	return exists, isDirect, path, nil
+	status := &TokenRouteSupportStatus{
+		Exists:     exists,
+		IsDirect:   isDirect,
+		Path:       path,
+		Executable: false,
+	}
+
+	if !exists {
+		status.Reasons = append(status.Reasons, "NO_ROUTE_REGISTERED")
+		return status, nil
+	}
+
+	v3Router, v3Err := callAddressBySignature(ctx, client, swapper.ContractAddress, "swapRouterV3()")
+	uniRouter, uniErr := callAddressBySignature(ctx, client, swapper.ContractAddress, "universalRouter()")
+
+	if v3Err == nil {
+		status.SwapRouterV3 = v3Router.Hex()
+	} else {
+		status.Reasons = append(status.Reasons, "SWAP_ROUTER_V3_READ_FAILED")
+	}
+
+	if uniErr == nil {
+		status.UniversalV4 = uniRouter.Hex()
+	} else {
+		status.Reasons = append(status.Reasons, "UNIVERSAL_ROUTER_READ_FAILED")
+	}
+
+	v3Ready := v3Err == nil && v3Router != (common.Address{})
+	v4Ready := uniErr == nil && uniRouter != (common.Address{})
+
+	if !v3Ready {
+		status.Reasons = append(status.Reasons, "SWAP_ROUTER_V3_NOT_SET")
+	}
+	if !v4Ready {
+		status.Reasons = append(status.Reasons, "UNIVERSAL_ROUTER_NOT_SET")
+	}
+
+	status.Executable = v3Ready || v4Ready
+	if !status.Executable {
+		status.Reasons = append(status.Reasons, "NO_EXECUTOR_CONFIGURED")
+	}
+
+	return status, nil
+}
+
+func callAddressBySignature(ctx context.Context, client *blockchain.EVMClient, contractAddress, signature string) (common.Address, error) {
+	selector := crypto.Keccak256([]byte(signature))[:4]
+	out, err := client.CallView(ctx, contractAddress, selector)
+	if err != nil {
+		return common.Address{}, err
+	}
+	if len(out) < 32 {
+		return common.Address{}, fmt.Errorf("invalid %s response", signature)
+	}
+	return common.BytesToAddress(out[len(out)-20:]), nil
 }
 
 // decodeSafeQuoteResult decodes (bool, uint256, string) from a SAFE quote call.

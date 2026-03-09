@@ -9,8 +9,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
-	"pay-chain.backend/internal/domain/entities"
-	"pay-chain.backend/internal/interfaces/http/middleware"
+	"payment-kita.backend/internal/domain/entities"
+	"payment-kita.backend/internal/interfaces/http/middleware"
 )
 
 func TestPaymentHandler_ListPayments_PaginationNormalization(t *testing.T) {

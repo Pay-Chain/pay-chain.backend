@@ -8,13 +8,15 @@ import (
 	"math/big"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
-	"pay-chain.backend/internal/domain/entities"
-	"pay-chain.backend/internal/infrastructure/blockchain"
+	"payment-kita.backend/internal/domain/entities"
+	"payment-kita.backend/internal/infrastructure/blockchain"
 )
 
 func newQuoteRPCServer(t *testing.T, ethCallResults []interface{}) *httptest.Server {
@@ -93,6 +95,70 @@ func newQuoteRPCServerWithCallErrorData(t *testing.T, revertDataHex string) *htt
 	}))
 }
 
+type quoteSelectorResponse struct {
+	result interface{}
+	errMsg string
+}
+
+func newQuoteRPCServerBySelector(t *testing.T, bySelector map[string]quoteSelectorResponse, seen *[]string) *httptest.Server {
+	t.Helper()
+	return newSafeHTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+		var req struct {
+			JSONRPC string            `json:"jsonrpc"`
+			ID      interface{}       `json:"id"`
+			Method  string            `json:"method"`
+			Params  []json.RawMessage `json:"params"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&req)
+
+		res := map[string]interface{}{"jsonrpc": "2.0", "id": req.ID}
+		switch req.Method {
+		case "eth_chainId":
+			res["result"] = "0x2105"
+		case "eth_call":
+			selector := ""
+			if len(req.Params) > 0 {
+				var callObj struct {
+					Data  string `json:"data"`
+					Input string `json:"input"`
+				}
+				_ = json.Unmarshal(req.Params[0], &callObj)
+				data := callObj.Data
+				if data == "" {
+					data = callObj.Input
+				}
+				lower := strings.ToLower(data)
+				if len(lower) >= 10 {
+					selector = lower[:10]
+				}
+			}
+			if seen != nil {
+				*seen = append(*seen, selector)
+			}
+			resp, ok := bySelector[selector]
+			if !ok {
+				res["result"] = "0x"
+				break
+			}
+			if resp.errMsg != "" {
+				res["error"] = map[string]interface{}{"code": -32000, "message": resp.errMsg}
+				break
+			}
+			res["result"] = resp.result
+		default:
+			res["result"] = "0x0"
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(res)
+	}))
+}
+
+func selectorFromSignature(sig string) string {
+	return "0x" + hex.EncodeToString(crypto.Keccak256([]byte(sig))[:4])
+}
+
 func TestPaymentUsecase_QuoteBridgeFeeByType_SuccessAndEmpty(t *testing.T) {
 	t.Run("success_safe_quote", func(t *testing.T) {
 		// Expect 3 calls: isRouteConfigured -> 1, hasAdapter -> 1, quotePaymentFeeSafe -> (true, 100, "")
@@ -169,6 +235,75 @@ func TestPaymentUsecase_QuoteBridgeFeeByType_SuccessAndEmpty(t *testing.T) {
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "empty result")
 	})
+}
+
+func TestPaymentUsecase_QuoteBridgeFeeByType_FallbackV2ToV1_BySelector(t *testing.T) {
+	isRouteConfiguredSel := selectorFromSignature("isRouteConfigured(string,uint8)")
+	hasAdapterSel := selectorFromSignature("hasAdapter(string,uint8)")
+	safeQuoteV2Sel := selectorFromSignature("quotePaymentFeeSafe(string,uint8,(bytes32,address,address,address,uint256,string,uint256,address))")
+	quoteV2Sel := selectorFromSignature("quotePaymentFee(string,uint8,(bytes32,address,address,address,uint256,string,uint256,address))")
+	quoteV1Sel := selectorFromSignature("quotePaymentFee(string,uint8,(bytes32,address,address,address,uint256,string,uint256))")
+
+	var seen []string
+	srv := newQuoteRPCServerBySelector(t, map[string]quoteSelectorResponse{
+		isRouteConfiguredSel: {result: "0x1"},
+		hasAdapterSel:        {result: "0x1"},
+		safeQuoteV2Sel:       {errMsg: "no method with id 0xdeadbeef"},
+		quoteV2Sel:           {errMsg: "function selector was not recognized and there's no fallback function"},
+		quoteV1Sel:           {result: "0x64"},
+	}, &seen)
+	defer srv.Close()
+
+	client, err := blockchain.NewEVMClient(srv.URL)
+	require.NoError(t, err)
+	defer client.Close()
+
+	u := &PaymentUsecase{}
+	fee, err := u.quoteBridgeFeeByType(
+		context.Background(),
+		client,
+		"0x1111111111111111111111111111111111111111",
+		"eip155:42161",
+		0,
+		"0x2222222222222222222222222222222222222222",
+		"0x3333333333333333333333333333333333333333",
+		big.NewInt(1000),
+		big.NewInt(0),
+	)
+	require.NoError(t, err)
+	require.Equal(t, int64(100), fee.Int64())
+	require.Equal(t, []string{
+		isRouteConfiguredSel,
+		hasAdapterSel,
+		safeQuoteV2Sel,
+		quoteV2Sel,
+		quoteV1Sel,
+	}, seen)
+}
+
+func TestPaymentUsecase_QuoteBridgeFeeByType_SchemaMismatchReasonFromSafeQuote(t *testing.T) {
+	safeRes := encodeSafeQuoteResult(t, false, big.NewInt(0), "function selector was not recognized and there's no fallback function")
+	srv := newQuoteRPCServer(t, []interface{}{"0x1", "0x1", safeRes})
+	defer srv.Close()
+
+	client, err := blockchain.NewEVMClient(srv.URL)
+	require.NoError(t, err)
+	defer client.Close()
+
+	u := &PaymentUsecase{}
+	_, err = u.quoteBridgeFeeByType(
+		context.Background(),
+		client,
+		"0x1111111111111111111111111111111111111111",
+		"eip155:42161",
+		0,
+		"0x2222222222222222222222222222222222222222",
+		"0x3333333333333333333333333333333333333333",
+		big.NewInt(1000),
+		big.NewInt(0),
+	)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "quote_failed_schema_mismatch")
 }
 
 func TestPaymentUsecase_QuoteBridgeFeeByType_CallErrorRPCResponse(t *testing.T) {
@@ -290,16 +425,14 @@ func TestPaymentUsecase_QuoteBridgeFeeByType_PackErrorAndExplicitEmptyResult(t *
 			big.NewInt(0),
 		)
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "failed to build ABI tuple type")
+		require.Contains(t, err.Error(), "failed to build ABI")
 	})
 
 	t.Run("abi string type construction error", func(t *testing.T) {
 		origNewType := newABIType
 		t.Cleanup(func() { newABIType = origNewType })
-		call := 0
 		newABIType = func(name, alias string, args []abi.ArgumentMarshaling) (abi.Type, error) {
-			call++
-			if call == 6 {
+			if name == "string" {
 				return abi.Type{}, errors.New("string type failed")
 			}
 			return origNewType(name, alias, args)
@@ -327,10 +460,8 @@ func TestPaymentUsecase_QuoteBridgeFeeByType_PackErrorAndExplicitEmptyResult(t *
 	t.Run("abi uint8 type construction error", func(t *testing.T) {
 		origNewType := newABIType
 		t.Cleanup(func() { newABIType = origNewType })
-		call := 0
 		newABIType = func(name, alias string, args []abi.ArgumentMarshaling) (abi.Type, error) {
-			call++
-			if call == 7 {
+			if name == "uint8" {
 				return abi.Type{}, errors.New("uint8 type failed")
 			}
 			return origNewType(name, alias, args)

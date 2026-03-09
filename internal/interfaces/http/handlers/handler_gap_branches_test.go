@@ -11,10 +11,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
-	"pay-chain.backend/internal/domain/entities"
-	domainerrors "pay-chain.backend/internal/domain/errors"
-	"pay-chain.backend/internal/interfaces/http/middleware"
-	"pay-chain.backend/internal/usecases"
+	"payment-kita.backend/internal/domain/entities"
+	domainerrors "payment-kita.backend/internal/domain/errors"
+	"payment-kita.backend/internal/interfaces/http/middleware"
+	"payment-kita.backend/internal/usecases"
 )
 
 type walletRepoSetPrimaryErrStub struct {
@@ -33,7 +33,7 @@ func TestMerchantHandler_GapBranches(t *testing.T) {
 		uc := usecases.NewMerchantUsecase(
 			newMerchantRepoStub(),
 			merchantUserRepoStub{users: map[uuid.UUID]*entities.User{
-				userID: {ID: userID, Email: "merchant@paychain.io", Role: entities.UserRoleUser},
+				userID: {ID: userID, Email: "merchant@paymentkita.io", Role: entities.UserRoleUser},
 			}},
 		)
 		h := NewMerchantHandler(uc)

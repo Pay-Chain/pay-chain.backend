@@ -6,26 +6,26 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/stretchr/testify/require"
-	"pay-chain.backend/internal/infrastructure/blockchain"
+	"payment-kita.backend/internal/infrastructure/blockchain"
 )
 
 func TestOnchainAdapterUsecase_CallHelpers_PackError(t *testing.T) {
-	origGatewayABI := FallbackPayChainGatewayABI
-	origRouterABI := FallbackPayChainRouterAdminABI
+	origGatewayABI := FallbackPaymentKitaGatewayABI
+	origRouterABI := FallbackPaymentKitaRouterAdminABI
 	origHyperABI := FallbackHyperbridgeSenderAdminABI
 	origCCIPABI := FallbackCCIPSenderAdminABI
 	origLZABI := FallbackLayerZeroSenderAdminABI
 	t.Cleanup(func() {
-		FallbackPayChainGatewayABI = origGatewayABI
-		FallbackPayChainRouterAdminABI = origRouterABI
+		FallbackPaymentKitaGatewayABI = origGatewayABI
+		FallbackPaymentKitaRouterAdminABI = origRouterABI
 		FallbackHyperbridgeSenderAdminABI = origHyperABI
 		FallbackCCIPSenderAdminABI = origCCIPABI
 		FallbackLayerZeroSenderAdminABI = origLZABI
 	})
 
 	// Force Pack(...) to fail before any RPC call.
-	FallbackPayChainGatewayABI = abi.ABI{}
-	FallbackPayChainRouterAdminABI = abi.ABI{}
+	FallbackPaymentKitaGatewayABI = abi.ABI{}
+	FallbackPaymentKitaRouterAdminABI = abi.ABI{}
 	FallbackHyperbridgeSenderAdminABI = abi.ABI{}
 	FallbackCCIPSenderAdminABI = abi.ABI{}
 	FallbackLayerZeroSenderAdminABI = abi.ABI{}
@@ -34,11 +34,11 @@ func TestOnchainAdapterUsecase_CallHelpers_PackError(t *testing.T) {
 	ctx := context.Background()
 	var client *blockchain.EVMClient
 
-	_, err := u.callDefaultBridgeType(ctx, client, "0x0", FallbackPayChainGatewayABI, "eip155:42161")
+	_, err := u.callDefaultBridgeType(ctx, client, "0x0", FallbackPaymentKitaGatewayABI, "eip155:42161")
 	require.Error(t, err)
-	_, err = u.callHasAdapter(ctx, client, "0x0", FallbackPayChainRouterAdminABI, "eip155:42161", 0)
+	_, err = u.callHasAdapter(ctx, client, "0x0", FallbackPaymentKitaRouterAdminABI, "eip155:42161", 0)
 	require.Error(t, err)
-	_, err = u.callGetAdapter(ctx, client, "0x0", FallbackPayChainRouterAdminABI, "eip155:42161", 0)
+	_, err = u.callGetAdapter(ctx, client, "0x0", FallbackPaymentKitaRouterAdminABI, "eip155:42161", 0)
 	require.Error(t, err)
 	_, err = u.callHyperbridgeConfigured(ctx, client, "0x0", FallbackHyperbridgeSenderAdminABI, "eip155:42161")
 	require.Error(t, err)

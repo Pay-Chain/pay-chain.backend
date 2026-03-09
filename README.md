@@ -1,4 +1,4 @@
-# Pay-Chain Backend
+# Payment-Kita Backend
 
 Cross-chain stablecoin payment gateway API built with Go, Gin, and SQLBoiler.
 
@@ -48,7 +48,7 @@ make test
 Copy `.env.example` to `.env` and configure:
 
 ```env
-DATABASE_URL=postgres://user:pass@localhost:5432/paychain
+DATABASE_URL=postgres://user:pass@localhost:5432/paymentkita
 REDIS_URL=redis://localhost:6379
 RABBITMQ_URL=amqp://guest:guest@localhost:5672/
 JWT_SECRET=your-secret-key

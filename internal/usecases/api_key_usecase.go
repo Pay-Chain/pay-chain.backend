@@ -16,9 +16,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"pay-chain.backend/internal/domain/entities"
-	domainerrors "pay-chain.backend/internal/domain/errors"
-	"pay-chain.backend/internal/domain/repositories"
+	"payment-kita.backend/internal/domain/entities"
+	domainerrors "payment-kita.backend/internal/domain/errors"
+	"payment-kita.backend/internal/domain/repositories"
 )
 
 var (

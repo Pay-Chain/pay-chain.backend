@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"pay-chain.backend/pkg/logger"
+	"payment-kita.backend/pkg/logger"
 )
 
 // LoggerMiddleware logs HTTP requests using the structured logger

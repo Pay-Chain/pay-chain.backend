@@ -12,12 +12,12 @@ import (
 	redisv9 "github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	"pay-chain.backend/internal/domain/entities"
-	domainerrors "pay-chain.backend/internal/domain/errors"
-	"pay-chain.backend/internal/usecases"
-	"pay-chain.backend/pkg/crypto"
-	"pay-chain.backend/pkg/jwt"
-	redispkg "pay-chain.backend/pkg/redis"
+	"payment-kita.backend/internal/domain/entities"
+	domainerrors "payment-kita.backend/internal/domain/errors"
+	"payment-kita.backend/internal/usecases"
+	"payment-kita.backend/pkg/crypto"
+	"payment-kita.backend/pkg/jwt"
+	redispkg "payment-kita.backend/pkg/redis"
 )
 
 func newAuthUsecaseForTest(
@@ -302,7 +302,7 @@ func TestAuthUsecase_GetUserByID(t *testing.T) {
 	uc := newAuthUsecaseForTest(userRepo, new(MockEmailVerificationRepository), new(MockWalletRepository), new(MockChainRepository))
 
 	id := uuid.New()
-	user := &entities.User{ID: id, Email: "u@paychain.io"}
+	user := &entities.User{ID: id, Email: "u@paymentkita.io"}
 	userRepo.On("GetByID", context.Background(), id).Return(user, nil).Once()
 
 	got, err := uc.GetUserByID(context.Background(), id)

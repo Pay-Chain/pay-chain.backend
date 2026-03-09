@@ -8,8 +8,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
-	"pay-chain.backend/internal/domain/entities"
-	"pay-chain.backend/internal/infrastructure/blockchain"
+	"payment-kita.backend/internal/domain/entities"
+	"payment-kita.backend/internal/infrastructure/blockchain"
 
 	"github.com/volatiletech/null/v8"
 )
@@ -31,7 +31,7 @@ func TestRequiredFunctions(t *testing.T) {
 		require.Contains(t, requiredFunctions(entities.ContractTypeTokenSwapper), "swap")
 	})
 	t.Run("ccip adapter", func(t *testing.T) {
-		require.Contains(t, requiredFunctions(entities.ContractTypeAdapterCCIP), "setChainSelector")
+		require.Contains(t, requiredFunctions(entities.ContractTypeAdapterCCIP), "setChainConfig")
 	})
 	t.Run("hyperbridge adapter", func(t *testing.T) {
 		require.Contains(t, requiredFunctions(entities.ContractTypeAdapterHyperbridge), "setStateMachineId")

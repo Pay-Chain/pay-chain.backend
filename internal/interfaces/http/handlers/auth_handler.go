@@ -9,13 +9,13 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"pay-chain.backend/internal/domain/entities"
-	domainerrors "pay-chain.backend/internal/domain/errors"
-	"pay-chain.backend/internal/interfaces/http/middleware"
-	"pay-chain.backend/internal/interfaces/http/response"
-	"pay-chain.backend/pkg/jwt"
-	"pay-chain.backend/pkg/redis"
-	"pay-chain.backend/pkg/utils"
+	"payment-kita.backend/internal/domain/entities"
+	domainerrors "payment-kita.backend/internal/domain/errors"
+	"payment-kita.backend/internal/interfaces/http/middleware"
+	"payment-kita.backend/internal/interfaces/http/response"
+	"payment-kita.backend/pkg/jwt"
+	"payment-kita.backend/pkg/redis"
+	"payment-kita.backend/pkg/utils"
 )
 
 type AuthService interface {

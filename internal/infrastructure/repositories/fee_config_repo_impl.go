@@ -7,11 +7,11 @@ import (
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
-	"pay-chain.backend/internal/domain/entities"
-	domainerrors "pay-chain.backend/internal/domain/errors"
-	domainrepos "pay-chain.backend/internal/domain/repositories"
-	"pay-chain.backend/internal/infrastructure/models"
-	"pay-chain.backend/pkg/utils"
+	"payment-kita.backend/internal/domain/entities"
+	domainerrors "payment-kita.backend/internal/domain/errors"
+	domainrepos "payment-kita.backend/internal/domain/repositories"
+	"payment-kita.backend/internal/infrastructure/models"
+	"payment-kita.backend/pkg/utils"
 )
 
 type feeConfigRepo struct {

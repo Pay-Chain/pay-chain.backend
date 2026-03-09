@@ -8,9 +8,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	"pay-chain.backend/internal/domain/entities"
-	"pay-chain.backend/internal/infrastructure/blockchain"
-	uc "pay-chain.backend/internal/usecases"
+	"payment-kita.backend/internal/domain/entities"
+	"payment-kita.backend/internal/infrastructure/blockchain"
+	uc "payment-kita.backend/internal/usecases"
 )
 
 func TestOnchainAdapterUsecase_GetStatus_InvalidSource(t *testing.T) {

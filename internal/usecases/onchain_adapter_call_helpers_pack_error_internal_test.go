@@ -7,7 +7,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/require"
-	"pay-chain.backend/internal/infrastructure/blockchain"
+	"payment-kita.backend/internal/infrastructure/blockchain"
 )
 
 func TestOnchainAdapterUsecase_CallHelpers_PackErrorByEmptyABI(t *testing.T) {
@@ -19,33 +19,33 @@ func TestOnchainAdapterUsecase_CallHelpers_PackErrorByEmptyABI(t *testing.T) {
 	addr := common.HexToAddress("0x1111111111111111111111111111111111111111").Hex()
 	dest := "eip155:42161"
 
-	origGateway := FallbackPayChainGatewayABI
-	origRouter := FallbackPayChainRouterAdminABI
+	origGateway := FallbackPaymentKitaGatewayABI
+	origRouter := FallbackPaymentKitaRouterAdminABI
 	origHyper := FallbackHyperbridgeSenderAdminABI
 	origCCIP := FallbackCCIPSenderAdminABI
 	origLZ := FallbackLayerZeroSenderAdminABI
 	t.Cleanup(func() {
-		FallbackPayChainGatewayABI = origGateway
-		FallbackPayChainRouterAdminABI = origRouter
+		FallbackPaymentKitaGatewayABI = origGateway
+		FallbackPaymentKitaRouterAdminABI = origRouter
 		FallbackHyperbridgeSenderAdminABI = origHyper
 		FallbackCCIPSenderAdminABI = origCCIP
 		FallbackLayerZeroSenderAdminABI = origLZ
 	})
 
 	// Empty ABIs force Pack(...) to fail deterministically.
-	FallbackPayChainGatewayABI = abi.ABI{}
-	FallbackPayChainRouterAdminABI = abi.ABI{}
+	FallbackPaymentKitaGatewayABI = abi.ABI{}
+	FallbackPaymentKitaRouterAdminABI = abi.ABI{}
 	FallbackHyperbridgeSenderAdminABI = abi.ABI{}
 	FallbackCCIPSenderAdminABI = abi.ABI{}
 	FallbackLayerZeroSenderAdminABI = abi.ABI{}
 
-	_, err := u.callDefaultBridgeType(ctx, client, addr, FallbackPayChainGatewayABI, dest)
+	_, err := u.callDefaultBridgeType(ctx, client, addr, FallbackPaymentKitaGatewayABI, dest)
 	require.Error(t, err)
 
-	_, err = u.callHasAdapter(ctx, client, addr, FallbackPayChainRouterAdminABI, dest, 0)
+	_, err = u.callHasAdapter(ctx, client, addr, FallbackPaymentKitaRouterAdminABI, dest, 0)
 	require.Error(t, err)
 
-	_, err = u.callGetAdapter(ctx, client, addr, FallbackPayChainRouterAdminABI, dest, 0)
+	_, err = u.callGetAdapter(ctx, client, addr, FallbackPaymentKitaRouterAdminABI, dest, 0)
 	require.Error(t, err)
 
 	_, err = u.callHyperbridgeConfigured(ctx, client, addr, FallbackHyperbridgeSenderAdminABI, dest)

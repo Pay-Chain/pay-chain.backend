@@ -6,7 +6,7 @@ import (
 	"time"
 
 	_ "github.com/lib/pq"
-	"pay-chain.backend/internal/config"
+	"payment-kita.backend/internal/config"
 )
 
 var (

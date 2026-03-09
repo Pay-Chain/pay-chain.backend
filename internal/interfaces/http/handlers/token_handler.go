@@ -8,12 +8,12 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"pay-chain.backend/internal/domain/entities"
-	domainerrors "pay-chain.backend/internal/domain/errors"
-	"pay-chain.backend/internal/domain/repositories"
-	"pay-chain.backend/internal/interfaces/http/response"
-	"pay-chain.backend/internal/usecases"
-	"pay-chain.backend/pkg/utils"
+	"payment-kita.backend/internal/domain/entities"
+	domainerrors "payment-kita.backend/internal/domain/errors"
+	"payment-kita.backend/internal/domain/repositories"
+	"payment-kita.backend/internal/interfaces/http/response"
+	"payment-kita.backend/internal/usecases"
+	"payment-kita.backend/pkg/utils"
 )
 
 // TokenHandler handles token endpoints
@@ -291,15 +291,19 @@ func (h *TokenHandler) CheckPairSupport(c *gin.Context) {
 		chainID = chain.ID
 	}
 
-	exists, isDirect, path, err := h.paymentUseCase.CheckRouteSupport(c.Request.Context(), chainID, tokenIn, tokenOut)
+	status, err := h.paymentUseCase.CheckRouteSupportDetailed(c.Request.Context(), chainID, tokenIn, tokenOut)
 	if err != nil {
 		response.Error(c, err)
 		return
 	}
 
 	response.Success(c, http.StatusOK, gin.H{
-		"exists":   exists,
-		"isDirect": isDirect,
-		"path":     path,
+		"exists":          status.Exists,
+		"isDirect":        status.IsDirect,
+		"path":            status.Path,
+		"executable":      status.Executable,
+		"reasons":         status.Reasons,
+		"swapRouterV3":    status.SwapRouterV3,
+		"universalRouter": status.UniversalV4,
 	})
 }

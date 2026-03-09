@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
+	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -12,21 +13,27 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/google/uuid"
-	"pay-chain.backend/internal/domain/entities"
-	domainerrors "pay-chain.backend/internal/domain/errors"
-	"pay-chain.backend/internal/domain/repositories"
-	"pay-chain.backend/internal/infrastructure/blockchain"
+	"payment-kita.backend/internal/domain/entities"
+	domainerrors "payment-kita.backend/internal/domain/errors"
+	"payment-kita.backend/internal/domain/repositories"
+	"payment-kita.backend/internal/infrastructure/blockchain"
 )
 
 var (
-	FallbackPayChainGatewayABI = mustParseABI(`[
+	FallbackPaymentKitaGatewayABI = mustParseABI(`[
 		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"}],"name":"defaultBridgeTypes","outputs":[{"internalType":"uint8","name":"","type":"uint8"}],"stateMutability":"view","type":"function"},
 		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"},{"internalType":"uint8","name":"bridgeType","type":"uint8"}],"name":"setDefaultBridgeType","outputs":[],"stateMutability":"nonpayable","type":"function"},
+		{"inputs":[{"internalType":"address","name":"adapter","type":"address"},{"internalType":"bool","name":"authorized","type":"bool"}],"name":"setAuthorizedAdapter","outputs":[],"stateMutability":"nonpayable","type":"function"},
+		{"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"isAuthorizedAdapter","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},
 		{"inputs":[{"internalType":"uint256","name":"amount","type":"uint256"}],"name":"quoteTotalAmount","outputs":[{"internalType":"uint256","name":"totalAmount","type":"uint256"},{"internalType":"uint256","name":"platformFee","type":"uint256"}],"stateMutability":"view","type":"function"},
 		{"inputs":[],"name":"FIXED_BASE_FEE","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
 		{"inputs":[],"name":"FEE_RATE_BPS","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}
 	]`)
-	FallbackPayChainRouterAdminABI = mustParseABI(`[
+	FallbackPaymentKitaVaultAdminABI = mustParseABI(`[
+		{"inputs":[{"internalType":"address","name":"spender","type":"address"},{"internalType":"bool","name":"authorized","type":"bool"}],"name":"setAuthorizedSpender","outputs":[],"stateMutability":"nonpayable","type":"function"},
+		{"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"authorizedSpenders","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"}
+	]`)
+	FallbackPaymentKitaRouterAdminABI = mustParseABI(`[
 		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"},{"internalType":"uint8","name":"bridgeType","type":"uint8"}],"name":"hasAdapter","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},
 		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"},{"internalType":"uint8","name":"bridgeType","type":"uint8"}],"name":"getAdapter","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},
 		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"},{"internalType":"uint8","name":"bridgeType","type":"uint8"},{"internalType":"address","name":"adapter","type":"address"}],"name":"registerAdapter","outputs":[],"stateMutability":"nonpayable","type":"function"}
@@ -42,17 +49,34 @@ var (
 	]`)
 	FallbackCCIPSenderAdminABI = mustParseABI(`[
 		{"inputs":[{"internalType":"string","name":"chainId","type":"string"},{"internalType":"uint64","name":"selector","type":"uint64"}],"name":"setChainSelector","outputs":[],"stateMutability":"nonpayable","type":"function"},
+		{"inputs":[{"internalType":"string","name":"chainId","type":"string"},{"internalType":"uint64","name":"selector","type":"uint64"},{"internalType":"address","name":"destAdapter","type":"address"}],"name":"setChainConfig","outputs":[],"stateMutability":"nonpayable","type":"function"},
 		{"inputs":[{"internalType":"string","name":"chainId","type":"string"},{"internalType":"bytes","name":"adapter","type":"bytes"}],"name":"setDestinationAdapter","outputs":[],"stateMutability":"nonpayable","type":"function"},
+		{"inputs":[{"internalType":"string","name":"chainId","type":"string"},{"internalType":"uint256","name":"gasLimit","type":"uint256"}],"name":"setDestinationGasLimit","outputs":[],"stateMutability":"nonpayable","type":"function"},
+		{"inputs":[{"internalType":"string","name":"chainId","type":"string"},{"internalType":"bytes","name":"extraArgs","type":"bytes"}],"name":"setDestinationExtraArgs","outputs":[],"stateMutability":"nonpayable","type":"function"},
+		{"inputs":[{"internalType":"string","name":"chainId","type":"string"},{"internalType":"address","name":"feeToken","type":"address"}],"name":"setDestinationFeeToken","outputs":[],"stateMutability":"nonpayable","type":"function"},
 		{"inputs":[{"internalType":"string","name":"chainId","type":"string"}],"name":"chainSelectors","outputs":[{"internalType":"uint64","name":"","type":"uint64"}],"stateMutability":"view","type":"function"},
-		{"inputs":[{"internalType":"string","name":"chainId","type":"string"}],"name":"destinationAdapters","outputs":[{"internalType":"bytes","name":"","type":"bytes"}],"stateMutability":"view","type":"function"}
+		{"inputs":[{"internalType":"string","name":"chainId","type":"string"}],"name":"destinationAdapters","outputs":[{"internalType":"bytes","name":"","type":"bytes"}],"stateMutability":"view","type":"function"},
+		{"inputs":[{"internalType":"string","name":"chainId","type":"string"}],"name":"destinationGasLimits","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+		{"inputs":[{"internalType":"string","name":"chainId","type":"string"}],"name":"destinationExtraArgs","outputs":[{"internalType":"bytes","name":"","type":"bytes"}],"stateMutability":"view","type":"function"},
+		{"inputs":[{"internalType":"string","name":"chainId","type":"string"}],"name":"destinationFeeTokens","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"}
+	]`)
+	FallbackCCIPReceiverAdminABI = mustParseABI(`[
+		{"inputs":[{"internalType":"uint64","name":"chainSelector","type":"uint64"},{"internalType":"bytes","name":"sender","type":"bytes"}],"name":"setTrustedSender","outputs":[],"stateMutability":"nonpayable","type":"function"},
+		{"inputs":[{"internalType":"uint64","name":"chainSelector","type":"uint64"},{"internalType":"bool","name":"allowed","type":"bool"}],"name":"setSourceChainAllowed","outputs":[],"stateMutability":"nonpayable","type":"function"}
 	]`)
 	FallbackLayerZeroSenderAdminABI = mustParseABI(`[
 		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"},{"internalType":"uint32","name":"dstEid","type":"uint32"},{"internalType":"bytes32","name":"peer","type":"bytes32"}],"name":"setRoute","outputs":[],"stateMutability":"nonpayable","type":"function"},
 		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"},{"internalType":"bytes","name":"options","type":"bytes"}],"name":"setEnforcedOptions","outputs":[],"stateMutability":"nonpayable","type":"function"},
+		{"inputs":[],"name":"registerDelegate","outputs":[],"stateMutability":"nonpayable","type":"function"},
 		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"}],"name":"dstEids","outputs":[{"internalType":"uint32","name":"","type":"uint32"}],"stateMutability":"view","type":"function"},
 		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"}],"name":"peers","outputs":[{"internalType":"bytes32","name":"","type":"bytes32"}],"stateMutability":"view","type":"function"},
 		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"}],"name":"enforcedOptions","outputs":[{"internalType":"bytes","name":"","type":"bytes"}],"stateMutability":"view","type":"function"},
 		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"}],"name":"isRouteConfigured","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"}
+	]`)
+	FallbackLayerZeroReceiverAdminABI = mustParseABI(`[
+		{"inputs":[{"internalType":"uint32","name":"eid","type":"uint32"},{"internalType":"bytes32","name":"peer","type":"bytes32"}],"name":"setPeer","outputs":[],"stateMutability":"nonpayable","type":"function"},
+		{"inputs":[{"internalType":"uint32","name":"_srcEid","type":"uint32"},{"internalType":"bytes32","name":"_sender","type":"bytes32"}],"name":"getPathState","outputs":[{"internalType":"bool","name":"peerConfigured","type":"bool"},{"internalType":"bool","name":"trusted","type":"bool"},{"internalType":"bytes32","name":"configuredPeer","type":"bytes32"},{"internalType":"uint64","name":"expectedNonce","type":"uint64"}],"stateMutability":"view","type":"function"},
+		{"inputs":[{"internalType":"uint32","name":"","type":"uint32"}],"name":"peers","outputs":[{"internalType":"bytes32","name":"","type":"bytes32"}],"stateMutability":"view","type":"function"}
 	]`)
 	performContractTransact = func(client *ethclient.Client, contractAddress string, parsedABI abi.ABI, auth *bind.TransactOpts, method string, args ...interface{}) (string, error) {
 		contract := bind.NewBoundContract(common.HexToAddress(contractAddress), parsedABI, client, client, client)
@@ -111,6 +135,9 @@ type OnchainAdapterStatus struct {
 	HyperbridgeDestinationContract string `json:"hyperbridgeDestinationContract"`
 	CCIPChainSelector              uint64 `json:"ccipChainSelector"`
 	CCIPDestinationAdapter         string `json:"ccipDestinationAdapter"`
+	CCIPDestinationGasLimit        string `json:"ccipDestinationGasLimit"`
+	CCIPDestinationExtraArgsHex    string `json:"ccipDestinationExtraArgsHex"`
+	CCIPDestinationFeeTokenAddress string `json:"ccipDestinationFeeTokenAddress"`
 	LayerZeroConfigured            bool   `json:"layerZeroConfigured"`
 	LayerZeroDstEID                uint32 `json:"layerZeroDstEid"`
 	LayerZeroPeer                  string `json:"layerZeroPeer"`
@@ -153,6 +180,7 @@ func NewOnchainAdapterUsecase(
 				destCAIP2:      destCAIP2,
 				routerAddress:  router.ContractAddress,
 				gatewayAddress: gateway.ContractAddress,
+				vaultAddress:   "",
 			}, nil
 		},
 		func(ctx context.Context, sourceChainID uuid.UUID, routerAddress, destCAIP2 string, bridgeType uint8) (string, error) {
@@ -172,12 +200,47 @@ func NewOnchainAdapterUsecase(
 				return "", err
 			}
 			defer evmClient.Close()
-			return u.callGetAdapter(ctx, evmClient, routerAddress, FallbackPayChainRouterAdminABI, destCAIP2, bridgeType)
+			return u.callGetAdapter(ctx, evmClient, routerAddress, FallbackPaymentKitaRouterAdminABI, destCAIP2, bridgeType)
 		},
 		func(ctx context.Context, sourceChainID uuid.UUID, contractAddress string, parsedABI abi.ABI, method string, args ...interface{}) (string, error) {
 			return u.sendTx(ctx, sourceChainID, contractAddress, parsedABI, method, args...)
 		},
 		u.ResolveABIWithFallback,
+		func(
+			ctx context.Context,
+			sourceChainID uuid.UUID,
+			contractAddress string,
+			parsedABI abi.ABI,
+			method string,
+			args ...interface{},
+		) ([]interface{}, error) {
+			if u.clientFactory == nil {
+				return nil, domainerrors.BadRequest("evm client factory is not configured")
+			}
+			chain, err := u.chainRepo.GetByID(ctx, sourceChainID)
+			if err != nil {
+				return nil, err
+			}
+			rpcURL := resolveRPCURL(chain)
+			if rpcURL == "" {
+				return nil, domainerrors.BadRequest("no active rpc url for source chain")
+			}
+			evmClient, err := u.clientFactory.GetEVMClient(rpcURL)
+			if err != nil {
+				return nil, err
+			}
+			defer evmClient.Close()
+
+			data, err := parsedABI.Pack(method, args...)
+			if err != nil {
+				return nil, err
+			}
+			out, err := evmClient.CallView(ctx, contractAddress, data)
+			if err != nil {
+				return nil, err
+			}
+			return parsedABI.Unpack(method, out)
+		},
 	)
 
 	return u
@@ -213,6 +276,9 @@ func (u *OnchainAdapterUsecase) GetStatus(ctx context.Context, sourceChainInput,
 	hyperDestination := ""
 	ccipSelector := uint64(0)
 	ccipDestination := ""
+	ccipGasLimit := ""
+	ccipExtraArgsHex := ""
+	ccipFeeToken := ""
 	lzConfigured := false
 	lzDstEid := uint32(0)
 	lzPeer := ""
@@ -237,6 +303,15 @@ func (u *OnchainAdapterUsecase) GetStatus(ctx context.Context, sourceChainInput,
 		}
 		if dst, dErr := u.callCCIPDestinationAdapter(ctx, evmClient, adapter1, ccipABI, destCAIP2); dErr == nil {
 			ccipDestination = "0x" + common.Bytes2Hex(dst)
+		}
+		if gasLimit, gErr := u.callCCIPDestinationGasLimit(ctx, evmClient, adapter1, ccipABI, destCAIP2); gErr == nil {
+			ccipGasLimit = gasLimit.String()
+		}
+		if extraArgs, xErr := u.callCCIPDestinationExtraArgs(ctx, evmClient, adapter1, ccipABI, destCAIP2); xErr == nil {
+			ccipExtraArgsHex = "0x" + common.Bytes2Hex(extraArgs)
+		}
+		if feeToken, fErr := u.callCCIPDestinationFeeToken(ctx, evmClient, adapter1, ccipABI, destCAIP2); fErr == nil {
+			ccipFeeToken = feeToken.Hex()
 		}
 	}
 	if has2 && adapter2 != "" && adapter2 != "0x0000000000000000000000000000000000000000" {
@@ -274,6 +349,9 @@ func (u *OnchainAdapterUsecase) GetStatus(ctx context.Context, sourceChainInput,
 		HyperbridgeDestinationContract: hyperDestination,
 		CCIPChainSelector:              ccipSelector,
 		CCIPDestinationAdapter:         ccipDestination,
+		CCIPDestinationGasLimit:        ccipGasLimit,
+		CCIPDestinationExtraArgsHex:    ccipExtraArgsHex,
+		CCIPDestinationFeeTokenAddress: ccipFeeToken,
 		LayerZeroConfigured:            lzConfigured,
 		LayerZeroDstEID:                lzDstEid,
 		LayerZeroPeer:                  lzPeer,
@@ -299,10 +377,9 @@ func (u *OnchainAdapterUsecase) SetHyperbridgeConfig(
 
 func (u *OnchainAdapterUsecase) SetCCIPConfig(
 	ctx context.Context,
-	sourceChainInput, destChainInput string,
-	chainSelector *uint64, destinationAdapterHex string,
+	input CCIPConfigInput,
 ) (string, []string, error) {
-	return u.adminOps.SetCCIPConfig(ctx, sourceChainInput, destChainInput, chainSelector, destinationAdapterHex)
+	return u.adminOps.SetCCIPConfig(ctx, input)
 }
 
 func (u *OnchainAdapterUsecase) SetLayerZeroConfig(
@@ -311,6 +388,82 @@ func (u *OnchainAdapterUsecase) SetLayerZeroConfig(
 	dstEid *uint32, peerHex, optionsHex string,
 ) (string, []string, error) {
 	return u.adminOps.SetLayerZeroConfig(ctx, sourceChainInput, destChainInput, dstEid, peerHex, optionsHex)
+}
+
+func (u *OnchainAdapterUsecase) ConfigureLayerZeroE2E(
+	ctx context.Context,
+	input LayerZeroE2EConfigureInput,
+) (*LayerZeroE2EConfigureResult, error) {
+	if strings.TrimSpace(input.SourceChainInput) == "" || strings.TrimSpace(input.DestChainInput) == "" {
+		return nil, domainerrors.BadRequest("sourceChainId and destChainId are required")
+	}
+	_, destCAIP2, err := u.chainResolver.ResolveFromAny(ctx, input.DestChainInput)
+	if err != nil {
+		return nil, domainerrors.BadRequest("invalid destChainId")
+	}
+	destChainID, _, err := u.chainResolver.ResolveFromAny(ctx, destCAIP2)
+	if err != nil {
+		return nil, domainerrors.BadRequest("invalid destination execution chain")
+	}
+	input.Destination.ChainID = destChainID
+
+	if strings.TrimSpace(input.Source.SenderAddress) == "" {
+		sourceChainID, _, srcErr := u.chainResolver.ResolveFromAny(ctx, input.SourceChainInput)
+		if srcErr == nil {
+			if sender, senderErr := u.contractRepo.GetActiveContract(ctx, sourceChainID, entities.ContractTypeAdapterLayerZero); senderErr == nil && sender != nil {
+				input.Source.SenderAddress = sender.ContractAddress
+			}
+		}
+	}
+	if strings.TrimSpace(input.Destination.ReceiverAddress) == "" {
+		if receiver, receiverErr := u.contractRepo.GetActiveContract(ctx, input.Destination.ChainID, entities.ContractTypeReceiverLayerZero); receiverErr == nil && receiver != nil {
+			input.Destination.ReceiverAddress = receiver.ContractAddress
+		}
+	}
+	if input.Destination.AuthorizeVaultSpender && strings.TrimSpace(input.Destination.VaultAddress) == "" {
+		if vault, vaultErr := u.contractRepo.GetActiveContract(ctx, input.Destination.ChainID, entities.ContractTypeVault); vaultErr == nil && vault != nil {
+			input.Destination.VaultAddress = vault.ContractAddress
+		}
+	}
+	if input.Destination.AuthorizeGatewayAdapter && strings.TrimSpace(input.Destination.GatewayAddress) == "" {
+		if gateway, gwErr := u.contractRepo.GetActiveContract(ctx, input.Destination.ChainID, entities.ContractTypeGateway); gwErr == nil && gateway != nil {
+			input.Destination.GatewayAddress = gateway.ContractAddress
+		}
+	}
+
+	return u.adminOps.ConfigureLayerZeroE2E(ctx, input)
+}
+
+func (u *OnchainAdapterUsecase) GetLayerZeroE2EStatus(
+	ctx context.Context,
+	input LayerZeroE2EStatusInput,
+) (*LayerZeroE2EStatusResult, error) {
+	if strings.TrimSpace(input.SourceChainInput) == "" || strings.TrimSpace(input.DestChainInput) == "" {
+		return nil, domainerrors.BadRequest("sourceChainId and destChainId are required")
+	}
+	destChainID, _, err := u.chainResolver.ResolveFromAny(ctx, input.DestChainInput)
+	if err != nil {
+		return nil, domainerrors.BadRequest("invalid destChainId")
+	}
+	input.DestinationChainID = destChainID
+
+	if strings.TrimSpace(input.DestinationReceiverAddress) == "" {
+		if receiver, receiverErr := u.contractRepo.GetActiveContract(ctx, destChainID, entities.ContractTypeReceiverLayerZero); receiverErr == nil && receiver != nil {
+			input.DestinationReceiverAddress = receiver.ContractAddress
+		}
+	}
+	if strings.TrimSpace(input.DestinationVaultAddress) == "" {
+		if vault, vaultErr := u.contractRepo.GetActiveContract(ctx, destChainID, entities.ContractTypeVault); vaultErr == nil && vault != nil {
+			input.DestinationVaultAddress = vault.ContractAddress
+		}
+	}
+	if strings.TrimSpace(input.DestinationGatewayAddress) == "" {
+		if gateway, gwErr := u.contractRepo.GetActiveContract(ctx, destChainID, entities.ContractTypeGateway); gwErr == nil && gateway != nil {
+			input.DestinationGatewayAddress = gateway.ContractAddress
+		}
+	}
+
+	return u.adminOps.GetLayerZeroE2EStatus(ctx, input)
 }
 
 func (u *OnchainAdapterUsecase) GenericInteract(
@@ -577,7 +730,37 @@ func (u *OnchainAdapterUsecase) sendTx(
 	if rpcURL == "" {
 		return "", domainerrors.BadRequest("no active rpc url for source chain")
 	}
-	return executeOnchainTx(ctx, rpcURL, u.ownerPrivateKey, contractAddress, parsedABI, method, args...)
+
+	const maxAttempts = 4
+	var lastErr error
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		txHash, err := executeOnchainTx(ctx, rpcURL, u.ownerPrivateKey, contractAddress, parsedABI, method, args...)
+		if err == nil {
+			return txHash, nil
+		}
+		lastErr = err
+		if !isRetriableNonceError(err) || attempt == maxAttempts {
+			break
+		}
+
+		// Backoff a bit so RPC mempool/pending nonce can converge.
+		wait := time.Duration(attempt*250) * time.Millisecond
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-time.After(wait):
+		}
+	}
+	return "", lastErr
+}
+
+func isRetriableNonceError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "nonce too low") ||
+		strings.Contains(msg, "replacement transaction underpriced")
 }
 
 func (u *OnchainAdapterUsecase) callDefaultBridgeType(ctx context.Context, client *blockchain.EVMClient, gatewayAddress string, parsedABI abi.ABI, destCAIP2 string) (uint8, error) {
@@ -610,6 +793,18 @@ func (u *OnchainAdapterUsecase) callCCIPSelector(ctx context.Context, client *bl
 
 func (u *OnchainAdapterUsecase) callCCIPDestinationAdapter(ctx context.Context, client *blockchain.EVMClient, adapterAddress string, parsedABI abi.ABI, destCAIP2 string) ([]byte, error) {
 	return callTypedView[[]byte](ctx, client, adapterAddress, parsedABI, "destinationAdapters", destCAIP2)
+}
+
+func (u *OnchainAdapterUsecase) callCCIPDestinationGasLimit(ctx context.Context, client *blockchain.EVMClient, adapterAddress string, parsedABI abi.ABI, destCAIP2 string) (*big.Int, error) {
+	return callTypedView[*big.Int](ctx, client, adapterAddress, parsedABI, "destinationGasLimits", destCAIP2)
+}
+
+func (u *OnchainAdapterUsecase) callCCIPDestinationExtraArgs(ctx context.Context, client *blockchain.EVMClient, adapterAddress string, parsedABI abi.ABI, destCAIP2 string) ([]byte, error) {
+	return callTypedView[[]byte](ctx, client, adapterAddress, parsedABI, "destinationExtraArgs", destCAIP2)
+}
+
+func (u *OnchainAdapterUsecase) callCCIPDestinationFeeToken(ctx context.Context, client *blockchain.EVMClient, adapterAddress string, parsedABI abi.ABI, destCAIP2 string) (common.Address, error) {
+	return callTypedView[common.Address](ctx, client, adapterAddress, parsedABI, "destinationFeeTokens", destCAIP2)
 }
 
 func (u *OnchainAdapterUsecase) callLayerZeroConfigured(ctx context.Context, client *blockchain.EVMClient, adapterAddress string, parsedABI abi.ABI, destCAIP2 string) (bool, error) {
@@ -687,6 +882,37 @@ func resolveRPCURL(chain *entities.Chain) string {
 		}
 	}
 	return ""
+}
+
+func resolveRPCURLs(chain *entities.Chain) []string {
+	if chain == nil {
+		return nil
+	}
+	seen := make(map[string]struct{})
+	out := make([]string, 0, len(chain.RPCs)+1)
+	add := func(v string) {
+		url := strings.TrimSpace(v)
+		if url == "" {
+			return
+		}
+		if _, ok := seen[url]; ok {
+			return
+		}
+		seen[url] = struct{}{}
+		out = append(out, url)
+	}
+
+	// Keep backward compatibility: prefer legacy primary RPC first.
+	add(chain.RPCURL)
+	for _, rpc := range chain.RPCs {
+		if rpc.IsActive {
+			add(rpc.URL)
+		}
+	}
+	for _, rpc := range chain.RPCs {
+		add(rpc.URL)
+	}
+	return out
 }
 
 func parseHexToBytes32(v string) ([32]byte, error) {

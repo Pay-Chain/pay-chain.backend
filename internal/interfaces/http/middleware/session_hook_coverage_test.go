@@ -13,9 +13,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
-	"pay-chain.backend/internal/usecases"
-	"pay-chain.backend/pkg/jwt"
-	"pay-chain.backend/pkg/redis"
+	"payment-kita.backend/internal/usecases"
+	"payment-kita.backend/pkg/jwt"
+	"payment-kita.backend/pkg/redis"
 )
 
 func TestAuthMiddleware_SessionHookAndExpiredBearer(t *testing.T) {
@@ -29,7 +29,7 @@ func TestAuthMiddleware_SessionHookAndExpiredBearer(t *testing.T) {
 	})
 
 	validJWT := jwt.NewJWTService("secret", time.Hour, time.Hour)
-	validPair, err := validJWT.GenerateTokenPair(uuid.New(), "session-hook@paychain.io", "USER")
+	validPair, err := validJWT.GenerateTokenPair(uuid.New(), "session-hook@paymentkita.io", "USER")
 	require.NoError(t, err)
 
 	loadSessionFromStore = func(context.Context, *redis.SessionStore, string) (*redis.SessionData, error) {
@@ -49,7 +49,7 @@ func TestAuthMiddleware_SessionHookAndExpiredBearer(t *testing.T) {
 	require.Equal(t, http.StatusNoContent, w.Code)
 
 	expiredJWT := jwt.NewJWTService("secret", -1*time.Second, time.Hour)
-	expiredPair, err := expiredJWT.GenerateTokenPair(uuid.New(), "expired-hook@paychain.io", "USER")
+	expiredPair, err := expiredJWT.GenerateTokenPair(uuid.New(), "expired-hook@paymentkita.io", "USER")
 	require.NoError(t, err)
 	_ = os.Setenv("INTERNAL_PROXY_SECRET", "")
 
@@ -75,7 +75,7 @@ func TestDualAuthMiddleware_SessionHookAndOptionalSignatureBranch(t *testing.T) 
 	})
 
 	j := jwt.NewJWTService("secret", time.Hour, time.Hour)
-	pair, err := j.GenerateTokenPair(uuid.New(), "dual-session-hook@paychain.io", "USER")
+	pair, err := j.GenerateTokenPair(uuid.New(), "dual-session-hook@paymentkita.io", "USER")
 	require.NoError(t, err)
 
 	loadSessionFromStore = func(context.Context, *redis.SessionStore, string) (*redis.SessionData, error) {

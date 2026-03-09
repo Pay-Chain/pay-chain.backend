@@ -11,8 +11,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
-	"pay-chain.backend/internal/domain/entities"
-	"pay-chain.backend/internal/infrastructure/blockchain"
+	"payment-kita.backend/internal/domain/entities"
+	"payment-kita.backend/internal/infrastructure/blockchain"
 )
 
 func encodeMethodOut(t *testing.T, methodName string, values ...interface{}) []byte {
@@ -24,9 +24,9 @@ func encodeMethodOut(t *testing.T, methodName string, values ...interface{}) []b
 
 	switch methodName {
 	case "defaultBridgeTypes":
-		out, err = FallbackPayChainGatewayABI.Methods[methodName].Outputs.Pack(values...)
+		out, err = FallbackPaymentKitaGatewayABI.Methods[methodName].Outputs.Pack(values...)
 	case "hasAdapter", "getAdapter":
-		out, err = FallbackPayChainRouterAdminABI.Methods[methodName].Outputs.Pack(values...)
+		out, err = FallbackPaymentKitaRouterAdminABI.Methods[methodName].Outputs.Pack(values...)
 	case "isChainConfigured", "stateMachineIds", "destinationContracts":
 		out, err = FallbackHyperbridgeSenderAdminABI.Methods[methodName].Outputs.Pack(values...)
 	case "chainSelectors", "destinationAdapters":
@@ -84,15 +84,15 @@ func TestOnchainAdapterUsecase_GetStatus_WithInjectedClient(t *testing.T) {
 		}
 		methodID := "0x" + hex.EncodeToString(data[:4])
 		switch methodID {
-		case "0x" + hex.EncodeToString(FallbackPayChainGatewayABI.Methods["defaultBridgeTypes"].ID):
+		case "0x" + hex.EncodeToString(FallbackPaymentKitaGatewayABI.Methods["defaultBridgeTypes"].ID):
 			return encodeMethodOut(t, "defaultBridgeTypes", uint8(1)), nil
-		case "0x" + hex.EncodeToString(FallbackPayChainRouterAdminABI.Methods["hasAdapter"].ID):
-			vals, err := FallbackPayChainRouterAdminABI.Methods["hasAdapter"].Inputs.Unpack(data[4:])
+		case "0x" + hex.EncodeToString(FallbackPaymentKitaRouterAdminABI.Methods["hasAdapter"].ID):
+			vals, err := FallbackPaymentKitaRouterAdminABI.Methods["hasAdapter"].Inputs.Unpack(data[4:])
 			require.NoError(t, err)
 			require.Equal(t, destCAIP2, vals[0].(string))
 			return encodeMethodOut(t, "hasAdapter", true), nil
-		case "0x" + hex.EncodeToString(FallbackPayChainRouterAdminABI.Methods["getAdapter"].ID):
-			vals, err := FallbackPayChainRouterAdminABI.Methods["getAdapter"].Inputs.Unpack(data[4:])
+		case "0x" + hex.EncodeToString(FallbackPaymentKitaRouterAdminABI.Methods["getAdapter"].ID):
+			vals, err := FallbackPaymentKitaRouterAdminABI.Methods["getAdapter"].Inputs.Unpack(data[4:])
 			require.NoError(t, err)
 			require.Equal(t, destCAIP2, vals[0].(string))
 			bridgeType := vals[1].(uint8)

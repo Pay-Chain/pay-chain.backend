@@ -10,21 +10,21 @@ import (
 )
 
 func TestGeneratePasswordHash(t *testing.T) {
-	hash, err := generatePasswordHash("AdminPayChain2026!", 10)
+	hash, err := generatePasswordHash("AdminPaymentKita2026!", 10)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if hash == "" {
 		t.Fatal("expected non-empty hash")
 	}
-	if err := bcrypt.CompareHashAndPassword([]byte(hash), []byte("AdminPayChain2026!")); err != nil {
+	if err := bcrypt.CompareHashAndPassword([]byte(hash), []byte("AdminPaymentKita2026!")); err != nil {
 		t.Fatalf("hash mismatch: %v", err)
 	}
 }
 
 func TestGeneratePasswordHash_InvalidCost(t *testing.T) {
 	// Bcrypt rejects cost outside allowed range.
-	_, err := generatePasswordHash("AdminPayChain2026!", 100)
+	_, err := generatePasswordHash("AdminPaymentKita2026!", 100)
 	if err == nil {
 		t.Fatal("expected error for invalid bcrypt cost")
 	}

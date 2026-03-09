@@ -6,9 +6,9 @@ import (
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
-	"pay-chain.backend/internal/domain/entities"
-	domainerrors "pay-chain.backend/internal/domain/errors"
-	"pay-chain.backend/internal/infrastructure/models"
+	"payment-kita.backend/internal/domain/entities"
+	domainerrors "payment-kita.backend/internal/domain/errors"
+	"payment-kita.backend/internal/infrastructure/models"
 )
 
 // WalletRepository implements wallet data operations

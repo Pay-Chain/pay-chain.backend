@@ -8,9 +8,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	"pay-chain.backend/internal/domain/entities"
-	uc "pay-chain.backend/internal/usecases"
-	"pay-chain.backend/pkg/utils"
+	"payment-kita.backend/internal/domain/entities"
+	uc "payment-kita.backend/internal/usecases"
+	"payment-kita.backend/pkg/utils"
 )
 
 func TestContractConfigAuditUsecase_Check_InvalidSource(t *testing.T) {

@@ -13,10 +13,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/volatiletech/null/v8"
-	"pay-chain.backend/internal/domain/entities"
-	domainerrors "pay-chain.backend/internal/domain/errors"
-	"pay-chain.backend/internal/interfaces/http/middleware"
-	"pay-chain.backend/internal/usecases"
+	"payment-kita.backend/internal/domain/entities"
+	domainerrors "payment-kita.backend/internal/domain/errors"
+	"payment-kita.backend/internal/interfaces/http/middleware"
+	"payment-kita.backend/internal/usecases"
 )
 
 type merchantRepoStub struct {
@@ -103,7 +103,7 @@ func TestMerchantHandler_ApplyAndGetStatus_Success(t *testing.T) {
 		repo,
 		merchantUserRepoStub{
 			users: map[uuid.UUID]*entities.User{
-				userID: {ID: userID, Email: "m@paychain.io", Role: entities.UserRoleUser},
+				userID: {ID: userID, Email: "m@paymentkita.io", Role: entities.UserRoleUser},
 			},
 		},
 	)
@@ -153,7 +153,7 @@ func TestMerchantHandler_Apply_InvalidTypeMapping(t *testing.T) {
 		repo,
 		merchantUserRepoStub{
 			users: map[uuid.UUID]*entities.User{
-				userID: {ID: userID, Email: "m@paychain.io", Role: entities.UserRoleUser},
+				userID: {ID: userID, Email: "m@paymentkita.io", Role: entities.UserRoleUser},
 			},
 		},
 	)
@@ -192,7 +192,7 @@ func TestMerchantHandler_GetStatus_ApprovedMessage(t *testing.T) {
 		repo,
 		merchantUserRepoStub{
 			users: map[uuid.UUID]*entities.User{
-				userID: {ID: userID, Email: "m@paychain.io", Role: entities.UserRoleUser},
+				userID: {ID: userID, Email: "m@paymentkita.io", Role: entities.UserRoleUser},
 			},
 		},
 	)
@@ -247,7 +247,7 @@ func TestMerchantHandler_GetStatus_InternalErrorBranch(t *testing.T) {
 	uc := usecases.NewMerchantUsecase(
 		merchantRepoStatusErrorStub{newErr: errors.New("repo failure")},
 		merchantUserRepoStub{users: map[uuid.UUID]*entities.User{
-			userID: {ID: userID, Email: "m@paychain.io", Role: entities.UserRoleUser},
+			userID: {ID: userID, Email: "m@paymentkita.io", Role: entities.UserRoleUser},
 		}},
 	)
 	h := NewMerchantHandler(uc)

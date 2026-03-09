@@ -10,7 +10,7 @@ import (
 	"github.com/alicebob/miniredis/v2"
 	redisv9 "github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
-	redispkg "pay-chain.backend/pkg/redis"
+	redispkg "payment-kita.backend/pkg/redis"
 )
 
 func startMiniRedis(t *testing.T) *miniredis.Miniredis {

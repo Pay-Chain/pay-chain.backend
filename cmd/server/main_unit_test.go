@@ -12,9 +12,9 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 
-	"pay-chain.backend/internal/config"
-	plog "pay-chain.backend/pkg/logger"
-	"pay-chain.backend/pkg/redis"
+	"payment-kita.backend/internal/config"
+	plog "payment-kita.backend/pkg/logger"
+	"payment-kita.backend/pkg/redis"
 )
 
 func withMainHooks(t *testing.T) {
@@ -51,7 +51,7 @@ func baseTestConfig() *config.Config {
 			Port:     5432,
 			User:     "postgres",
 			Password: "postgres",
-			DBName:   "paychain",
+			DBName:   "paymentkita",
 			SSLMode:  "disable",
 		},
 		Redis: config.RedisConfig{
@@ -184,7 +184,7 @@ func TestDefaultOpenDBAndRunServerWrappers_ExecuteBodies(t *testing.T) {
 	openDB = func(dsn string) (*gorm.DB, error) {
 		return origOpen(dsn)
 	}
-	_, err := openDB("host=localhost port=-1 user=postgres password=postgres dbname=paychain sslmode=disable")
+	_, err := openDB("host=localhost port=-1 user=postgres password=postgres dbname=paymentkita sslmode=disable")
 	if err == nil {
 		t.Fatal("expected openDB wrapper to fail on invalid DSN")
 	}

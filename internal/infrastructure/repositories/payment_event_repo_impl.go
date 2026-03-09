@@ -10,9 +10,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/lib/pq"
 	"gorm.io/gorm"
-	"pay-chain.backend/internal/domain/entities"
-	domainerrors "pay-chain.backend/internal/domain/errors"
-	"pay-chain.backend/internal/infrastructure/models"
+	"payment-kita.backend/internal/domain/entities"
+	domainerrors "payment-kita.backend/internal/domain/errors"
+	"payment-kita.backend/internal/infrastructure/models"
 )
 
 // PaymentEventRepository implements payment event data operations
@@ -33,8 +33,12 @@ func (r *PaymentEventRepository) Create(ctx context.Context, event *entities.Pay
 		createdAt = time.Now()
 	}
 
-	// Use transaction-aware DB instance
-	db := GetDB(ctx, r.db).WithContext(ctx)
+	// Primary path: transaction-aware DB instance (if any)
+	primaryDB := GetDB(ctx, r.db).WithContext(ctx)
+	// Fallback path: force base DB (non-transaction) to avoid stale/aborted tx context.
+	// This is important for best-effort event writes after parent payment commit.
+	fallbackDB := r.db.WithContext(ctx)
+	_, inTx := ctx.Value(txKey).(*gorm.DB)
 	// Map Entity -> Model
 	m := &models.PaymentEvent{
 		ID:          event.ID,
@@ -48,16 +52,34 @@ func (r *PaymentEventRepository) Create(ctx context.Context, event *entities.Pay
 		BlockNumber: event.BlockNumber,
 	}
 
-	const maxFKRetries = 3
+	// Keep this best-effort write quiet: a single attempt avoids repeated FK spam logs
+	// from Postgres/GORM while preserving warning visibility at caller level.
+	const maxRetries = 1
 	var lastErr error
-	for attempt := 0; attempt < maxFKRetries; attempt++ {
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		// First attempt uses transaction-aware DB, next attempts force base DB.
+		db := primaryDB
+		if attempt > 0 && !inTx {
+			db = fallbackDB
+		}
+
 		lastErr = db.Create(m).Error
 		if lastErr == nil {
 			return nil
 		}
-		if !isForeignKeyError(lastErr) {
+
+		// In an active transaction, FK/aborted errors poison tx state.
+		// Return immediately and let caller decide best-effort handling.
+		if inTx {
 			return lastErr
 		}
+
+		// Non-retryable errors fail fast.
+		if !isForeignKeyError(lastErr) && !isTransactionAbortedError(lastErr) {
+			return lastErr
+		}
+
+		// Backoff before retrying on base DB / eventual visibility.
 		time.Sleep(time.Duration(100*(attempt+1)) * time.Millisecond)
 	}
 	return fmt.Errorf("failed to create payment event after FK retries: %w", lastErr)
@@ -72,6 +94,17 @@ func isForeignKeyError(err error) bool {
 		return string(pgErr.Code) == "23503"
 	}
 	return strings.Contains(strings.ToLower(err.Error()), "foreign key")
+}
+
+func isTransactionAbortedError(err error) bool {
+	if err == nil {
+		return false
+	}
+	var pgErr *pq.Error
+	if errors.As(err, &pgErr) {
+		return string(pgErr.Code) == "25P02"
+	}
+	return strings.Contains(strings.ToLower(err.Error()), "current transaction is aborted")
 }
 
 func (r *PaymentEventRepository) resolveLegacyChainValue(chainID *uuid.UUID) string {

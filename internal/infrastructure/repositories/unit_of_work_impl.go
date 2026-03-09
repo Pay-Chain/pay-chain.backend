@@ -6,7 +6,7 @@ import (
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
-	domainRepos "pay-chain.backend/internal/domain/repositories"
+	domainRepos "payment-kita.backend/internal/domain/repositories"
 )
 
 type contextKey string

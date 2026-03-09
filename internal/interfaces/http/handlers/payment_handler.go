@@ -7,10 +7,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"pay-chain.backend/internal/domain/entities"
-	domainerrors "pay-chain.backend/internal/domain/errors"
-	"pay-chain.backend/internal/interfaces/http/middleware"
-	"pay-chain.backend/internal/interfaces/http/response"
+	"payment-kita.backend/internal/domain/entities"
+	domainerrors "payment-kita.backend/internal/domain/errors"
+	"payment-kita.backend/internal/interfaces/http/middleware"
+	"payment-kita.backend/internal/interfaces/http/response"
 )
 
 type PaymentService interface {
@@ -18,6 +18,7 @@ type PaymentService interface {
 	GetPayment(ctx context.Context, id uuid.UUID) (*entities.Payment, error)
 	GetPaymentsByUser(ctx context.Context, userID uuid.UUID, page, limit int) ([]*entities.Payment, int, error)
 	GetPaymentEvents(ctx context.Context, paymentID uuid.UUID) ([]*entities.PaymentEvent, error)
+	GetPaymentPrivacyStatus(ctx context.Context, paymentID uuid.UUID) (*entities.PaymentPrivacyStatus, error)
 }
 
 // PaymentHandler handles payment endpoints
@@ -137,4 +138,27 @@ func (h *PaymentHandler) GetPaymentEvents(c *gin.Context) {
 	}
 
 	response.Success(c, http.StatusOK, gin.H{"events": events})
+}
+
+// GetPaymentPrivacyStatus gets inferred privacy lifecycle status for a payment
+// GET /api/v1/payments/:id/privacy-status
+func (h *PaymentHandler) GetPaymentPrivacyStatus(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		response.Error(c, domainerrors.BadRequest("Invalid payment ID"))
+		return
+	}
+
+	privacyStatus, err := h.paymentUsecase.GetPaymentPrivacyStatus(c.Request.Context(), id)
+	if err != nil {
+		if err == domainerrors.ErrNotFound {
+			response.Error(c, domainerrors.NotFound("Payment not found"))
+			return
+		}
+		response.Error(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, gin.H{"privacyStatus": privacyStatus})
 }

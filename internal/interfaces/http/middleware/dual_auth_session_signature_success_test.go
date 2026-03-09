@@ -15,11 +15,11 @@ import (
 	goredis "github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	"pay-chain.backend/internal/domain/entities"
-	"pay-chain.backend/internal/interfaces/http/middleware"
-	"pay-chain.backend/internal/usecases"
-	"pay-chain.backend/pkg/jwt"
-	redispkg "pay-chain.backend/pkg/redis"
+	"payment-kita.backend/internal/domain/entities"
+	"payment-kita.backend/internal/interfaces/http/middleware"
+	"payment-kita.backend/internal/usecases"
+	"payment-kita.backend/pkg/jwt"
+	redispkg "payment-kita.backend/pkg/redis"
 )
 
 func TestDualAuthMiddleware_TrustedSession_WithOptionalSignatureValidationSuccess(t *testing.T) {
@@ -45,7 +45,7 @@ func TestDualAuthMiddleware_TrustedSession_WithOptionalSignatureValidationSucces
 	}
 
 	userID := uuid.New()
-	tokens, _ := jwtService.GenerateTokenPair(userID, "trusted@paychain.io", "USER")
+	tokens, _ := jwtService.GenerateTokenPair(userID, "trusted@paymentkita.io", "USER")
 	if err := sessionStore.CreateSession(context.Background(), "sid-verify", &redispkg.SessionData{
 		AccessToken:  tokens.AccessToken,
 		RefreshToken: tokens.RefreshToken,

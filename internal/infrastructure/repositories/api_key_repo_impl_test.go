@@ -7,8 +7,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
-	"pay-chain.backend/internal/domain/entities"
-	domainerrors "pay-chain.backend/internal/domain/errors"
+	"payment-kita.backend/internal/domain/entities"
+	domainerrors "payment-kita.backend/internal/domain/errors"
 )
 
 func TestApiKeyRepository_CRUDAndFinders(t *testing.T) {
@@ -21,7 +21,7 @@ func TestApiKeyRepository_CRUDAndFinders(t *testing.T) {
 	userID := uuid.New()
 	now := time.Now()
 	mustExec(t, db, `INSERT INTO users(id,email,name,role,kyc_status,password_hash,is_email_verified,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?)`,
-		userID.String(), "admin@paychain.io", "Admin", "ADMIN", "APPROVED", "x", true, now, now)
+		userID.String(), "admin@paymentkita.io", "Admin", "ADMIN", "APPROVED", "x", true, now, now)
 
 	ak := &entities.ApiKey{
 		ID:              uuid.New(),

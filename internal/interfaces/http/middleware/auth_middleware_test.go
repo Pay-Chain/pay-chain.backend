@@ -12,8 +12,8 @@ import (
 	"github.com/google/uuid"
 	goredis "github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
-	"pay-chain.backend/pkg/jwt"
-	"pay-chain.backend/pkg/redis"
+	"payment-kita.backend/pkg/jwt"
+	"payment-kita.backend/pkg/redis"
 )
 
 func TestAuthMiddleware_BearerFlow(t *testing.T) {
@@ -46,7 +46,7 @@ func TestAuthMiddleware_BearerFlow(t *testing.T) {
 	})
 
 	t.Run("valid token", func(t *testing.T) {
-		pair, err := jwtService.GenerateTokenPair(uuid.New(), "u@paychain.io", "USER")
+		pair, err := jwtService.GenerateTokenPair(uuid.New(), "u@paymentkita.io", "USER")
 		require.NoError(t, err)
 		req := httptest.NewRequest(http.MethodGet, "/me", nil)
 		req.Header.Set("Authorization", "Bearer "+pair.AccessToken)
@@ -66,7 +66,7 @@ func TestAuthMiddleware_StrictModeBlocksBearerFallback(t *testing.T) {
 	})
 	_ = os.Setenv("INTERNAL_PROXY_SECRET", "proxy-secret")
 
-	pair, err := jwtService.GenerateTokenPair(uuid.New(), "u@paychain.io", "USER")
+	pair, err := jwtService.GenerateTokenPair(uuid.New(), "u@paymentkita.io", "USER")
 	require.NoError(t, err)
 
 	r := gin.New()
@@ -98,7 +98,7 @@ func TestAuthMiddleware_StrictModeSessionFlowAndExpiredToken(t *testing.T) {
 	require.NoError(t, err)
 
 	jwtService := jwt.NewJWTService("secret", time.Minute, time.Hour)
-	pair, err := jwtService.GenerateTokenPair(uuid.New(), "u@paychain.io", "USER")
+	pair, err := jwtService.GenerateTokenPair(uuid.New(), "u@paymentkita.io", "USER")
 	require.NoError(t, err)
 	require.NoError(t, sessionStore.CreateSession(t.Context(), "sid-ok", &redis.SessionData{
 		AccessToken:  pair.AccessToken,
@@ -123,7 +123,7 @@ func TestAuthMiddleware_StrictModeSessionFlowAndExpiredToken(t *testing.T) {
 	// Expired token path in non-strict mode via Authorization header.
 	_ = os.Setenv("INTERNAL_PROXY_SECRET", "")
 	expiredJWT := jwt.NewJWTService("secret", -1*time.Second, time.Hour)
-	expiredPair, err := expiredJWT.GenerateTokenPair(uuid.New(), "u@paychain.io", "USER")
+	expiredPair, err := expiredJWT.GenerateTokenPair(uuid.New(), "u@paymentkita.io", "USER")
 	require.NoError(t, err)
 
 	r2 := gin.New()

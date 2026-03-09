@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	domainerrors "pay-chain.backend/internal/domain/errors"
+	domainerrors "payment-kita.backend/internal/domain/errors"
 )
 
 type webhookServiceStub struct {

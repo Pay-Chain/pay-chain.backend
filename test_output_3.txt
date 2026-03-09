@@ -574,7 +574,7 @@ Warning: Active Gateway contract not found for chain eip155:8453: resource not f
     --- PASS: TestPaymentUsecase_QuoteBridgeFeeByType_PackErrorAndExplicitEmptyResult/pack_error (0.00s)
 === RUN   TestPaymentUsecase_GetBridgeFeeQuote_UsesFallbackOrder
     payment_usecase_quote_success_internal_test.go:415: 
-        	Error Trace:	/Users/staffinc/Documents/Development/pay-chain/pay-chain.backend/internal/usecases/payment_usecase_quote_success_internal_test.go:415
+        	Error Trace:	/Users/staffinc/Documents/Development/payment-kita/payment-kita.backend/internal/usecases/payment_usecase_quote_success_internal_test.go:415
         	Error:      	Received unexpected error:
         	            	empty result from quotePaymentFee
         	Test:       	TestPaymentUsecase_GetBridgeFeeQuote_UsesFallbackOrder
@@ -1182,5 +1182,5 @@ redis: 2026/02/18 08:13:16 pool.go:426: redis: connection pool: failed to dial a
     --- PASS: TestFormatDecodedRouteErrorForPreflight/fallback_by_known_name (0.00s)
     --- PASS: TestFormatDecodedRouteErrorForPreflight/generic_fallback (0.00s)
 FAIL
-FAIL	pay-chain.backend/internal/usecases	10.681s
+FAIL	payment-kita.backend/internal/usecases	10.681s
 FAIL

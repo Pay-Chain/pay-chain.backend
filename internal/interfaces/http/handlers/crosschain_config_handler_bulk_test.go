@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"pay-chain.backend/internal/usecases"
+	"payment-kita.backend/internal/usecases"
 )
 
 func TestCrosschainConfigHandler_BulkRoutes_ErrorItems(t *testing.T) {

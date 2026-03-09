@@ -6,7 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
-	"pay-chain.backend/pkg/utils"
+	"payment-kita.backend/pkg/utils"
 )
 
 func TestTokenRepository_GetAllTokens_QueryBranches(t *testing.T) {

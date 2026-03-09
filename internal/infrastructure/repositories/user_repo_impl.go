@@ -7,10 +7,10 @@ import (
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
-	"pay-chain.backend/internal/domain/entities"
-	domainerrors "pay-chain.backend/internal/domain/errors"
-	"pay-chain.backend/internal/infrastructure/models"
-	"pay-chain.backend/pkg/utils"
+	"payment-kita.backend/internal/domain/entities"
+	domainerrors "payment-kita.backend/internal/domain/errors"
+	"payment-kita.backend/internal/infrastructure/models"
+	"payment-kita.backend/pkg/utils"
 )
 
 // UserRepository implements user data operations
@@ -150,7 +150,7 @@ func (r *UserRepository) toEntity(m *models.User) *entities.User {
 
 	// Wait, I cannot assign *time.Time to null.Time directly.
 	// Use null.TimeFromPtr(m.KYCVerifiedAt) if I import null.
-	// Since I am already importing "pay-chain.backend/internal/domain/entities" which imports null/v8,
+	// Since I am already importing "payment-kita.backend/internal/domain/entities" which imports null/v8,
 	// I should probably import null/v8 too to use helper constructors.
 	// OR I construct it manually: null.Time{Time: *t, Valid: true}
 	// But `null.Time` is in `volatiletech/null/v8` package.

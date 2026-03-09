@@ -8,8 +8,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	"pay-chain.backend/internal/domain/entities"
-	uc "pay-chain.backend/internal/usecases"
+	"payment-kita.backend/internal/domain/entities"
+	uc "payment-kita.backend/internal/usecases"
 )
 
 func TestOnchainAdapterUsecase_Setters_InvalidSourceChain(t *testing.T) {
@@ -28,7 +28,10 @@ func TestOnchainAdapterUsecase_Setters_InvalidSourceChain(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid input")
 
-	_, _, err = u.SetCCIPConfig(context.Background(), "invalid-source", "eip155:42161", nil, "")
+	_, _, err = u.SetCCIPConfig(context.Background(), uc.CCIPConfigInput{
+		SourceChainInput: "invalid-source",
+		DestChainInput:   "eip155:42161",
+	})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid input")
 
@@ -55,7 +58,10 @@ func TestOnchainAdapterUsecase_Setters_InvalidDestChain(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid input")
 
-	_, _, err = u.SetCCIPConfig(context.Background(), "eip155:8453", "invalid-dest", nil, "")
+	_, _, err = u.SetCCIPConfig(context.Background(), uc.CCIPConfigInput{
+		SourceChainInput: "eip155:8453",
+		DestChainInput:   "invalid-dest",
+	})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid input")
 
@@ -104,7 +110,11 @@ func TestOnchainAdapterUsecase_SetCCIPConfig_ClientFactoryNotConfigured(t *testi
 
 	u := uc.NewOnchainAdapterUsecase(chainRepo, contractRepo, nil, "")
 	selector := uint64(123)
-	_, _, err := u.SetCCIPConfig(context.Background(), "eip155:8453", "eip155:42161", &selector, "")
+	_, _, err := u.SetCCIPConfig(context.Background(), uc.CCIPConfigInput{
+		SourceChainInput: "eip155:8453",
+		DestChainInput:   "eip155:42161",
+		ChainSelector:    &selector,
+	})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid input")
 }

@@ -9,8 +9,8 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
-	"pay-chain.backend/internal/domain/entities"
-	derrs "pay-chain.backend/internal/domain/errors"
+	"payment-kita.backend/internal/domain/entities"
+	derrs "payment-kita.backend/internal/domain/errors"
 )
 
 func TestEVMAdminOpsService_RegisterAndDefault(t *testing.T) {
@@ -191,7 +191,12 @@ func TestEVMAdminOpsService_SetCCIPAndLayerZeroConfig(t *testing.T) {
 			},
 			mockResolveABI,
 		)
-		adapter, txs, err := svc.SetCCIPConfig(ctx, "eip155:8453", "eip155:42161", &ccipSelector, "0xabcd")
+		adapter, txs, err := svc.SetCCIPConfig(ctx, CCIPConfigInput{
+			SourceChainInput:      "eip155:8453",
+			DestChainInput:        "eip155:42161",
+			ChainSelector:         &ccipSelector,
+			DestinationAdapterHex: "0xabcd",
+		})
 		require.NoError(t, err)
 		require.Equal(t, "0x4444444444444444444444444444444444444444", adapter)
 		require.Len(t, txs, 2)
@@ -236,7 +241,11 @@ func TestEVMAdminOpsService_SetCCIPAndLayerZeroConfig(t *testing.T) {
 			},
 			mockResolveABI,
 		)
-		_, _, err := svcMissing.SetCCIPConfig(ctx, "eip155:8453", "eip155:42161", &ccipSelector, "")
+		_, _, err := svcMissing.SetCCIPConfig(ctx, CCIPConfigInput{
+			SourceChainInput: "eip155:8453",
+			DestChainInput:   "eip155:42161",
+			ChainSelector:    &ccipSelector,
+		})
 		require.Error(t, err)
 
 		svcRequired := newEVMAdminOpsService(
@@ -249,7 +258,10 @@ func TestEVMAdminOpsService_SetCCIPAndLayerZeroConfig(t *testing.T) {
 			},
 			mockResolveABI,
 		)
-		_, _, err = svcRequired.SetCCIPConfig(ctx, "eip155:8453", "eip155:42161", nil, "")
+		_, _, err = svcRequired.SetCCIPConfig(ctx, CCIPConfigInput{
+			SourceChainInput: "eip155:8453",
+			DestChainInput:   "eip155:42161",
+		})
 		require.Error(t, err)
 	})
 
@@ -316,7 +328,11 @@ func TestEVMAdminOpsService_SetCCIPAndLayerZeroConfig(t *testing.T) {
 			},
 			mockResolveABI,
 		)
-		_, _, err := svc.SetCCIPConfig(ctx, "eip155:8453", "eip155:42161", &ccipSelector, "")
+		_, _, err := svc.SetCCIPConfig(ctx, CCIPConfigInput{
+			SourceChainInput: "eip155:8453",
+			DestChainInput:   "eip155:42161",
+			ChainSelector:    &ccipSelector,
+		})
 		require.Error(t, err)
 		var appErr *derrs.AppError
 		require.ErrorAs(t, err, &appErr)
@@ -338,7 +354,11 @@ func TestEVMAdminOpsService_SetCCIPAndLayerZeroConfig(t *testing.T) {
 			},
 			mockResolveABI,
 		)
-		_, _, err := svc.SetCCIPConfig(ctx, "eip155:8453", "eip155:42161", nil, "0xabcd")
+		_, _, err := svc.SetCCIPConfig(ctx, CCIPConfigInput{
+			SourceChainInput:      "eip155:8453",
+			DestChainInput:        "eip155:42161",
+			DestinationAdapterHex: "0xabcd",
+		})
 		require.Error(t, err)
 		var appErr *derrs.AppError
 		require.ErrorAs(t, err, &appErr)

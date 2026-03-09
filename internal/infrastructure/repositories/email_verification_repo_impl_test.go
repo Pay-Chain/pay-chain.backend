@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
-	domainerrors "pay-chain.backend/internal/domain/errors"
+	domainerrors "payment-kita.backend/internal/domain/errors"
 )
 
 func TestEmailVerificationRepository_CRUDLikeFlow(t *testing.T) {
@@ -30,7 +30,7 @@ func TestEmailVerificationRepository_CRUDLikeFlow(t *testing.T) {
 
 	mustExec(t, db, `INSERT INTO users(id,email,name,role,kyc_status,password_hash,is_email_verified,created_at,updated_at)
 		VALUES (?,?,?,?,?,?,?,?,?)`,
-		userID.String(), "u@paychain.io", "User", "USER", "NOT_STARTED", "hash", false, time.Now(), time.Now(),
+		userID.String(), "u@paymentkita.io", "User", "USER", "NOT_STARTED", "hash", false, time.Now(), time.Now(),
 	)
 
 	require.NoError(t, repo.Create(ctx, userID, "token-1"))

@@ -9,7 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
-	"pay-chain.backend/internal/interfaces/http/middleware"
+	"payment-kita.backend/internal/interfaces/http/middleware"
 )
 
 func TestAuthHandler_RegisterLoginVerify_Validation(t *testing.T) {

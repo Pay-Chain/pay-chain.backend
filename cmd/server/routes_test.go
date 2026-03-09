@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"pay-chain.backend/internal/interfaces/http/handlers"
+	"payment-kita.backend/internal/interfaces/http/handlers"
 )
 
 func TestRegisterAPIV1Routes_RegistersKeyRoutes(t *testing.T) {

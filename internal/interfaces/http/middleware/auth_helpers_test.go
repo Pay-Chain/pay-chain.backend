@@ -25,7 +25,7 @@ func TestContextGetters(t *testing.T) {
 
 	id := uuid.New()
 	c.Set(UserIDKey, id)
-	c.Set(UserEmailKey, "user@paychain.io")
+	c.Set(UserEmailKey, "user@paymentkita.io")
 	c.Set(UserRoleKey, "ADMIN")
 
 	gotID, ok := GetUserID(c)
@@ -33,7 +33,7 @@ func TestContextGetters(t *testing.T) {
 	require.Equal(t, id, gotID)
 	gotEmail, ok := GetUserEmail(c)
 	require.True(t, ok)
-	require.Equal(t, "user@paychain.io", gotEmail)
+	require.Equal(t, "user@paymentkita.io", gotEmail)
 	gotRole, ok := GetUserRole(c)
 	require.True(t, ok)
 	require.Equal(t, "ADMIN", gotRole)

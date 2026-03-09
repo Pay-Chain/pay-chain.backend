@@ -11,8 +11,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	"pay-chain.backend/internal/domain/entities"
-	"pay-chain.backend/internal/usecases"
+	"payment-kita.backend/internal/domain/entities"
+	"payment-kita.backend/internal/usecases"
 )
 
 func TestApiKeyUsecase_NewAndCreate_Branches(t *testing.T) {
@@ -131,7 +131,7 @@ func TestApiKeyUsecase_ValidateApiKey_ErrorBranches(t *testing.T) {
 		bodyHash := sha256Hex([]byte(`{"x":2}`))
 		signature := hmacSha256Hex(secretKey, fmt.Sprintf("%s%s%s%s", ts, method, path, bodyHash))
 		userID := uuid.New()
-		user := &entities.User{ID: userID, Email: "ok@paychain.io"}
+		user := &entities.User{ID: userID, Email: "ok@paymentkita.io"}
 
 		mockApiKeyRepo.On("FindByKeyHash", ctx, sha256Hex([]byte(apiKey))).Return(&entities.ApiKey{
 			IsActive:        true,

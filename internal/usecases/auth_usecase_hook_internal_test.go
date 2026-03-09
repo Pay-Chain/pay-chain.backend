@@ -9,11 +9,11 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
-	"pay-chain.backend/internal/domain/entities"
-	domainerrors "pay-chain.backend/internal/domain/errors"
-	"pay-chain.backend/pkg/crypto"
-	"pay-chain.backend/pkg/jwt"
-	"pay-chain.backend/pkg/utils"
+	"payment-kita.backend/internal/domain/entities"
+	domainerrors "payment-kita.backend/internal/domain/errors"
+	"payment-kita.backend/pkg/crypto"
+	"payment-kita.backend/pkg/jwt"
+	"payment-kita.backend/pkg/utils"
 )
 
 type authUserRepoStub struct {

@@ -9,10 +9,10 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/google/uuid"
-	"pay-chain.backend/internal/domain/entities"
-	"pay-chain.backend/internal/domain/repositories"
-	"pay-chain.backend/internal/infrastructure/blockchain"
-	"pay-chain.backend/pkg/utils"
+	"payment-kita.backend/internal/domain/entities"
+	"payment-kita.backend/internal/domain/repositories"
+	"payment-kita.backend/internal/infrastructure/blockchain"
+	"payment-kita.backend/pkg/utils"
 )
 
 type ContractConfigCheckItem struct {
@@ -519,7 +519,15 @@ func (u *ContractConfigAuditUsecase) runEVMOnchainChecks(
 func requiredFunctions(contractType entities.SmartContractType) []string {
 	switch contractType {
 	case entities.ContractTypeGateway:
-		return []string{"createPayment", "createPaymentRequest", "setDefaultBridgeType", "defaultBridgeTypes"}
+		return []string{
+			"createPayment",
+			"createPaymentPrivate",
+			"createPaymentDefaultBridge",
+			"quotePaymentCost",
+			"previewApproval",
+			"setDefaultBridgeType",
+			"defaultBridgeTypes",
+		}
 	case entities.ContractTypeRouter:
 		return []string{"registerAdapter", "hasAdapter", "quotePaymentFee", "routePayment"}
 	case entities.ContractTypeVault:
@@ -529,7 +537,7 @@ func requiredFunctions(contractType entities.SmartContractType) []string {
 	case entities.ContractTypeTokenSwapper:
 		return []string{"swap"}
 	case entities.ContractTypeAdapterCCIP:
-		return []string{"quoteFee", "sendMessage", "setChainSelector", "setDestinationAdapter"}
+		return []string{"quoteFee", "sendMessage", "setChainConfig", "setDestinationGasLimit"}
 	case entities.ContractTypeAdapterHyperbridge:
 		return []string{"quoteFee", "sendMessage", "setStateMachineId", "setDestinationContract"}
 	case entities.ContractTypeAdapterLayerZero:

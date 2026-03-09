@@ -8,9 +8,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/volatiletech/null/v8" // Added import
 	"gorm.io/gorm"
-	"pay-chain.backend/internal/domain/entities"
-	domainerrors "pay-chain.backend/internal/domain/errors"
-	"pay-chain.backend/internal/infrastructure/models"
+	"payment-kita.backend/internal/domain/entities"
+	domainerrors "payment-kita.backend/internal/domain/errors"
+	"payment-kita.backend/internal/infrastructure/models"
 )
 
 // PaymentRepository implements payment data operations
