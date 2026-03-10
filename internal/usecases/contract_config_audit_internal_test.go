@@ -39,6 +39,12 @@ func TestRequiredFunctions(t *testing.T) {
 	t.Run("layerzero adapter", func(t *testing.T) {
 		require.Contains(t, requiredFunctions(entities.ContractTypeAdapterLayerZero), "setRoute")
 	})
+	t.Run("privacy module", func(t *testing.T) {
+		require.Contains(t, requiredFunctions(entities.ContractTypePrivacyModule), "forwardFromStealth")
+	})
+	t.Run("stealth escrow factory", func(t *testing.T) {
+		require.Contains(t, requiredFunctions(entities.ContractTypeStealthEscrowFactory), "predictEscrow")
+	})
 	t.Run("unknown", func(t *testing.T) {
 		require.Empty(t, requiredFunctions(entities.SmartContractType("UNKNOWN")))
 	})

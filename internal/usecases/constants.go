@@ -27,11 +27,12 @@ var (
 	PrivateRoutingTuple = "(bytes32,address)"
 
 	// Final V2-only gateway selectors.
-	CreatePaymentSelector = computeSelectorHex("createPayment(" + PaymentRequestV2Tuple + ")")
-	CreatePaymentPrivateSelector = computeSelectorHex("createPaymentPrivate(" + PaymentRequestV2Tuple + "," + PrivateRoutingTuple + ")")
+	CreatePaymentSelector              = computeSelectorHex("createPayment(" + PaymentRequestV2Tuple + ")")
+	CreatePaymentPrivateSelector       = computeSelectorHex("createPaymentPrivate(" + PaymentRequestV2Tuple + "," + PrivateRoutingTuple + ")")
 	CreatePaymentDefaultBridgeSelector = computeSelectorHex("createPaymentDefaultBridge(" + PaymentRequestV2Tuple + ")")
-	PreviewApprovalSelector = computeSelectorHex("previewApproval(" + PaymentRequestV2Tuple + ")")
-	QuotePaymentCostSelector = computeSelectorHex("quotePaymentCost(" + PaymentRequestV2Tuple + ")")
+	PreviewApprovalSelector            = computeSelectorHex("previewApproval(" + PaymentRequestV2Tuple + ")")
+	QuotePaymentCostSelector           = computeSelectorHex("quotePaymentCost(" + PaymentRequestV2Tuple + ")")
+	DeployEscrowSelector               = computeSelectorHex("deployEscrow(bytes32,address,address)")
 
 	// Backward-compat aliases for old constant names in tests/helpers.
 	CreatePaymentV2Selector              = CreatePaymentSelector

@@ -542,6 +542,10 @@ func requiredFunctions(contractType entities.SmartContractType) []string {
 		return []string{"quoteFee", "sendMessage", "setStateMachineId", "setDestinationContract"}
 	case entities.ContractTypeAdapterLayerZero:
 		return []string{"quoteFee", "sendMessage", "setRoute", "setEnforcedOptions"}
+	case entities.ContractTypePrivacyModule:
+		return []string{"setAuthorizedGateway", "authorizedGateway", "forwardFromStealth"}
+	case entities.ContractTypeStealthEscrowFactory:
+		return []string{"deployEscrow", "predictEscrow", "isEscrow"}
 	default:
 		return []string{}
 	}

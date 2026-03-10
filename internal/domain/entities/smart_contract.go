@@ -11,17 +11,21 @@ import (
 type SmartContractType string
 
 const (
-	ContractTypeGateway            SmartContractType = "GATEWAY"
-	ContractTypeVault              SmartContractType = "VAULT"
-	ContractTypeRouter             SmartContractType = "ROUTER"
-	ContractTypeTokenRegistry      SmartContractType = "TOKEN_REGISTRY"
-	ContractTypeTokenSwapper       SmartContractType = "TOKEN_SWAPPER"
-	ContractTypeAdapterCCIP        SmartContractType = "ADAPTER_CCIP"
-	ContractTypeAdapterHyperbridge SmartContractType = "ADAPTER_HYPERBRIDGE"
-	ContractTypeAdapterLayerZero   SmartContractType = "ADAPTER_LAYERZERO"
-	ContractTypeReceiverLayerZero  SmartContractType = "RECEIVER_LAYERZERO"
-	ContractTypePool               SmartContractType = "POOL" // DEX Pool
-	ContractTypeMock               SmartContractType = "MOCK" // For testing
+	ContractTypeGateway              SmartContractType = "GATEWAY"
+	ContractTypeVault                SmartContractType = "VAULT"
+	ContractTypeRouter               SmartContractType = "ROUTER"
+	ContractTypeTokenRegistry        SmartContractType = "TOKEN_REGISTRY"
+	ContractTypeTokenSwapper         SmartContractType = "TOKEN_SWAPPER"
+	ContractTypeAdapterCCIP          SmartContractType = "ADAPTER_CCIP"
+	ContractTypeAdapterHyperbridge   SmartContractType = "ADAPTER_HYPERBRIDGE"
+	ContractTypeAdapterLayerZero     SmartContractType = "ADAPTER_LAYERZERO"
+	ContractTypeReceiverLayerZero    SmartContractType = "RECEIVER_LAYERZERO"
+	ContractTypePrivacyModule        SmartContractType = "PRIVACY_MODULE"
+	ContractTypeStealthEscrowFactory SmartContractType = "STEALTH_ESCROW_FACTORY"
+	ContractTypeFeePolicyManager     SmartContractType = "FEE_POLICY_MANAGER"
+	ContractTypeFeeStrategyDefaultV1 SmartContractType = "FEE_STRATEGY_DEFAULT_V1"
+	ContractTypePool                 SmartContractType = "POOL" // DEX Pool
+	ContractTypeMock                 SmartContractType = "MOCK" // For testing
 )
 
 // SmartContract represents a deployed smart contract

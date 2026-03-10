@@ -294,4 +294,58 @@ func TestPaymentUsecase_BuildTransactionData_Branches(t *testing.T) {
 		require.Equal(t, "approve", txs[0]["kind"])
 		require.Equal(t, "createPayment", txs[1]["kind"])
 	})
+
+	t.Run("evm privacy same-chain includes deployEscrow + createPayment txs", func(t *testing.T) {
+		chainID := uuid.New()
+		scRepo := &scRepoStub{getActiveFn: func(_ context.Context, _ uuid.UUID, t entities.SmartContractType) (*entities.SmartContract, error) {
+			switch t {
+			case entities.ContractTypeStealthEscrowFactory:
+				return &entities.SmartContract{ContractAddress: "0x5555555555555555555555555555555555555555"}, nil
+			case entities.ContractTypePrivacyModule:
+				return &entities.SmartContract{ContractAddress: "0x6666666666666666666666666666666666666666"}, nil
+			default:
+				return nil, domainerrors.ErrNotFound
+			}
+		}}
+		u := &PaymentUsecase{
+			contractRepo:     scRepo,
+			ABIResolverMixin: NewABIResolverMixin(scRepo),
+		}
+
+		payment := &entities.Payment{
+			ID:                 uuid.New(),
+			SourceChainID:      chainID,
+			DestChainID:        chainID,
+			SourceTokenAddress: "native",
+			DestTokenAddress:   "0x1111111111111111111111111111111111111111",
+			ReceiverAddress:    "0x2222222222222222222222222222222222222222",
+			SourceAmount:       "1000",
+			SourceChain:        &entities.Chain{ChainID: "eip155:8453", Type: entities.ChainTypeEVM},
+			DestChain:          &entities.Chain{ChainID: "eip155:8453", Type: entities.ChainTypeEVM},
+		}
+		mode := "privacy"
+		intentID := "56a545f348517e04c3c9709d1af4caff6a900f1c899d65e08981612f88d9abec"
+		stealth := "0x164c55085432DE781B8D3EB306401e543FBa0f1e"
+		input := &entities.CreatePaymentInput{
+			Mode:                   &mode,
+			PrivacyIntentID:        &intentID,
+			PrivacyStealthReceiver: &stealth,
+		}
+
+		out, err := u.buildTransactionDataWithInput(payment, contract, input)
+		require.NoError(t, err)
+		m, ok := out.(map[string]interface{})
+		require.True(t, ok)
+
+		txs, ok := m["transactions"].([]map[string]string)
+		require.True(t, ok)
+		require.Len(t, txs, 2)
+		require.Equal(t, "deployEscrow", txs[0]["kind"])
+		require.Equal(t, "0x5555555555555555555555555555555555555555", txs[0]["to"])
+		require.Equal(t, "createPayment", txs[1]["kind"])
+
+		createData, _ := m["data"].(string)
+		require.NotEmpty(t, createData)
+		require.Contains(t, createData, CreatePaymentPrivateSelector)
+	})
 }

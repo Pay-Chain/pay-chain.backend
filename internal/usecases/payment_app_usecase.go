@@ -3,12 +3,14 @@ package usecases
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/google/uuid"
 	"payment-kita.backend/internal/domain/entities"
 	"payment-kita.backend/internal/domain/repositories"
@@ -22,6 +24,8 @@ type PaymentAppUsecase struct {
 	chainRepo      repositories.ChainRepository
 	chainResolver  *ChainResolver
 }
+
+var predictEscrowStealthAddressFn = tryPredictEscrowStealthAddress
 
 func NewPaymentAppUsecase(
 	paymentUsecase *PaymentUsecase,
@@ -40,19 +44,8 @@ func NewPaymentAppUsecase(
 
 func (u *PaymentAppUsecase) CreatePaymentApp(ctx context.Context, input *entities.CreatePaymentAppInput) (*entities.CreatePaymentResponse, error) {
 	mode := normalizePaymentMode(input.Mode)
-	if mode == PaymentModePrivacy {
-		intentID, stealthReceiver, err := preparePrivacyRouting(input)
-		if err != nil {
-			return nil, err
-		}
-		input.PrivacyIntentID = &intentID
-		input.PrivacyStealthReceiver = &stealthReceiver
-	}
 	if _, err := normalizeBridgeOption(input.BridgeOption); err != nil {
 		return nil, fmt.Errorf("invalid bridge option: %w", err)
-	}
-	if err := validatePrivacyFields(mode, input.PrivacyIntentID, input.PrivacyStealthReceiver); err != nil {
-		return nil, err
 	}
 
 	senderAddress := strings.TrimSpace(input.SenderWalletAddress)
@@ -64,6 +57,17 @@ func (u *PaymentAppUsecase) CreatePaymentApp(ctx context.Context, input *entitie
 	_, destCAIP2, err := u.chainResolver.ResolveFromAny(ctx, input.DestChainID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid destination chain: %w", err)
+	}
+	if mode == PaymentModePrivacy {
+		intentID, stealthReceiver, err := u.preparePrivacyRoutingWithDB(ctx, sourceChainID, input)
+		if err != nil {
+			return nil, err
+		}
+		input.PrivacyIntentID = &intentID
+		input.PrivacyStealthReceiver = &stealthReceiver
+	}
+	if err := validatePrivacyFields(mode, input.PrivacyIntentID, input.PrivacyStealthReceiver); err != nil {
+		return nil, err
 	}
 
 	// 2. Resolve User logic
@@ -140,6 +144,86 @@ func (u *PaymentAppUsecase) CreatePaymentApp(ctx context.Context, input *entitie
 	return u.paymentUsecase.CreatePayment(ctx, userID, paymentInput)
 }
 
+func (u *PaymentAppUsecase) preparePrivacyRoutingWithDB(
+	ctx context.Context,
+	sourceChainID uuid.UUID,
+	input *entities.CreatePaymentAppInput,
+) (intentID string, stealthReceiver string, err error) {
+	if u.paymentUsecase == nil || u.paymentUsecase.contractRepo == nil || u.chainRepo == nil {
+		// Compatibility fallback for tests/wiring that don't pass repository dependencies.
+		return preparePrivacyRouting(input)
+	}
+
+	receiverRaw := strings.TrimSpace(input.ReceiverAddress)
+	if receiverRaw == "" {
+		return "", "", fmt.Errorf("receiverAddress is required when mode=privacy")
+	}
+	if !common.IsHexAddress(receiverRaw) {
+		return "", "", fmt.Errorf("receiverAddress must be valid EVM address when mode=privacy")
+	}
+	finalReceiver := common.HexToAddress(normalizeEvmAddress(receiverRaw))
+
+	intentID = ""
+	if input.PrivacyIntentID != nil {
+		intentID = strings.TrimSpace(*input.PrivacyIntentID)
+	}
+	if intentID == "" {
+		intentID = utils.GenerateUUIDv7().String()
+	}
+
+	factoryContract, err := u.paymentUsecase.contractRepo.GetActiveContract(ctx, sourceChainID, entities.ContractTypeStealthEscrowFactory)
+	if err != nil || factoryContract == nil || !common.IsHexAddress(factoryContract.ContractAddress) {
+		return "", "", fmt.Errorf("active stealth escrow factory is not configured on source chain")
+	}
+	privacyModuleContract, err := u.paymentUsecase.contractRepo.GetActiveContract(ctx, sourceChainID, entities.ContractTypePrivacyModule)
+	if err != nil || privacyModuleContract == nil || !common.IsHexAddress(privacyModuleContract.ContractAddress) {
+		return "", "", fmt.Errorf("active privacy module is not configured on source chain")
+	}
+
+	sourceChain, err := u.chainRepo.GetByID(ctx, sourceChainID)
+	if err != nil || sourceChain == nil {
+		return "", "", fmt.Errorf("failed to resolve source chain for privacy escrow prediction")
+	}
+	rpcURL := resolveChainRPCURL(sourceChain)
+	if rpcURL == "" {
+		return "", "", fmt.Errorf("source chain rpc url is not configured for privacy escrow prediction")
+	}
+
+	expectedStealth, err := predictEscrowFromFactoryRPC(
+		ctx,
+		rpcURL,
+		common.HexToAddress(normalizeEvmAddress(factoryContract.ContractAddress)),
+		parsePrivacyIntentID(intentID),
+		finalReceiver,
+		common.HexToAddress(normalizeEvmAddress(privacyModuleContract.ContractAddress)),
+	)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to derive escrow stealth address from factory: %w", err)
+	}
+	if expectedStealth == finalReceiver {
+		return "", "", fmt.Errorf("privacyStealthReceiver must differ from receiverAddress")
+	}
+
+	if input.PrivacyStealthReceiver != nil {
+		stealthRaw := strings.TrimSpace(*input.PrivacyStealthReceiver)
+		if stealthRaw != "" {
+			if !common.IsHexAddress(stealthRaw) {
+				return "", "", fmt.Errorf("privacyStealthReceiver must be valid EVM address when mode=privacy")
+			}
+			stealth := common.HexToAddress(normalizeEvmAddress(stealthRaw))
+			if stealth == finalReceiver {
+				return "", "", fmt.Errorf("privacyStealthReceiver must differ from receiverAddress")
+			}
+			if stealth != expectedStealth {
+				return "", "", fmt.Errorf("privacyStealthReceiver must match factory predicted escrow address: %s", expectedStealth.Hex())
+			}
+			return intentID, stealth.Hex(), nil
+		}
+	}
+
+	return intentID, expectedStealth.Hex(), nil
+}
+
 func walletPrefix(addr string) string {
 	if len(addr) >= 8 {
 		return addr[:8]
@@ -178,6 +262,14 @@ func preparePrivacyRouting(input *entities.CreatePaymentAppInput) (intentID stri
 		intentID = utils.GenerateUUIDv7().String()
 	}
 
+	escrowStealth, predictedFromFactory, predictErr := predictEscrowStealthAddressFn(intentID, finalReceiver)
+	if predictErr != nil {
+		return "", "", predictErr
+	}
+	if !predictedFromFactory {
+		escrowStealth = prepareEscrowStealthAddress(input, intentID)
+	}
+
 	if input.PrivacyStealthReceiver != nil {
 		stealthRaw := strings.TrimSpace(*input.PrivacyStealthReceiver)
 		if stealthRaw != "" {
@@ -188,11 +280,13 @@ func preparePrivacyRouting(input *entities.CreatePaymentAppInput) (intentID stri
 			if stealth == finalReceiver {
 				return "", "", fmt.Errorf("privacyStealthReceiver must differ from receiverAddress")
 			}
+			if predictedFromFactory && stealth != escrowStealth {
+				return "", "", fmt.Errorf("privacyStealthReceiver must match factory predicted escrow address: %s", escrowStealth.Hex())
+			}
 			return intentID, stealth.Hex(), nil
 		}
 	}
 
-	escrowStealth := prepareEscrowStealthAddress(input, intentID)
 	if escrowStealth == finalReceiver {
 		return "", "", fmt.Errorf("privacyStealthReceiver must differ from receiverAddress")
 	}
@@ -200,6 +294,80 @@ func preparePrivacyRouting(input *entities.CreatePaymentAppInput) (intentID stri
 		return "", "", fmt.Errorf("failed to derive escrow stealth address")
 	}
 	return intentID, escrowStealth.Hex(), nil
+}
+
+func tryPredictEscrowStealthAddress(intentID string, owner common.Address) (common.Address, bool, error) {
+	_ = intentID
+	_ = owner
+	// Runtime path already resolves from DB via preparePrivacyRoutingWithDB.
+	// Keep fallback deterministic and DB-agnostic for legacy tests/wiring.
+	return common.Address{}, false, nil
+}
+
+func predictEscrowFromFactoryRPC(
+	ctx context.Context,
+	rpcURL string,
+	factory common.Address,
+	salt [32]byte,
+	owner common.Address,
+	forwarder common.Address,
+) (common.Address, error) {
+	const predictEscrowABI = `[{"inputs":[{"internalType":"bytes32","name":"salt","type":"bytes32"},{"internalType":"address","name":"owner","type":"address"},{"internalType":"address","name":"forwarder","type":"address"}],"name":"predictEscrow","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"}]`
+	parsedABI, err := abi.JSON(strings.NewReader(predictEscrowABI))
+	if err != nil {
+		return common.Address{}, fmt.Errorf("parse factory abi: %w", err)
+	}
+	calldata, err := parsedABI.Pack("predictEscrow", salt, owner, forwarder)
+	if err != nil {
+		return common.Address{}, fmt.Errorf("pack predictEscrow calldata: %w", err)
+	}
+
+	client, err := ethclient.DialContext(ctx, rpcURL)
+	if err != nil {
+		return common.Address{}, fmt.Errorf("dial rpc: %w", err)
+	}
+	defer client.Close()
+
+	msg := ethereum.CallMsg{To: &factory, Data: calldata}
+	out, err := client.CallContract(ctx, msg, nil)
+	if err != nil {
+		return common.Address{}, fmt.Errorf("call predictEscrow: %w", err)
+	}
+	values, err := parsedABI.Unpack("predictEscrow", out)
+	if err != nil {
+		return common.Address{}, fmt.Errorf("decode predictEscrow return: %w", err)
+	}
+	if len(values) != 1 {
+		return common.Address{}, fmt.Errorf("invalid predictEscrow return length")
+	}
+	addr, ok := values[0].(common.Address)
+	if !ok {
+		return common.Address{}, fmt.Errorf("invalid predictEscrow return type")
+	}
+	return addr, nil
+}
+
+func resolveChainRPCURL(chain *entities.Chain) string {
+	if chain == nil {
+		return ""
+	}
+	if rpcURL := strings.TrimSpace(chain.RPCURL); rpcURL != "" {
+		return rpcURL
+	}
+	fallback := ""
+	for _, rpc := range chain.RPCs {
+		url := strings.TrimSpace(rpc.URL)
+		if url == "" {
+			continue
+		}
+		if rpc.IsActive {
+			return url
+		}
+		if fallback == "" {
+			fallback = url
+		}
+	}
+	return fallback
 }
 
 func prepareEscrowStealthAddress(input *entities.CreatePaymentAppInput, intentID string) common.Address {
@@ -215,16 +383,6 @@ func prepareEscrowStealthAddress(input *entities.CreatePaymentAppInput, intentID
 		intentID,
 	}, "|")
 	salt := crypto.Keccak256Hash([]byte(seed))
-
-	factoryRaw := strings.TrimSpace(os.Getenv("PRIVACY_ESCROW_FACTORY"))
-	initCodeHashRaw := strings.TrimSpace(os.Getenv("PRIVACY_ESCROW_INIT_CODE_HASH"))
-	if common.IsHexAddress(factoryRaw) && len(initCodeHashRaw) == 66 {
-		initCodeHash := common.Hex2Bytes(strings.TrimPrefix(initCodeHashRaw, "0x"))
-		if len(initCodeHash) == 32 {
-			return crypto.CreateAddress2(common.HexToAddress(factoryRaw), salt, initCodeHash)
-		}
-	}
-
 	placeholder := crypto.Keccak256Hash([]byte("payment-kita-escrow-placeholder"), salt.Bytes())
 	return common.BytesToAddress(placeholder.Bytes()[12:])
 }

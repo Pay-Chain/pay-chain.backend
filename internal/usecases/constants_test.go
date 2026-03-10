@@ -41,4 +41,9 @@ func TestSelectorComputation(t *testing.T) {
 		expected := computeSelectorHex("quotePaymentCost((bytes,bytes,address,address,address,uint256,uint256,uint256,uint8,uint8))")
 		assert.Equal(t, expected, QuotePaymentCostSelector)
 	})
+
+	t.Run("DeployEscrowSelector is computed from signature", func(t *testing.T) {
+		expected := computeSelectorHex("deployEscrow(bytes32,address,address)")
+		assert.Equal(t, expected, DeployEscrowSelector)
+	})
 }

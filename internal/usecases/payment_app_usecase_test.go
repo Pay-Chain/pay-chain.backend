@@ -84,13 +84,6 @@ func TestPaymentAppUsecase_CreatePaymentApp_PrivacyModeAutoFillsPrivacyFields(t 
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid source chain")
-	if assert.NotNil(t, input.PrivacyIntentID) {
-		assert.NotEmpty(t, *input.PrivacyIntentID)
-	}
-	if assert.NotNil(t, input.PrivacyStealthReceiver) {
-		assert.NotEmpty(t, *input.PrivacyStealthReceiver)
-		assert.NotEqual(t, input.ReceiverAddress, *input.PrivacyStealthReceiver)
-	}
 }
 
 func TestPaymentAppUsecase_CreatePaymentApp_PrivacyMode_RejectStealthEqualsReceiver(t *testing.T) {
@@ -103,6 +96,18 @@ func TestPaymentAppUsecase_CreatePaymentApp_PrivacyMode_RejectStealthEqualsRecei
 	receiver := "0x000000000000000000000000000000000000dEaD"
 	stealth := receiver
 	intent := "intent-manual"
+	srcID := uuid.New()
+	destID := uuid.New()
+	mockChainRepo.On("GetByCAIP2", context.Background(), "eip155:8453").Return(&entities.Chain{
+		ID:      srcID,
+		Type:    entities.ChainTypeEVM,
+		ChainID: "8453",
+	}, nil).Once()
+	mockChainRepo.On("GetByCAIP2", context.Background(), "eip155:137").Return(&entities.Chain{
+		ID:      destID,
+		Type:    entities.ChainTypeEVM,
+		ChainID: "137",
+	}, nil).Once()
 
 	_, err := uc.CreatePaymentApp(context.Background(), &entities.CreatePaymentAppInput{
 		SourceChainID:          "eip155:8453",
@@ -129,6 +134,18 @@ func TestPaymentAppUsecase_CreatePaymentApp_PrivacyMode_RejectInvalidReceiver(t 
 
 	uc := usecases.NewPaymentAppUsecase(nil, mockUserRepo, mockWalletRepo, mockChainRepo)
 	mode := "privacy"
+	srcID := uuid.New()
+	destID := uuid.New()
+	mockChainRepo.On("GetByCAIP2", context.Background(), "eip155:8453").Return(&entities.Chain{
+		ID:      srcID,
+		Type:    entities.ChainTypeEVM,
+		ChainID: "8453",
+	}, nil).Once()
+	mockChainRepo.On("GetByCAIP2", context.Background(), "eip155:137").Return(&entities.Chain{
+		ID:      destID,
+		Type:    entities.ChainTypeEVM,
+		ChainID: "137",
+	}, nil).Once()
 
 	_, err := uc.CreatePaymentApp(context.Background(), &entities.CreatePaymentAppInput{
 		SourceChainID:       "eip155:8453",

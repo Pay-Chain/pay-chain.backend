@@ -568,19 +568,21 @@ func (u *PaymentUsecase) buildTransactionDataWithInput(
 		} else if srcChain, err := u.chainRepo.GetByID(context.Background(), payment.SourceChainID); err == nil && srcChain != nil {
 			sourceCAIP2 = srcChain.GetCAIP2ID()
 		}
+		// Always try Track-B preview for approval amount (same-chain and cross-chain).
+		// For cross-chain we also consume required native fee from the same preview.
+		preview, previewErr := u.previewGatewayApprovalV2(context.Background(), payment, contract.ContractAddress, input)
+		if previewErr == nil && preview != nil && preview.ApprovalAmount != nil && preview.ApprovalAmount.Sign() > 0 {
+			previewApprovalAmount = preview.ApprovalAmount.String()
+		}
 		if sourceCAIP2 != "" && sourceCAIP2 != destChainID {
 			amount := new(big.Int)
 			if _, ok := amount.SetString(payment.SourceAmount, 10); !ok {
 				return nil, domainerrors.BadRequest("invalid source amount for bridge fee quote")
 			}
 
-			// Preferred V2 preview path for native fee + approval amount.
-			preview, previewErr := u.previewGatewayApprovalV2(context.Background(), payment, contract.ContractAddress, input)
+			// Preferred V2 preview path for native fee.
 			if previewErr == nil && preview != nil && preview.RequiredNativeFee != nil && preview.RequiredNativeFee.Sign() >= 0 {
 				txValueHex = "0x" + preview.RequiredNativeFee.Text(16)
-				if preview.ApprovalAmount != nil && preview.ApprovalAmount.Sign() > 0 {
-					previewApprovalAmount = preview.ApprovalAmount.String()
-				}
 			} else {
 				feeWei, err := u.getBridgeFeeQuote(context.Background(), sourceCAIP2, destChainID, payment.SourceTokenAddress, payment.DestTokenAddress, amount, minDestAmount)
 				if err != nil {
@@ -617,17 +619,28 @@ func (u *PaymentUsecase) buildTransactionDataWithInput(
 			}
 		}
 		result := map[string]interface{}{
+			"to":           contract.ContractAddress,
+			"data":         createPaymentData,
+			"value":        txValueHex,
+			"transactions": []map[string]string{},
+		}
+		createPaymentTx := map[string]string{
+			"kind":  "createPayment",
 			"to":    contract.ContractAddress,
 			"data":  createPaymentData,
 			"value": txValueHex,
-			"transactions": []map[string]string{
-				{
-					"kind":  "createPayment",
-					"to":    contract.ContractAddress,
-					"data":  createPaymentData,
-					"value": txValueHex,
-				},
-			},
+		}
+		txs := make([]map[string]string, 0, 3)
+		if privacyDeployTx, privacyErr := u.buildPrivacyEscrowDeployTx(
+			context.Background(),
+			payment,
+			input,
+			sourceCAIP2,
+			destChainID,
+		); privacyErr != nil {
+			return nil, privacyErr
+		} else if privacyDeployTx != nil {
+			txs = append(txs, privacyDeployTx)
 		}
 
 		if u.shouldRequireEvmApproval(payment.SourceTokenAddress) {
@@ -662,16 +675,10 @@ func (u *PaymentUsecase) buildTransactionDataWithInput(
 				"amount":  approvalAmount,
 			}
 			result["approval"] = approvalTx
-			result["transactions"] = []map[string]string{
-				approvalTx,
-				{
-					"kind":  "createPayment",
-					"to":    contract.ContractAddress,
-					"data":  createPaymentData,
-					"value": txValueHex,
-				},
-			}
+			txs = append(txs, approvalTx)
 		}
+		txs = append(txs, createPaymentTx)
+		result["transactions"] = txs
 
 		return result, nil
 	case "solana":
@@ -761,6 +768,88 @@ func (u *PaymentUsecase) buildErc20ApproveHex(spender, amount string) string {
 	return "0x095ea7b3" + hex.EncodeToString(packed)
 }
 
+func (u *PaymentUsecase) buildPrivacyEscrowDeployTx(
+	ctx context.Context,
+	payment *entities.Payment,
+	input *entities.CreatePaymentInput,
+	sourceCAIP2 string,
+	destCAIP2 string,
+) (map[string]string, error) {
+	if payment == nil || input == nil {
+		return nil, nil
+	}
+	if sourceCAIP2 == "" || destCAIP2 == "" || sourceCAIP2 != destCAIP2 {
+		return nil, nil
+	}
+	if normalizePaymentMode(input.Mode) != PaymentModePrivacy {
+		return nil, nil
+	}
+	if input.PrivacyIntentID == nil || input.PrivacyStealthReceiver == nil {
+		return nil, nil
+	}
+	receiverRaw := strings.TrimSpace(payment.ReceiverAddress)
+	intentRaw := strings.TrimSpace(*input.PrivacyIntentID)
+	stealthRaw := strings.TrimSpace(*input.PrivacyStealthReceiver)
+	if receiverRaw == "" || intentRaw == "" || stealthRaw == "" {
+		return nil, fmt.Errorf("privacy routing fields are incomplete for same-chain escrow deployment")
+	}
+	if !common.IsHexAddress(receiverRaw) {
+		return nil, fmt.Errorf("receiverAddress must be valid EVM address for same-chain privacy escrow")
+	}
+	if !common.IsHexAddress(stealthRaw) {
+		return nil, fmt.Errorf("privacyStealthReceiver must be valid EVM address for same-chain privacy escrow")
+	}
+
+	if u.contractRepo == nil {
+		return nil, fmt.Errorf("smart contract repository is required for same-chain privacy escrow deployment")
+	}
+	factoryContract, err := u.contractRepo.GetActiveContract(ctx, payment.SourceChainID, entities.ContractTypeStealthEscrowFactory)
+	if err != nil || factoryContract == nil || !common.IsHexAddress(factoryContract.ContractAddress) {
+		return nil, fmt.Errorf("active stealth escrow factory is not configured on source chain")
+	}
+	privacyModuleContract, err := u.contractRepo.GetActiveContract(ctx, payment.SourceChainID, entities.ContractTypePrivacyModule)
+	if err != nil || privacyModuleContract == nil || !common.IsHexAddress(privacyModuleContract.ContractAddress) {
+		return nil, fmt.Errorf("active privacy module is not configured on source chain")
+	}
+
+	deployData := u.buildDeployEscrowHex(
+		parsePrivacyIntentID(intentRaw),
+		common.HexToAddress(normalizeEvmAddress(receiverRaw)),
+		common.HexToAddress(normalizeEvmAddress(privacyModuleContract.ContractAddress)),
+	)
+	if deployData == "" {
+		return nil, fmt.Errorf("failed to build deployEscrow calldata")
+	}
+
+	return map[string]string{
+		"kind":  "deployEscrow",
+		"to":    factoryContract.ContractAddress,
+		"data":  deployData,
+		"value": "0x0",
+	}, nil
+}
+
+func (u *PaymentUsecase) buildDeployEscrowHex(salt [32]byte, owner common.Address, forwarder common.Address) string {
+	bytes32Type, err := newABIType("bytes32", "", nil)
+	if err != nil {
+		return ""
+	}
+	addressType, err := newABIType("address", "", nil)
+	if err != nil {
+		return ""
+	}
+	args := abi.Arguments{
+		{Type: bytes32Type},
+		{Type: addressType},
+		{Type: addressType},
+	}
+	packed, err := packABIArgs(args, salt, owner, forwarder)
+	if err != nil {
+		return ""
+	}
+	return "0x" + hex.EncodeToString(append(common.FromHex(DeployEscrowSelector), packed...))
+}
+
 func (u *PaymentUsecase) calculateOnchainApprovalAmount(payment *entities.Payment, gatewayAddress string) (string, error) {
 	if payment == nil || gatewayAddress == "" {
 		return "", fmt.Errorf("invalid payment or gateway address")
@@ -813,7 +902,11 @@ func (u *PaymentUsecase) calculateOnchainApprovalAmount(payment *entities.Paymen
 		if abiErr != nil {
 			return "", fmt.Errorf("failed to resolve gateway ABI: %w", abiErr)
 		}
-		feeABI = resolvedABI
+		// Some DB ABI rows are stale and can miss Track-B methods.
+		// Prefer resolved ABI only when it contains the method we need.
+		if _, ok := resolvedABI.Methods["quoteTotalAmount"]; ok {
+			feeABI = resolvedABI
+		}
 	}
 
 	// Preferred path: ask contract directly for exact total amount
@@ -928,7 +1021,11 @@ func (u *PaymentUsecase) quoteGatewayPaymentCost(
 			// Optional Track-B path; keep legacy behavior when ABI unavailable.
 			return nil, nil
 		}
-		feeABI = resolvedABI
+		// Some DB ABI rows are stale and can miss Track-B methods.
+		// Prefer resolved ABI only when it contains the method we need.
+		if _, ok := resolvedABI.Methods["quotePaymentCost"]; ok {
+			feeABI = resolvedABI
+		}
 	}
 	if _, ok := feeABI.Methods["quotePaymentCost"]; !ok {
 		// Gateway deployed without Track-B quote method.
@@ -1096,7 +1193,11 @@ func (u *PaymentUsecase) previewGatewayApprovalV2(
 		if abiErr != nil {
 			return nil, fmt.Errorf("failed to resolve gateway ABI: %w", abiErr)
 		}
-		feeABI = resolvedABI
+		// Some DB ABI rows are stale and can miss Track-B methods.
+		// Prefer resolved ABI only when it contains the method we need.
+		if _, ok := resolvedABI.Methods["previewApproval"]; ok {
+			feeABI = resolvedABI
+		}
 	}
 	if _, ok := feeABI.Methods["previewApproval"]; !ok {
 		return nil, fmt.Errorf("previewApproval is not available on gateway ABI")
