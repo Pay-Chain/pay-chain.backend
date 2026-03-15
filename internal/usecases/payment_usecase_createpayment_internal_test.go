@@ -89,10 +89,12 @@ func (s *createPaymentRepoStub) Update(context.Context, *entities.Payment) error
 type createPaymentEventRepoStub struct {
 	createErr error
 	created   *entities.PaymentEvent
+	events    []*entities.PaymentEvent
 }
 
 func (s *createPaymentEventRepoStub) Create(_ context.Context, event *entities.PaymentEvent) error {
 	s.created = event
+	s.events = append(s.events, event)
 	return s.createErr
 }
 func (s *createPaymentEventRepoStub) GetByPaymentID(context.Context, uuid.UUID) ([]*entities.PaymentEvent, error) {
@@ -270,6 +272,44 @@ func TestPaymentUsecase_CreatePayment_UOWAndEventBranches(t *testing.T) {
 	require.NotNil(t, resp)
 	require.NotNil(t, paymentRepo.created)
 	require.NotNil(t, eventRepo.created)
+}
+
+func TestBuildPaymentQuoteSnapshotMetadata_CombinesPreviewAndQuote(t *testing.T) {
+	signatureData := map[string]interface{}{
+		"value": "0x1234",
+		"approval": map[string]string{
+			"to":      "0xToken",
+			"amount":  "1000000",
+			"spender": "0xVault",
+		},
+	}
+	onchainCost := &entities.OnchainCost{
+		PlatformFeeToken:         "100",
+		BridgeFeeNative:          "200",
+		TotalSourceTokenRequired: "1000000",
+		BridgeType:               3,
+		IsSameChain:              false,
+		BridgeQuoteOk:            true,
+		BridgeQuoteReason:        "",
+	}
+
+	metadata := buildPaymentQuoteSnapshotMetadata(signatureData, onchainCost)
+	require.NotNil(t, metadata)
+	require.Equal(t, "payment_quote_snapshot.v1", metadata["schema"])
+
+	preview, ok := metadata["previewApproval"].(map[string]interface{})
+	require.True(t, ok)
+	require.Equal(t, "0x1234", preview["requiredNativeFee"])
+	require.Equal(t, "0xToken", preview["approvalToken"])
+	require.Equal(t, "1000000", preview["approvalAmount"])
+	require.Equal(t, "0xVault", preview["approvalSpender"])
+
+	quote, ok := metadata["quotePaymentCost"].(map[string]interface{})
+	require.True(t, ok)
+	require.Equal(t, "100", quote["platformFeeToken"])
+	require.Equal(t, "200", quote["bridgeFeeNative"])
+	require.Equal(t, uint8(3), quote["bridgeType"])
+	require.Equal(t, true, quote["bridgeQuoteOk"])
 }
 
 func TestPaymentUsecase_CreatePayment_ChainLookupAndPersistenceBranches(t *testing.T) {

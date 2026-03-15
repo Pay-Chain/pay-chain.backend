@@ -10,6 +10,7 @@ func TestBridgeName(t *testing.T) {
 	require.Equal(t, "HYPERBRIDGE", bridgeName(0))
 	require.Equal(t, "CCIP", bridgeName(1))
 	require.Equal(t, "LAYERZERO", bridgeName(2))
+	require.Equal(t, "HYPERBRIDGE_TOKEN_GATEWAY", bridgeName(3))
 	require.Equal(t, "UNKNOWN", bridgeName(99))
 }
 

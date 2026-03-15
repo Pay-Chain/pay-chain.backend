@@ -210,6 +210,7 @@ func registerAPIV1Routes(r *gin.Engine, d routeDeps) {
 			admin.POST("/onchain-adapters/register", d.onchainAdapterHandler.RegisterAdapter)
 			admin.POST("/onchain-adapters/default-bridge", d.onchainAdapterHandler.SetDefaultBridgeType)
 			admin.POST("/onchain-adapters/hyperbridge-config", d.onchainAdapterHandler.SetHyperbridgeConfig)
+			admin.POST("/onchain-adapters/hyperbridge-token-gateway-config", d.onchainAdapterHandler.SetHyperbridgeTokenGatewayConfig)
 			admin.POST("/onchain-adapters/ccip-config", d.onchainAdapterHandler.SetCCIPConfig)
 			admin.POST("/onchain-adapters/layerzero-config", d.onchainAdapterHandler.SetLayerZeroConfig)
 			admin.POST("/onchain-adapters/layerzero-configure-e2e", d.onchainAdapterHandler.ConfigureLayerZeroE2E)

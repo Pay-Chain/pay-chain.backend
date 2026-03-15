@@ -21,6 +21,11 @@ func TestRoutePolicyRepo_UpdateAndListBranches(t *testing.T) {
 		default_bridge_type INTEGER NOT NULL,
 		fallback_mode TEXT NOT NULL,
 		fallback_order TEXT NOT NULL,
+		supports_token_bridge BOOLEAN,
+		supports_dest_swap BOOLEAN,
+		supports_privacy_forward BOOLEAN,
+		bridge_token TEXT,
+		status TEXT,
 		per_byte_rate TEXT,
 		overhead_bytes TEXT,
 		min_fee TEXT,
@@ -49,6 +54,11 @@ func TestRoutePolicyRepo_UpdateAndListBranches(t *testing.T) {
 	policy.DefaultBridgeType = 2
 	policy.FallbackMode = ""
 	policy.FallbackOrder = nil
+	policy.SupportsTokenBridge = true
+	policy.SupportsDestSwap = true
+	policy.SupportsPrivacyForward = true
+	policy.BridgeToken = "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+	policy.Status = "paused"
 	require.NoError(t, repo.Update(ctx, policy))
 
 	got, err := repo.GetByID(ctx, policy.ID)
@@ -56,6 +66,11 @@ func TestRoutePolicyRepo_UpdateAndListBranches(t *testing.T) {
 	require.Equal(t, uint8(2), got.DefaultBridgeType)
 	require.Equal(t, entities.BridgeFallbackModeStrict, got.FallbackMode)
 	require.Equal(t, []uint8{0}, got.FallbackOrder)
+	require.True(t, got.SupportsTokenBridge)
+	require.True(t, got.SupportsDestSwap)
+	require.True(t, got.SupportsPrivacyForward)
+	require.Equal(t, "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913", got.BridgeToken)
+	require.Equal(t, "paused", got.Status)
 
 	// Update not found branch.
 	missing := &entities.RoutePolicy{
@@ -107,6 +122,11 @@ func TestRoutePolicyRepo_DeleteAndGetByIDBranches(t *testing.T) {
 		default_bridge_type INTEGER NOT NULL,
 		fallback_mode TEXT NOT NULL,
 		fallback_order TEXT NOT NULL,
+		supports_token_bridge BOOLEAN,
+		supports_dest_swap BOOLEAN,
+		supports_privacy_forward BOOLEAN,
+		bridge_token TEXT,
+		status TEXT,
 		per_byte_rate TEXT,
 		overhead_bytes TEXT,
 		min_fee TEXT,
@@ -160,6 +180,11 @@ func TestRoutePolicyRepo_Create_DefaultsAndDBErrorBranches(t *testing.T) {
 		default_bridge_type INTEGER NOT NULL,
 		fallback_mode TEXT NOT NULL,
 		fallback_order TEXT NOT NULL,
+		supports_token_bridge BOOLEAN,
+		supports_dest_swap BOOLEAN,
+		supports_privacy_forward BOOLEAN,
+		bridge_token TEXT,
+		status TEXT,
 		per_byte_rate TEXT,
 		overhead_bytes TEXT,
 		min_fee TEXT,
@@ -185,6 +210,10 @@ func TestRoutePolicyRepo_Create_DefaultsAndDBErrorBranches(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, entities.BridgeFallbackModeStrict, got.FallbackMode)
 	require.Equal(t, []uint8{0}, got.FallbackOrder)
+	require.Equal(t, "active", got.Status)
+	require.False(t, got.SupportsTokenBridge)
+	require.False(t, got.SupportsDestSwap)
+	require.False(t, got.SupportsPrivacyForward)
 
 	// DB error branch for Create
 	badDB := newTestDB(t)

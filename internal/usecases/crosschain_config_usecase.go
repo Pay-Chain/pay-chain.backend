@@ -579,6 +579,8 @@ func bridgeName(bridgeType uint8) string {
 		return "CCIP"
 	case 2:
 		return "LAYERZERO"
+	case 3:
+		return "HYPERBRIDGE_TOKEN_GATEWAY"
 	default:
 		return "UNKNOWN"
 	}

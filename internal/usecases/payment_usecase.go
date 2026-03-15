@@ -434,6 +434,19 @@ func (u *PaymentUsecase) CreatePayment(ctx context.Context, userID uuid.UUID, in
 			onchainCost = quoted
 		}
 	}
+	if snapshotMetadata := buildPaymentQuoteSnapshotMetadata(signatureData, onchainCost); snapshotMetadata != nil {
+		snapshotEvent := &entities.PaymentEvent{
+			ID:        utils.GenerateUUIDv7(),
+			PaymentID: payment.ID,
+			EventType: entities.PaymentEventType("QUOTE_SNAPSHOT_CAPTURED"),
+			ChainID:   &sourceChain.ID,
+			Metadata:  snapshotMetadata,
+			CreatedAt: time.Now(),
+		}
+		if err := u.paymentEventRepo.Create(ctx, snapshotEvent); err != nil {
+			fmt.Printf("Warning: failed to create quote snapshot event for payment %s: %v\n", payment.ID, err)
+		}
+	}
 
 	return &entities.CreatePaymentResponse{
 		PaymentID:      payment.ID,
@@ -689,6 +702,113 @@ func (u *PaymentUsecase) buildTransactionDataWithInput(
 	}
 
 	return nil, nil
+}
+
+func buildPaymentQuoteSnapshotMetadata(signatureData interface{}, onchainCost *entities.OnchainCost) map[string]interface{} {
+	preview := extractPreviewApprovalSnapshot(signatureData)
+	quote := extractOnchainCostSnapshot(onchainCost)
+	if preview == nil && quote == nil {
+		return nil
+	}
+
+	metadata := map[string]interface{}{
+		"schema": "payment_quote_snapshot.v1",
+	}
+	if preview != nil {
+		metadata["previewApproval"] = preview
+	}
+	if quote != nil {
+		metadata["quotePaymentCost"] = quote
+	}
+	return metadata
+}
+
+func extractPreviewApprovalSnapshot(signatureData interface{}) map[string]interface{} {
+	root, ok := signatureData.(map[string]interface{})
+	if !ok {
+		return nil
+	}
+
+	snapshot := make(map[string]interface{})
+	if value := extractStringField(root, "value"); value != "" {
+		snapshot["requiredNativeFee"] = value
+	}
+
+	approvalRaw, ok := root["approval"]
+	if !ok {
+		if len(snapshot) == 0 {
+			return nil
+		}
+		return snapshot
+	}
+
+	approval, ok := approvalRaw.(map[string]string)
+	if ok {
+		if token := strings.TrimSpace(approval["to"]); token != "" {
+			snapshot["approvalToken"] = token
+		}
+		if amount := strings.TrimSpace(approval["amount"]); amount != "" {
+			snapshot["approvalAmount"] = amount
+		}
+		if spender := strings.TrimSpace(approval["spender"]); spender != "" {
+			snapshot["approvalSpender"] = spender
+		}
+		if len(snapshot) == 0 {
+			return nil
+		}
+		return snapshot
+	}
+
+	approvalAny, ok := approvalRaw.(map[string]interface{})
+	if !ok {
+		if len(snapshot) == 0 {
+			return nil
+		}
+		return snapshot
+	}
+	if token := extractStringField(approvalAny, "to"); token != "" {
+		snapshot["approvalToken"] = token
+	}
+	if amount := extractStringField(approvalAny, "amount"); amount != "" {
+		snapshot["approvalAmount"] = amount
+	}
+	if spender := extractStringField(approvalAny, "spender"); spender != "" {
+		snapshot["approvalSpender"] = spender
+	}
+	if len(snapshot) == 0 {
+		return nil
+	}
+	return snapshot
+}
+
+func extractOnchainCostSnapshot(onchainCost *entities.OnchainCost) map[string]interface{} {
+	if onchainCost == nil {
+		return nil
+	}
+	return map[string]interface{}{
+		"platformFeeToken":         onchainCost.PlatformFeeToken,
+		"bridgeFeeNative":          onchainCost.BridgeFeeNative,
+		"totalSourceTokenRequired": onchainCost.TotalSourceTokenRequired,
+		"bridgeType":               onchainCost.BridgeType,
+		"isSameChain":              onchainCost.IsSameChain,
+		"bridgeQuoteOk":            onchainCost.BridgeQuoteOk,
+		"bridgeQuoteReason":        onchainCost.BridgeQuoteReason,
+	}
+}
+
+func extractStringField(values map[string]interface{}, key string) string {
+	raw, ok := values[key]
+	if !ok {
+		return ""
+	}
+	switch v := raw.(type) {
+	case string:
+		return strings.TrimSpace(v)
+	case fmt.Stringer:
+		return strings.TrimSpace(v.String())
+	default:
+		return strings.TrimSpace(fmt.Sprintf("%v", v))
+	}
 }
 
 func (u *PaymentUsecase) shouldRequireEvmApproval(tokenAddress string) bool {
@@ -1509,6 +1629,14 @@ func (u *PaymentUsecase) GetPaymentPrivacyStatus(ctx context.Context, paymentID 
 	}
 
 	stage, isPrivacy, signals, reason := derivePaymentPrivacyLifecycle(payment, events)
+	if onchainStage, onchainPrivacy, onchainSignals, onchainReason, ok := u.deriveGatewayPrivacyLifecycle(ctx, payment, stage, isPrivacy, reason); ok {
+		stage = onchainStage
+		isPrivacy = onchainPrivacy
+		signals = append(signals, onchainSignals...)
+		if strings.TrimSpace(onchainReason) != "" {
+			reason = onchainReason
+		}
+	}
 	return &entities.PaymentPrivacyStatus{
 		PaymentID:          paymentID,
 		Stage:              stage,
@@ -1726,6 +1854,321 @@ func derivePaymentPrivacyLifecycle(payment *entities.Payment, events []*entities
 	}
 
 	return entities.PrivacyLifecycleUnknown, false, dedupeSignals(signals), "insufficient privacy lifecycle signals"
+}
+
+type gatewayPrivacyState struct {
+	intentID         [32]byte
+	stealthReceiver  common.Address
+	forwardCompleted bool
+	retryCount       uint8
+	settledToken     common.Address
+	settledAmount    *big.Int
+}
+
+func (u *PaymentUsecase) deriveGatewayPrivacyLifecycle(
+	ctx context.Context,
+	payment *entities.Payment,
+	currentStage string,
+	currentPrivacy bool,
+	currentReason string,
+) (string, bool, []string, string, bool) {
+	if payment == nil || u.chainRepo == nil || u.contractRepo == nil || u.clientFactory == nil {
+		return "", false, nil, "", false
+	}
+
+	sourceChain, err := u.chainRepo.GetByID(ctx, payment.SourceChainID)
+	if err != nil || sourceChain == nil || sourceChain.Type != entities.ChainTypeEVM {
+		return "", false, nil, "", false
+	}
+
+	gatewayContract, err := u.contractRepo.GetActiveContract(ctx, payment.SourceChainID, entities.ContractTypeGateway)
+	if err != nil || gatewayContract == nil || !common.IsHexAddress(gatewayContract.ContractAddress) {
+		return "", false, nil, "", false
+	}
+
+	rpcURL := resolveRPCURL(sourceChain)
+	if rpcURL == "" {
+		return "", false, nil, "", false
+	}
+
+	client, err := u.clientFactory.GetEVMClient(rpcURL)
+	if err != nil {
+		return "", false, nil, "", false
+	}
+	defer client.Close()
+
+	state, err := fetchGatewayPrivacyState(ctx, client, gatewayContract.ContractAddress, uuidToBytes32(payment.ID))
+	if err != nil {
+		return "", false, nil, "", false
+	}
+
+	var zeroBytes32 [32]byte
+	hasPrivacyIntent := state.intentID != zeroBytes32
+	hasStealthReceiver := state.stealthReceiver != (common.Address{})
+	hasSettlement := state.settledToken != (common.Address{}) && state.settledAmount != nil && state.settledAmount.Sign() > 0
+	hasRetryFailure := state.retryCount > 0
+	isPrivacy := currentPrivacy || hasPrivacyIntent || hasStealthReceiver || state.forwardCompleted || hasRetryFailure
+	if !isPrivacy {
+		return "", false, nil, "", false
+	}
+
+	signals := make([]string, 0, 6)
+	if hasPrivacyIntent {
+		signals = append(signals, "onchain_privacy_intent_present")
+	}
+	if hasStealthReceiver {
+		signals = append(signals, "onchain_privacy_stealth_receiver_present")
+	}
+	if hasSettlement {
+		signals = append(signals, "onchain_privacy_settlement_present")
+	}
+	if state.forwardCompleted {
+		signals = append(signals, "onchain_privacy_forward_completed")
+	}
+	if hasRetryFailure {
+		signals = append(signals, "onchain_privacy_forward_retry_count_present")
+	}
+
+	switch {
+	case state.forwardCompleted:
+		return entities.PrivacyLifecycleForwardedFinal, true, dedupeSignals(signals), "", true
+	case hasRetryFailure:
+		failureUpper := strings.ToUpper(strings.TrimSpace(payment.FailureReason.String))
+		if payment.Status == entities.PaymentStatusFailed ||
+			payment.Status == entities.PaymentStatusRefunded ||
+			strings.Contains(failureUpper, "REFUND") {
+			return entities.PrivacyLifecycleRefundable, true, dedupeSignals(signals), currentReason, true
+		}
+		if currentStage == entities.PrivacyLifecycleForwardFailedRetrying ||
+			strings.Contains(failureUpper, "RETRY") {
+			return entities.PrivacyLifecycleForwardFailedRetrying, true, dedupeSignals(signals), currentReason, true
+		}
+		return entities.PrivacyLifecycleClaimable, true, dedupeSignals(signals), currentReason, true
+	case hasSettlement:
+		reason := currentReason
+		if strings.TrimSpace(reason) == "" && payment.Status == entities.PaymentStatusCompleted {
+			reason = "privacy forward confirmation not observed yet"
+		}
+		return entities.PrivacyLifecycleSettledToStealth, true, dedupeSignals(signals), reason, true
+	default:
+		return entities.PrivacyLifecyclePendingOnSource, true, dedupeSignals(signals), currentReason, true
+	}
+}
+
+func fetchGatewayPrivacyState(
+	ctx context.Context,
+	client *blockchain.EVMClient,
+	gatewayAddress string,
+	paymentID [32]byte,
+) (*gatewayPrivacyState, error) {
+	intentID, err := callGatewayBytes32Getter(ctx, client, gatewayAddress, "privacyIntentByPayment(bytes32)", paymentID)
+	if err != nil {
+		return nil, err
+	}
+	stealthReceiver, err := callGatewayAddressGetter(ctx, client, gatewayAddress, "privacyStealthByPayment(bytes32)", paymentID)
+	if err != nil {
+		return nil, err
+	}
+	forwardCompleted, err := callGatewayBoolGetter(ctx, client, gatewayAddress, "privacyForwardCompleted(bytes32)", paymentID)
+	if err != nil {
+		return nil, err
+	}
+	retryCount, err := callGatewayUint8Getter(ctx, client, gatewayAddress, "privacyForwardRetryCount(bytes32)", paymentID)
+	if err != nil {
+		return nil, err
+	}
+	settledToken, err := callGatewayAddressGetter(ctx, client, gatewayAddress, "paymentSettledToken(bytes32)", paymentID)
+	if err != nil {
+		return nil, err
+	}
+	settledAmount, err := callGatewayUint256Getter(ctx, client, gatewayAddress, "paymentSettledAmount(bytes32)", paymentID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &gatewayPrivacyState{
+		intentID:         intentID,
+		stealthReceiver:  stealthReceiver,
+		forwardCompleted: forwardCompleted,
+		retryCount:       retryCount,
+		settledToken:     settledToken,
+		settledAmount:    settledAmount,
+	}, nil
+}
+
+func callGatewayBytes32Getter(
+	ctx context.Context,
+	client *blockchain.EVMClient,
+	gatewayAddress string,
+	methodSig string,
+	paymentID [32]byte,
+) ([32]byte, error) {
+	out, err := callGatewayPaymentGetter(ctx, client, gatewayAddress, methodSig, paymentID)
+	if err != nil {
+		return [32]byte{}, err
+	}
+	bytes32Type, err := abi.NewType("bytes32", "", nil)
+	if err != nil {
+		return [32]byte{}, err
+	}
+	values, err := abi.Arguments{{Type: bytes32Type}}.Unpack(out)
+	if err != nil {
+		return [32]byte{}, err
+	}
+	if len(values) != 1 {
+		return [32]byte{}, fmt.Errorf("invalid bytes32 getter response")
+	}
+	switch v := values[0].(type) {
+	case [32]byte:
+		return v, nil
+	case []byte:
+		var out32 [32]byte
+		copy(out32[:], v)
+		return out32, nil
+	default:
+		return [32]byte{}, fmt.Errorf("invalid bytes32 getter type")
+	}
+}
+
+func callGatewayAddressGetter(
+	ctx context.Context,
+	client *blockchain.EVMClient,
+	gatewayAddress string,
+	methodSig string,
+	paymentID [32]byte,
+) (common.Address, error) {
+	out, err := callGatewayPaymentGetter(ctx, client, gatewayAddress, methodSig, paymentID)
+	if err != nil {
+		return common.Address{}, err
+	}
+	addressType, err := abi.NewType("address", "", nil)
+	if err != nil {
+		return common.Address{}, err
+	}
+	values, err := abi.Arguments{{Type: addressType}}.Unpack(out)
+	if err != nil {
+		return common.Address{}, err
+	}
+	if len(values) != 1 {
+		return common.Address{}, fmt.Errorf("invalid address getter response")
+	}
+	addressValue, ok := values[0].(common.Address)
+	if !ok {
+		return common.Address{}, fmt.Errorf("invalid address getter type")
+	}
+	return addressValue, nil
+}
+
+func callGatewayBoolGetter(
+	ctx context.Context,
+	client *blockchain.EVMClient,
+	gatewayAddress string,
+	methodSig string,
+	paymentID [32]byte,
+) (bool, error) {
+	out, err := callGatewayPaymentGetter(ctx, client, gatewayAddress, methodSig, paymentID)
+	if err != nil {
+		return false, err
+	}
+	boolType, err := abi.NewType("bool", "", nil)
+	if err != nil {
+		return false, err
+	}
+	values, err := abi.Arguments{{Type: boolType}}.Unpack(out)
+	if err != nil {
+		return false, err
+	}
+	if len(values) != 1 {
+		return false, fmt.Errorf("invalid bool getter response")
+	}
+	boolValue, ok := values[0].(bool)
+	if !ok {
+		return false, fmt.Errorf("invalid bool getter type")
+	}
+	return boolValue, nil
+}
+
+func callGatewayUint8Getter(
+	ctx context.Context,
+	client *blockchain.EVMClient,
+	gatewayAddress string,
+	methodSig string,
+	paymentID [32]byte,
+) (uint8, error) {
+	out, err := callGatewayPaymentGetter(ctx, client, gatewayAddress, methodSig, paymentID)
+	if err != nil {
+		return 0, err
+	}
+	uint8Type, err := abi.NewType("uint8", "", nil)
+	if err != nil {
+		return 0, err
+	}
+	values, err := abi.Arguments{{Type: uint8Type}}.Unpack(out)
+	if err != nil {
+		return 0, err
+	}
+	if len(values) != 1 {
+		return 0, fmt.Errorf("invalid uint8 getter response")
+	}
+	switch v := values[0].(type) {
+	case uint8:
+		return v, nil
+	case *big.Int:
+		return uint8(v.Uint64()), nil
+	default:
+		return 0, fmt.Errorf("invalid uint8 getter type")
+	}
+}
+
+func callGatewayUint256Getter(
+	ctx context.Context,
+	client *blockchain.EVMClient,
+	gatewayAddress string,
+	methodSig string,
+	paymentID [32]byte,
+) (*big.Int, error) {
+	out, err := callGatewayPaymentGetter(ctx, client, gatewayAddress, methodSig, paymentID)
+	if err != nil {
+		return nil, err
+	}
+	uint256Type, err := abi.NewType("uint256", "", nil)
+	if err != nil {
+		return nil, err
+	}
+	values, err := abi.Arguments{{Type: uint256Type}}.Unpack(out)
+	if err != nil {
+		return nil, err
+	}
+	if len(values) != 1 {
+		return nil, fmt.Errorf("invalid uint256 getter response")
+	}
+	switch v := values[0].(type) {
+	case *big.Int:
+		return v, nil
+	case uint64:
+		return new(big.Int).SetUint64(v), nil
+	default:
+		return nil, fmt.Errorf("invalid uint256 getter type")
+	}
+}
+
+func callGatewayPaymentGetter(
+	ctx context.Context,
+	client *blockchain.EVMClient,
+	gatewayAddress string,
+	methodSig string,
+	paymentID [32]byte,
+) ([]byte, error) {
+	bytes32Type, err := abi.NewType("bytes32", "", nil)
+	if err != nil {
+		return nil, err
+	}
+	packedArgs, err := abi.Arguments{{Type: bytes32Type}}.Pack(paymentID)
+	if err != nil {
+		return nil, err
+	}
+	methodID := crypto.Keccak256([]byte(methodSig))[:4]
+	return client.CallView(ctx, gatewayAddress, append(methodID, packedArgs...))
 }
 
 func validatePrivacyRecoveryStage(stage string, action entities.PrivacyRecoveryAction) error {
@@ -2047,9 +2490,9 @@ func buildBridgeOrderFromPolicy(policy *entities.RoutePolicy) []uint8 {
 	}
 
 	added := make(map[uint8]struct{}, 3)
-	order := make([]uint8, 0, 3)
+	order := make([]uint8, 0, 4)
 	add := func(bridgeType uint8) {
-		if bridgeType > 2 {
+		if bridgeType > 3 {
 			return
 		}
 		if _, ok := added[bridgeType]; ok {
@@ -2325,6 +2768,8 @@ func bridgeTypeToName(bridgeType uint8) string {
 		return "CCIP"
 	case 2:
 		return "LayerZero"
+	case 3:
+		return "HyperbridgeTokenGateway"
 	default:
 		return "Hyperbridge"
 	}
@@ -2336,6 +2781,8 @@ func bridgeNameToType(bridgeName string) uint8 {
 		return 1
 	case "LAYERZERO":
 		return 2
+	case "HYPERBRIDGE_TOKEN_GATEWAY", "HYPERBRIDGETOKENGATEWAY", "HBTOKENGATEWAY":
+		return 3
 	default:
 		return 0
 	}

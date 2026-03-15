@@ -90,7 +90,7 @@ func TestCrosschainPolicyHandler_CRUDSuccessPaths(t *testing.T) {
 	r.POST("/lz", h.CreateLayerZeroConfig)
 	r.PUT("/lz/:id", h.UpdateLayerZeroConfig)
 
-	createRouteBody := `{"sourceChainId":"` + sourceID.String() + `","destChainId":"` + destID.String() + `","defaultBridgeType":1,"fallbackMode":"auto_fallback","fallbackOrder":[1,0],"perByteRate":"300","overheadBytes":"256","minFee":"1000","maxFee":"999999"}`
+	createRouteBody := `{"sourceChainId":"` + sourceID.String() + `","destChainId":"` + destID.String() + `","defaultBridgeType":1,"fallbackMode":"auto_fallback","fallbackOrder":[1,0],"supportsTokenBridge":true,"supportsDestSwap":true,"supportsPrivacyForward":false,"bridgeToken":"0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913","status":"active","perByteRate":"300","overheadBytes":"256","minFee":"1000","maxFee":"999999"}`
 	req := httptest.NewRequest(http.MethodPost, "/route", strings.NewReader(createRouteBody))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -102,9 +102,14 @@ func TestCrosschainPolicyHandler_CRUDSuccessPaths(t *testing.T) {
 	require.Equal(t, "256", routeRepo.item.OverheadBytes)
 	require.Equal(t, "1000", routeRepo.item.MinFee)
 	require.Equal(t, "999999", routeRepo.item.MaxFee)
+	require.True(t, routeRepo.item.SupportsTokenBridge)
+	require.True(t, routeRepo.item.SupportsDestSwap)
+	require.False(t, routeRepo.item.SupportsPrivacyForward)
+	require.Equal(t, "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913", routeRepo.item.BridgeToken)
+	require.Equal(t, "active", routeRepo.item.Status)
 
 	policyID := routeRepo.item.ID
-	updateRouteBody := `{"sourceChainId":"` + sourceID.String() + `","destChainId":"` + destID.String() + `","defaultBridgeType":2,"fallbackMode":"strict","fallbackOrder":[2],"perByteRate":"400","overheadBytes":"300","minFee":"500","maxFee":"1000"}`
+	updateRouteBody := `{"sourceChainId":"` + sourceID.String() + `","destChainId":"` + destID.String() + `","defaultBridgeType":2,"fallbackMode":"strict","fallbackOrder":[2],"supportsPrivacyForward":true,"status":"paused","perByteRate":"400","overheadBytes":"300","minFee":"500","maxFee":"1000"}`
 	req = httptest.NewRequest(http.MethodPut, "/route/"+policyID.String(), strings.NewReader(updateRouteBody))
 	req.Header.Set("Content-Type", "application/json")
 	w = httptest.NewRecorder()
@@ -116,6 +121,10 @@ func TestCrosschainPolicyHandler_CRUDSuccessPaths(t *testing.T) {
 	require.Equal(t, "300", routeRepo.item.OverheadBytes)
 	require.Equal(t, "500", routeRepo.item.MinFee)
 	require.Equal(t, "1000", routeRepo.item.MaxFee)
+	require.True(t, routeRepo.item.SupportsTokenBridge)
+	require.True(t, routeRepo.item.SupportsDestSwap)
+	require.True(t, routeRepo.item.SupportsPrivacyForward)
+	require.Equal(t, "paused", routeRepo.item.Status)
 
 	peerHex := "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	createLZBody := `{"sourceChainId":"` + sourceID.String() + `","destChainId":"` + destID.String() + `","dstEid":30110,"peerHex":"` + peerHex + `","optionsHex":"0x0102","isActive":true}`

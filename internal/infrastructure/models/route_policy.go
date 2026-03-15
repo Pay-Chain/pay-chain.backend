@@ -8,19 +8,24 @@ import (
 )
 
 type RoutePolicy struct {
-	ID                uuid.UUID `gorm:"type:uuid;primaryKey;default:uuid_generate_v7()"`
-	SourceChainID     uuid.UUID `gorm:"type:uuid;not null;index"`
-	DestChainID       uuid.UUID `gorm:"type:uuid;not null;index"`
-	DefaultBridgeType int16     `gorm:"type:smallint;not null;default:0"`
-	FallbackMode      string    `gorm:"type:varchar(32);not null;default:'strict'"`
-	FallbackOrder     string    `gorm:"type:jsonb;not null;default:'[0]'"`
-	PerByteRate       *string   `gorm:"type:numeric(78,0)"`
-	OverheadBytes     *string   `gorm:"type:numeric(78,0)"`
-	MinFee            *string   `gorm:"type:numeric(78,0)"`
-	MaxFee            *string   `gorm:"type:numeric(78,0)"`
-	CreatedAt         time.Time
-	UpdatedAt         time.Time
-	DeletedAt         gorm.DeletedAt `gorm:"index"`
+	ID                     uuid.UUID `gorm:"type:uuid;primaryKey;default:uuid_generate_v7()"`
+	SourceChainID          uuid.UUID `gorm:"type:uuid;not null;index"`
+	DestChainID            uuid.UUID `gorm:"type:uuid;not null;index"`
+	DefaultBridgeType      int16     `gorm:"type:smallint;not null;default:0"`
+	FallbackMode           string    `gorm:"type:varchar(32);not null;default:'strict'"`
+	FallbackOrder          string    `gorm:"type:jsonb;not null;default:'[0]'"`
+	SupportsTokenBridge    bool      `gorm:"type:boolean;not null;default:false"`
+	SupportsDestSwap       bool      `gorm:"type:boolean;not null;default:false"`
+	SupportsPrivacyForward bool      `gorm:"type:boolean;not null;default:false"`
+	BridgeToken            *string   `gorm:"type:varchar(66)"`
+	Status                 string    `gorm:"type:varchar(32);not null;default:'active';index"`
+	PerByteRate            *string   `gorm:"type:numeric(78,0)"`
+	OverheadBytes          *string   `gorm:"type:numeric(78,0)"`
+	MinFee                 *string   `gorm:"type:numeric(78,0)"`
+	MaxFee                 *string   `gorm:"type:numeric(78,0)"`
+	CreatedAt              time.Time
+	UpdatedAt              time.Time
+	DeletedAt              gorm.DeletedAt `gorm:"index"`
 }
 
 func (RoutePolicy) TableName() string {

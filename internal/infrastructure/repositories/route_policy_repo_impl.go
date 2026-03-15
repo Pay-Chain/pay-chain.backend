@@ -95,18 +95,23 @@ func (r *routePolicyRepo) Create(ctx context.Context, policy *entities.RoutePoli
 	}
 
 	row := &models.RoutePolicy{
-		ID:                policy.ID,
-		SourceChainID:     policy.SourceChainID,
-		DestChainID:       policy.DestChainID,
-		DefaultBridgeType: int16(policy.DefaultBridgeType),
-		FallbackMode:      mode,
-		FallbackOrder:     fallbackOrder,
-		PerByteRate:       nullableNumeric(policy.PerByteRate),
-		OverheadBytes:     nullableNumeric(policy.OverheadBytes),
-		MinFee:            nullableNumeric(policy.MinFee),
-		MaxFee:            nullableNumeric(policy.MaxFee),
-		CreatedAt:         time.Now(),
-		UpdatedAt:         time.Now(),
+		ID:                     policy.ID,
+		SourceChainID:          policy.SourceChainID,
+		DestChainID:            policy.DestChainID,
+		DefaultBridgeType:      int16(policy.DefaultBridgeType),
+		FallbackMode:           mode,
+		FallbackOrder:          fallbackOrder,
+		SupportsTokenBridge:    policy.SupportsTokenBridge,
+		SupportsDestSwap:       policy.SupportsDestSwap,
+		SupportsPrivacyForward: policy.SupportsPrivacyForward,
+		BridgeToken:            nullableText(policy.BridgeToken),
+		Status:                 normalizeRoutePolicyStatus(policy.Status),
+		PerByteRate:            nullableNumeric(policy.PerByteRate),
+		OverheadBytes:          nullableNumeric(policy.OverheadBytes),
+		MinFee:                 nullableNumeric(policy.MinFee),
+		MaxFee:                 nullableNumeric(policy.MaxFee),
+		CreatedAt:              time.Now(),
+		UpdatedAt:              time.Now(),
 	}
 	return r.db.WithContext(ctx).Create(row).Error
 }
@@ -121,16 +126,21 @@ func (r *routePolicyRepo) Update(ctx context.Context, policy *entities.RoutePoli
 	result := r.db.WithContext(ctx).Model(&models.RoutePolicy{}).
 		Where("id = ?", policy.ID).
 		Updates(map[string]interface{}{
-			"source_chain_id":     policy.SourceChainID,
-			"dest_chain_id":       policy.DestChainID,
-			"default_bridge_type": int16(policy.DefaultBridgeType),
-			"fallback_mode":       mode,
-			"fallback_order":      fallbackOrder,
-			"per_byte_rate":       nullableNumeric(policy.PerByteRate),
-			"overhead_bytes":      nullableNumeric(policy.OverheadBytes),
-			"min_fee":             nullableNumeric(policy.MinFee),
-			"max_fee":             nullableNumeric(policy.MaxFee),
-			"updated_at":          time.Now(),
+			"source_chain_id":          policy.SourceChainID,
+			"dest_chain_id":            policy.DestChainID,
+			"default_bridge_type":      int16(policy.DefaultBridgeType),
+			"fallback_mode":            mode,
+			"fallback_order":           fallbackOrder,
+			"supports_token_bridge":    policy.SupportsTokenBridge,
+			"supports_dest_swap":       policy.SupportsDestSwap,
+			"supports_privacy_forward": policy.SupportsPrivacyForward,
+			"bridge_token":             nullableText(policy.BridgeToken),
+			"status":                   normalizeRoutePolicyStatus(policy.Status),
+			"per_byte_rate":            nullableNumeric(policy.PerByteRate),
+			"overhead_bytes":           nullableNumeric(policy.OverheadBytes),
+			"min_fee":                  nullableNumeric(policy.MinFee),
+			"max_fee":                  nullableNumeric(policy.MaxFee),
+			"updated_at":               time.Now(),
 		})
 	if result.Error != nil {
 		return result.Error
@@ -154,18 +164,23 @@ func (r *routePolicyRepo) Delete(ctx context.Context, id uuid.UUID) error {
 
 func toRoutePolicyEntity(m *models.RoutePolicy) *entities.RoutePolicy {
 	return &entities.RoutePolicy{
-		ID:                m.ID,
-		SourceChainID:     m.SourceChainID,
-		DestChainID:       m.DestChainID,
-		DefaultBridgeType: uint8(m.DefaultBridgeType),
-		FallbackMode:      entities.BridgeFallbackMode(m.FallbackMode),
-		FallbackOrder:     parseFallbackOrder(m.FallbackOrder),
-		PerByteRate:       derefString(m.PerByteRate),
-		OverheadBytes:     derefString(m.OverheadBytes),
-		MinFee:            derefString(m.MinFee),
-		MaxFee:            derefString(m.MaxFee),
-		CreatedAt:         m.CreatedAt,
-		UpdatedAt:         m.UpdatedAt,
+		ID:                     m.ID,
+		SourceChainID:          m.SourceChainID,
+		DestChainID:            m.DestChainID,
+		DefaultBridgeType:      uint8(m.DefaultBridgeType),
+		FallbackMode:           entities.BridgeFallbackMode(m.FallbackMode),
+		FallbackOrder:          parseFallbackOrder(m.FallbackOrder),
+		SupportsTokenBridge:    m.SupportsTokenBridge,
+		SupportsDestSwap:       m.SupportsDestSwap,
+		SupportsPrivacyForward: m.SupportsPrivacyForward,
+		BridgeToken:            derefString(m.BridgeToken),
+		Status:                 normalizeRoutePolicyStatus(m.Status),
+		PerByteRate:            derefString(m.PerByteRate),
+		OverheadBytes:          derefString(m.OverheadBytes),
+		MinFee:                 derefString(m.MinFee),
+		MaxFee:                 derefString(m.MaxFee),
+		CreatedAt:              m.CreatedAt,
+		UpdatedAt:              m.UpdatedAt,
 	}
 }
 
@@ -175,6 +190,22 @@ func nullableNumeric(v string) *string {
 		return nil
 	}
 	return &s
+}
+
+func nullableText(v string) *string {
+	s := strings.TrimSpace(v)
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
+func normalizeRoutePolicyStatus(v string) string {
+	s := strings.ToLower(strings.TrimSpace(v))
+	if s == "" {
+		return "active"
+	}
+	return s
 }
 
 func derefString(v *string) string {

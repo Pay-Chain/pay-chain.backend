@@ -146,6 +146,15 @@ type CCIPConfigInput struct {
 	AllowSourceChain        *bool   `json:"allowSourceChain"`
 }
 
+type HyperbridgeTokenGatewayConfigInput struct {
+	SourceChainInput     string  `json:"sourceChainId"`
+	DestChainInput       string  `json:"destChainId"`
+	StateMachineIDHex    string  `json:"stateMachineIdHex"`
+	SettlementExecutor   string  `json:"settlementExecutorAddress"`
+	NativeCost           *string `json:"nativeCost"`
+	RelayerFee           *string `json:"relayerFee"`
+}
+
 func (s *evmAdminOpsService) RegisterAdapter(
 	ctx context.Context,
 	sourceChainInput, destChainInput string,
@@ -247,6 +256,109 @@ func (s *evmAdminOpsService) SetHyperbridgeConfig(
 	if len(txHashes) == 0 {
 		return "", nil, domainerrors.BadRequest("stateMachineId or destinationContract is required")
 	}
+	return adapter, txHashes, nil
+}
+
+func (s *evmAdminOpsService) SetHyperbridgeTokenGatewayConfig(
+	ctx context.Context,
+	input HyperbridgeTokenGatewayConfigInput,
+) (string, []string, error) {
+	resolved, err := s.resolveContext(ctx, input.SourceChainInput, input.DestChainInput)
+	if err != nil {
+		return "", nil, err
+	}
+	adapter, err := s.getAdapter(ctx, resolved.sourceChainID, resolved.routerAddress, resolved.destCAIP2, 3)
+	if err != nil {
+		return "", nil, err
+	}
+	if !isValidAdapterAddress(adapter) {
+		return "", nil, domainerrors.BadRequest("hyperbridge token gateway adapter (type 3) is not registered")
+	}
+
+	parsedABI, err := s.resolveABI(ctx, resolved.sourceChainID, entities.ContractTypeAdapterHBTokenSender)
+	if err != nil {
+		return "", nil, err
+	}
+
+	txHashes := make([]string, 0, 4)
+
+	stateMachine := normalizeHexInput(input.StateMachineIDHex)
+	if stateMachine != "" {
+		txHash, txErr := s.sendTx(
+			ctx,
+			resolved.sourceChainID,
+			adapter,
+			parsedABI,
+			"setStateMachineId",
+			resolved.destCAIP2,
+			common.FromHex("0x"+stateMachine),
+		)
+		if txErr != nil {
+			return "", txHashes, wrapAdminTxError("setStateMachineId", txErr)
+		}
+		txHashes = append(txHashes, txHash)
+	}
+
+	settlementExecutor := strings.TrimSpace(input.SettlementExecutor)
+	if settlementExecutor != "" {
+		if !isValidAdapterAddress(settlementExecutor) {
+			return "", nil, domainerrors.BadRequest("invalid settlementExecutorAddress")
+		}
+		txHash, txErr := s.sendTx(
+			ctx,
+			resolved.sourceChainID,
+			adapter,
+			parsedABI,
+			"setRouteSettlementExecutor",
+			resolved.destCAIP2,
+			common.HexToAddress(settlementExecutor),
+		)
+		if txErr != nil {
+			return "", txHashes, wrapAdminTxError("setRouteSettlementExecutor", txErr)
+		}
+		txHashes = append(txHashes, txHash)
+	}
+
+	if nativeCost, parseErr := parseOptionalBigInt(input.NativeCost); parseErr != nil {
+		return "", nil, domainerrors.BadRequest("invalid nativeCost")
+	} else if nativeCost != nil {
+		txHash, txErr := s.sendTx(
+			ctx,
+			resolved.sourceChainID,
+			adapter,
+			parsedABI,
+			"setNativeCost",
+			resolved.destCAIP2,
+			nativeCost,
+		)
+		if txErr != nil {
+			return "", txHashes, wrapAdminTxError("setNativeCost", txErr)
+		}
+		txHashes = append(txHashes, txHash)
+	}
+
+	if relayerFee, parseErr := parseOptionalBigInt(input.RelayerFee); parseErr != nil {
+		return "", nil, domainerrors.BadRequest("invalid relayerFee")
+	} else if relayerFee != nil {
+		txHash, txErr := s.sendTx(
+			ctx,
+			resolved.sourceChainID,
+			adapter,
+			parsedABI,
+			"setRelayerFee",
+			resolved.destCAIP2,
+			relayerFee,
+		)
+		if txErr != nil {
+			return "", txHashes, wrapAdminTxError("setRelayerFee", txErr)
+		}
+		txHashes = append(txHashes, txHash)
+	}
+
+	if len(txHashes) == 0 {
+		return "", nil, domainerrors.BadRequest("at least one config field is required")
+	}
+
 	return adapter, txHashes, nil
 }
 
@@ -1029,6 +1141,28 @@ func parseAdapterAddressHex(value string) (common.Address, error) {
 		return addr, nil
 	}
 	return common.Address{}, fmt.Errorf("invalid adapter hex length")
+}
+
+func parseOptionalBigInt(raw *string) (*big.Int, error) {
+	if raw == nil {
+		return nil, nil
+	}
+	value := strings.TrimSpace(*raw)
+	if value == "" {
+		return nil, nil
+	}
+	if len(value) > 2 && strings.EqualFold(value[:2], "0x") {
+		n := new(big.Int)
+		if _, ok := n.SetString(value[2:], 16); ok {
+			return n, nil
+		}
+		return nil, fmt.Errorf("invalid hex integer")
+	}
+	n := new(big.Int)
+	if _, ok := n.SetString(value, 10); ok {
+		return n, nil
+	}
+	return nil, fmt.Errorf("invalid integer")
 }
 
 func wrapAdminTxError(method string, err error) error {

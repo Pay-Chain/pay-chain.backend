@@ -13,6 +13,7 @@ const (
 	BridgeOptionHyperbridge     uint8 = 0
 	BridgeOptionCCIP            uint8 = 1
 	BridgeOptionLayerZero       uint8 = 2
+	BridgeOptionHBTokenGateway  uint8 = 3
 )
 
 func normalizePaymentMode(mode *string) string {
@@ -29,7 +30,7 @@ func normalizeBridgeOption(option *uint8) (uint8, error) {
 	if option == nil {
 		return BridgeOptionDefaultSentinel, nil
 	}
-	if *option > BridgeOptionLayerZero {
+	if *option > BridgeOptionHBTokenGateway {
 		return 0, fmt.Errorf("invalid bridgeOption: %d", *option)
 	}
 	return *option, nil

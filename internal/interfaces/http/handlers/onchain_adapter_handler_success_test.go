@@ -18,6 +18,7 @@ type onchainAdapterServiceStub struct {
 	registerAdapter  func(context.Context, string, string, uint8, string) (string, error)
 	setDefaultBridge func(context.Context, string, string, uint8) (string, error)
 	setHyperbridge   func(context.Context, string, string, string, string) (string, []string, error)
+	setHyperbridgeTokenGateway func(context.Context, usecases.HyperbridgeTokenGatewayConfigInput) (string, []string, error)
 	setCCIP          func(context.Context, usecases.CCIPConfigInput) (string, []string, error)
 	setLayerZero     func(context.Context, string, string, *uint32, string, string) (string, []string, error)
 	configureLZE2E   func(context.Context, usecases.LayerZeroE2EConfigureInput) (*usecases.LayerZeroE2EConfigureResult, error)
@@ -36,6 +37,12 @@ func (s onchainAdapterServiceStub) SetDefaultBridgeType(ctx context.Context, sou
 }
 func (s onchainAdapterServiceStub) SetHyperbridgeConfig(ctx context.Context, sourceChainInput, destChainInput, stateMachineIDHex, destinationContractHex string) (string, []string, error) {
 	return s.setHyperbridge(ctx, sourceChainInput, destChainInput, stateMachineIDHex, destinationContractHex)
+}
+func (s onchainAdapterServiceStub) SetHyperbridgeTokenGatewayConfig(ctx context.Context, input usecases.HyperbridgeTokenGatewayConfigInput) (string, []string, error) {
+	if s.setHyperbridgeTokenGateway == nil {
+		return "0xhbtoken", []string{"0x5"}, nil
+	}
+	return s.setHyperbridgeTokenGateway(ctx, input)
 }
 func (s onchainAdapterServiceStub) SetCCIPConfig(ctx context.Context, input usecases.CCIPConfigInput) (string, []string, error) {
 	return s.setCCIP(ctx, input)
@@ -93,6 +100,7 @@ func TestOnchainAdapterHandler_SuccessPaths(t *testing.T) {
 	r.POST("/register", h.RegisterAdapter)
 	r.POST("/default-bridge", h.SetDefaultBridgeType)
 	r.POST("/hyperbridge", h.SetHyperbridgeConfig)
+	r.POST("/hyperbridge-token-gateway", h.SetHyperbridgeTokenGatewayConfig)
 	r.POST("/ccip", h.SetCCIPConfig)
 	r.POST("/layerzero", h.SetLayerZeroConfig)
 	r.POST("/layerzero-e2e", h.ConfigureLayerZeroE2E)
@@ -131,6 +139,17 @@ func TestOnchainAdapterHandler_SuccessPaths(t *testing.T) {
 				"destChainId":            "eip155:42161",
 				"stateMachineIdHex":      "0x45564d2d3432313631",
 				"destinationContractHex": "0x0000000000000000000000001111111111111111111111111111111111111111",
+			},
+		},
+		{
+			path: "/hyperbridge-token-gateway",
+			body: map[string]interface{}{
+				"sourceChainId":          "eip155:8453",
+				"destChainId":            "eip155:42161",
+				"stateMachineIdHex":      "0x45564d2d3432313631",
+				"settlementExecutorAddress": "0x1111111111111111111111111111111111111111",
+				"nativeCost":             "100000000000000",
+				"relayerFee":             "0",
 			},
 		},
 		{

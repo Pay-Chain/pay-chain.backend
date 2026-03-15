@@ -21,10 +21,10 @@ func TestBuildBridgeOrderFromPolicy_AutoFallbackDedupAndFilter(t *testing.T) {
 	order := buildBridgeOrderFromPolicy(&entities.RoutePolicy{
 		DefaultBridgeType: 0,
 		FallbackMode:      entities.BridgeFallbackModeAutoFallback,
-		FallbackOrder:     []uint8{0, 2, 1, 2, 9},
+		FallbackOrder:     []uint8{0, 2, 1, 3, 2, 9},
 	})
 
-	assert.Equal(t, []uint8{0, 2, 1}, order)
+	assert.Equal(t, []uint8{0, 2, 1, 3}, order)
 }
 
 func TestBuildBridgeOrderFromPolicy_DefaultFallbackCases(t *testing.T) {

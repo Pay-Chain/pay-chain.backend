@@ -14,19 +14,24 @@ const (
 )
 
 type RoutePolicy struct {
-	ID                uuid.UUID          `json:"id"`
-	SourceChainID     uuid.UUID          `json:"sourceChainId"`
-	DestChainID       uuid.UUID          `json:"destChainId"`
-	DefaultBridgeType uint8              `json:"defaultBridgeType"`
-	FallbackMode      BridgeFallbackMode `json:"fallbackMode"`
-	FallbackOrder     []uint8            `json:"fallbackOrder"`
-	PerByteRate       string             `json:"perByteRate,omitempty"`
-	OverheadBytes     string             `json:"overheadBytes,omitempty"`
-	MinFee            string             `json:"minFee,omitempty"`
-	MaxFee            string             `json:"maxFee,omitempty"`
-	CreatedAt         time.Time          `json:"createdAt"`
-	UpdatedAt         time.Time          `json:"updatedAt"`
-	DeletedAt         *time.Time         `json:"-"`
+	ID                     uuid.UUID          `json:"id"`
+	SourceChainID          uuid.UUID          `json:"sourceChainId"`
+	DestChainID            uuid.UUID          `json:"destChainId"`
+	DefaultBridgeType      uint8              `json:"defaultBridgeType"`
+	FallbackMode           BridgeFallbackMode `json:"fallbackMode"`
+	FallbackOrder          []uint8            `json:"fallbackOrder"`
+	SupportsTokenBridge    bool               `json:"supportsTokenBridge"`
+	SupportsDestSwap       bool               `json:"supportsDestSwap"`
+	SupportsPrivacyForward bool               `json:"supportsPrivacyForward"`
+	BridgeToken            string             `json:"bridgeToken,omitempty"`
+	Status                 string             `json:"status"`
+	PerByteRate            string             `json:"perByteRate,omitempty"`
+	OverheadBytes          string             `json:"overheadBytes,omitempty"`
+	MinFee                 string             `json:"minFee,omitempty"`
+	MaxFee                 string             `json:"maxFee,omitempty"`
+	CreatedAt              time.Time          `json:"createdAt"`
+	UpdatedAt              time.Time          `json:"updatedAt"`
+	DeletedAt              *time.Time         `json:"-"`
 }
 
 type LayerZeroConfig struct {

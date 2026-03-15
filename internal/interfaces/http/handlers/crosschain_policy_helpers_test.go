@@ -127,7 +127,8 @@ func TestCrosschainPolicyHelpers(t *testing.T) {
 	require.True(t, isValidBridgeType(0))
 	require.True(t, isValidBridgeType(1))
 	require.True(t, isValidBridgeType(2))
-	require.False(t, isValidBridgeType(3))
+	require.True(t, isValidBridgeType(3))
+	require.False(t, isValidBridgeType(4))
 
 	require.Error(t, validateBridgeOrder(nil))
 	require.Error(t, validateBridgeOrder([]uint8{9}))

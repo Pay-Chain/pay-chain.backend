@@ -105,6 +105,13 @@ func (u *ABIResolverMixin) ResolveABIWithFallback(ctx context.Context, chainID u
 			if !isValid {
 				fmt.Printf("[ResolveABI] ABI for %s has %d methods but missing 'setRoute'. Using fallback.\n", contractType, len(parsed.Methods))
 			}
+		case entities.ContractTypeAdapterHBTokenSender:
+			_, hasSetStateMachine := parsed.Methods["setStateMachineId"]
+			_, hasSetSettlementExecutor := parsed.Methods["setRouteSettlementExecutor"]
+			isValid = hasSetStateMachine && hasSetSettlementExecutor
+			if !isValid {
+				fmt.Printf("[ResolveABI] ABI for %s has %d methods but missing token-gateway admin methods. Using fallback.\n", contractType, len(parsed.Methods))
+			}
 		default:
 			// For others (or if we don't need strict validation), checks length
 			isValid = len(parsed.Methods) > 0
@@ -132,6 +139,8 @@ func (u *ABIResolverMixin) ResolveABIWithFallback(ctx context.Context, chainID u
 		return FallbackCCIPSenderAdminABI, nil
 	case entities.ContractTypeAdapterLayerZero:
 		return FallbackLayerZeroSenderAdminABI, nil
+	case entities.ContractTypeAdapterHBTokenSender:
+		return FallbackHyperbridgeTokenGatewaySenderAdminABI, nil
 	case entities.ContractTypeReceiverLayerZero:
 		return FallbackLayerZeroReceiverAdminABI, nil
 	}

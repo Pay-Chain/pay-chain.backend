@@ -64,15 +64,20 @@ func (h *CrosschainPolicyHandler) ListRoutePolicies(c *gin.Context) {
 
 func (h *CrosschainPolicyHandler) CreateRoutePolicy(c *gin.Context) {
 	var input struct {
-		SourceChainID     string  `json:"sourceChainId" binding:"required"`
-		DestChainID       string  `json:"destChainId" binding:"required"`
-		DefaultBridgeType *uint8  `json:"defaultBridgeType" binding:"required"`
-		FallbackMode      string  `json:"fallbackMode"`
-		FallbackOrder     []uint8 `json:"fallbackOrder"`
-		PerByteRate       string  `json:"perByteRate"`
-		OverheadBytes     string  `json:"overheadBytes"`
-		MinFee            string  `json:"minFee"`
-		MaxFee            string  `json:"maxFee"`
+		SourceChainID          string  `json:"sourceChainId" binding:"required"`
+		DestChainID            string  `json:"destChainId" binding:"required"`
+		DefaultBridgeType      *uint8  `json:"defaultBridgeType" binding:"required"`
+		FallbackMode           string  `json:"fallbackMode"`
+		FallbackOrder          []uint8 `json:"fallbackOrder"`
+		SupportsTokenBridge    *bool   `json:"supportsTokenBridge"`
+		SupportsDestSwap       *bool   `json:"supportsDestSwap"`
+		SupportsPrivacyForward *bool   `json:"supportsPrivacyForward"`
+		BridgeToken            *string `json:"bridgeToken"`
+		Status                 *string `json:"status"`
+		PerByteRate            string  `json:"perByteRate"`
+		OverheadBytes          string  `json:"overheadBytes"`
+		MinFee                 string  `json:"minFee"`
+		MaxFee                 string  `json:"maxFee"`
 	}
 	if err := c.ShouldBindJSON(&input); err != nil {
 		response.Error(c, domainerrors.BadRequest(err.Error()))
@@ -138,20 +143,38 @@ func (h *CrosschainPolicyHandler) CreateRoutePolicy(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
+	bridgeToken, err := normalizeBridgeTokenInput(input.BridgeToken)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	status, err := normalizeRoutePolicyStatusInput(input.Status)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	supportsTokenBridge := input.SupportsTokenBridge != nil && *input.SupportsTokenBridge
+	supportsDestSwap := input.SupportsDestSwap != nil && *input.SupportsDestSwap
+	supportsPrivacyForward := input.SupportsPrivacyForward != nil && *input.SupportsPrivacyForward
 
 	item := &entities.RoutePolicy{
-		ID:                utils.GenerateUUIDv7(),
-		SourceChainID:     sourceChainID,
-		DestChainID:       destChainID,
-		DefaultBridgeType: *input.DefaultBridgeType,
-		FallbackMode:      mode,
-		FallbackOrder:     order,
-		PerByteRate:       perByteRate,
-		OverheadBytes:     overheadBytes,
-		MinFee:            minFee,
-		MaxFee:            maxFee,
-		CreatedAt:         time.Now(),
-		UpdatedAt:         time.Now(),
+		ID:                     utils.GenerateUUIDv7(),
+		SourceChainID:          sourceChainID,
+		DestChainID:            destChainID,
+		DefaultBridgeType:      *input.DefaultBridgeType,
+		FallbackMode:           mode,
+		FallbackOrder:          order,
+		SupportsTokenBridge:    supportsTokenBridge,
+		SupportsDestSwap:       supportsDestSwap,
+		SupportsPrivacyForward: supportsPrivacyForward,
+		BridgeToken:            bridgeToken,
+		Status:                 status,
+		PerByteRate:            perByteRate,
+		OverheadBytes:          overheadBytes,
+		MinFee:                 minFee,
+		MaxFee:                 maxFee,
+		CreatedAt:              time.Now(),
+		UpdatedAt:              time.Now(),
 	}
 	if err := h.routePolicyRepo.Create(c.Request.Context(), item); err != nil {
 		response.Error(c, err)
@@ -173,15 +196,20 @@ func (h *CrosschainPolicyHandler) UpdateRoutePolicy(c *gin.Context) {
 	}
 
 	var input struct {
-		SourceChainID     string  `json:"sourceChainId" binding:"required"`
-		DestChainID       string  `json:"destChainId" binding:"required"`
-		DefaultBridgeType *uint8  `json:"defaultBridgeType" binding:"required"`
-		FallbackMode      string  `json:"fallbackMode"`
-		FallbackOrder     []uint8 `json:"fallbackOrder"`
-		PerByteRate       string  `json:"perByteRate"`
-		OverheadBytes     string  `json:"overheadBytes"`
-		MinFee            string  `json:"minFee"`
-		MaxFee            string  `json:"maxFee"`
+		SourceChainID          string  `json:"sourceChainId" binding:"required"`
+		DestChainID            string  `json:"destChainId" binding:"required"`
+		DefaultBridgeType      *uint8  `json:"defaultBridgeType" binding:"required"`
+		FallbackMode           string  `json:"fallbackMode"`
+		FallbackOrder          []uint8 `json:"fallbackOrder"`
+		SupportsTokenBridge    *bool   `json:"supportsTokenBridge"`
+		SupportsDestSwap       *bool   `json:"supportsDestSwap"`
+		SupportsPrivacyForward *bool   `json:"supportsPrivacyForward"`
+		BridgeToken            *string `json:"bridgeToken"`
+		Status                 *string `json:"status"`
+		PerByteRate            string  `json:"perByteRate"`
+		OverheadBytes          string  `json:"overheadBytes"`
+		MinFee                 string  `json:"minFee"`
+		MaxFee                 string  `json:"maxFee"`
 	}
 	if err := c.ShouldBindJSON(&input); err != nil {
 		response.Error(c, domainerrors.BadRequest(err.Error()))
@@ -247,12 +275,44 @@ func (h *CrosschainPolicyHandler) UpdateRoutePolicy(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
+	bridgeToken := existing.BridgeToken
+	if input.BridgeToken != nil {
+		normalizedBridgeToken, normalizeErr := normalizeBridgeTokenInput(input.BridgeToken)
+		if normalizeErr != nil {
+			response.Error(c, normalizeErr)
+			return
+		}
+		bridgeToken = normalizedBridgeToken
+	}
+	status := existing.Status
+	if input.Status != nil {
+		normalizedStatus, normalizeErr := normalizeRoutePolicyStatusInput(input.Status)
+		if normalizeErr != nil {
+			response.Error(c, normalizeErr)
+			return
+		}
+		status = normalizedStatus
+	}
+	if strings.TrimSpace(status) == "" {
+		status = "active"
+	}
 
 	existing.SourceChainID = sourceChainID
 	existing.DestChainID = destChainID
 	existing.DefaultBridgeType = *input.DefaultBridgeType
 	existing.FallbackMode = mode
 	existing.FallbackOrder = order
+	if input.SupportsTokenBridge != nil {
+		existing.SupportsTokenBridge = *input.SupportsTokenBridge
+	}
+	if input.SupportsDestSwap != nil {
+		existing.SupportsDestSwap = *input.SupportsDestSwap
+	}
+	if input.SupportsPrivacyForward != nil {
+		existing.SupportsPrivacyForward = *input.SupportsPrivacyForward
+	}
+	existing.BridgeToken = bridgeToken
+	existing.Status = status
 	existing.PerByteRate = perByteRate
 	existing.OverheadBytes = overheadBytes
 	existing.MinFee = minFee
@@ -481,7 +541,7 @@ func (h *CrosschainPolicyHandler) parseChainQuery(ctx context.Context, input str
 }
 
 func isValidBridgeType(v uint8) bool {
-	return v == 0 || v == 1 || v == 2
+	return v == 0 || v == 1 || v == 2 || v == 3
 }
 
 func validateBridgeOrder(order []uint8) error {
@@ -523,6 +583,48 @@ func normalizeUnsignedInteger(v string) (string, error) {
 		}
 	}
 	return raw, nil
+}
+
+func normalizeBridgeTokenInput(v *string) (string, error) {
+	if v == nil {
+		return "", nil
+	}
+	raw := strings.TrimSpace(*v)
+	if raw == "" {
+		return "", nil
+	}
+	if !strings.HasPrefix(raw, "0x") {
+		raw = "0x" + raw
+	}
+	if len(raw) != 42 {
+		return "", domainerrors.BadRequest("bridgeToken must be a valid EVM address")
+	}
+	for _, ch := range strings.TrimPrefix(raw, "0x") {
+		switch {
+		case ch >= '0' && ch <= '9':
+		case ch >= 'a' && ch <= 'f':
+		case ch >= 'A' && ch <= 'F':
+		default:
+			return "", domainerrors.BadRequest("bridgeToken must be a valid EVM address")
+		}
+	}
+	return strings.ToLower(raw), nil
+}
+
+func normalizeRoutePolicyStatusInput(v *string) (string, error) {
+	if v == nil {
+		return "active", nil
+	}
+	status := strings.ToLower(strings.TrimSpace(*v))
+	if status == "" {
+		return "active", nil
+	}
+	switch status {
+	case "active", "paused", "deprecated":
+		return status, nil
+	default:
+		return "", domainerrors.BadRequest("status must be active, paused, or deprecated")
+	}
 }
 
 func validateMinMaxFee(minFee, maxFee string) error {

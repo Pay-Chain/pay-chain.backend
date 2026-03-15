@@ -1,0 +1,5 @@
+ALTER TABLE payments
+DROP COLUMN IF EXISTS is_rescued,
+DROP COLUMN IF EXISTS rescued_at,
+DROP COLUMN IF EXISTS retry_count,
+DROP COLUMN IF EXISTS last_retry_at;

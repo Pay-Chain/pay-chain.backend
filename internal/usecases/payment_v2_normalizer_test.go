@@ -31,7 +31,7 @@ func TestNormalizeBridgeOption(t *testing.T) {
 	})
 
 	t.Run("valid options pass", func(t *testing.T) {
-		for _, option := range []uint8{BridgeOptionHyperbridge, BridgeOptionCCIP, BridgeOptionLayerZero} {
+		for _, option := range []uint8{BridgeOptionHyperbridge, BridgeOptionCCIP, BridgeOptionLayerZero, BridgeOptionHBTokenGateway} {
 			option := option
 			got, err := normalizeBridgeOption(&option)
 			if err != nil {

@@ -1,0 +1,8 @@
+ALTER TABLE route_policies
+    ADD COLUMN IF NOT EXISTS supports_token_bridge BOOLEAN NOT NULL DEFAULT FALSE,
+    ADD COLUMN IF NOT EXISTS supports_dest_swap BOOLEAN NOT NULL DEFAULT FALSE,
+    ADD COLUMN IF NOT EXISTS supports_privacy_forward BOOLEAN NOT NULL DEFAULT FALSE,
+    ADD COLUMN IF NOT EXISTS bridge_token VARCHAR(66),
+    ADD COLUMN IF NOT EXISTS status VARCHAR(16) NOT NULL DEFAULT 'active';
+
+CREATE INDEX IF NOT EXISTS idx_route_policies_status ON route_policies(status);

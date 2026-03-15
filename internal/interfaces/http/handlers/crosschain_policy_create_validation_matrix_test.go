@@ -79,6 +79,10 @@ func TestCrosschainPolicyHandler_CreateRoutePolicy_ValidationMatrix(t *testing.T
 		`{"sourceChainId":"eip155:8453","destChainId":"eip155:42161","defaultBridgeType":0,"maxFee":"bad"}`,
 		// maxFee lower than minFee
 		`{"sourceChainId":"eip155:8453","destChainId":"eip155:42161","defaultBridgeType":0,"minFee":"100","maxFee":"99"}`,
+		// invalid status
+		`{"sourceChainId":"eip155:8453","destChainId":"eip155:42161","defaultBridgeType":0,"status":"unknown"}`,
+		// invalid bridge token
+		`{"sourceChainId":"eip155:8453","destChainId":"eip155:42161","defaultBridgeType":0,"bridgeToken":"not-an-address"}`,
 	}
 
 	for _, body := range cases {

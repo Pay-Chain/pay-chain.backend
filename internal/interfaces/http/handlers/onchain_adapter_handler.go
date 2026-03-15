@@ -21,6 +21,7 @@ type onchainAdapterService interface {
 	RegisterAdapter(ctx context.Context, sourceChainInput, destChainInput string, bridgeType uint8, adapterAddress string) (string, error)
 	SetDefaultBridgeType(ctx context.Context, sourceChainInput, destChainInput string, bridgeType uint8) (string, error)
 	SetHyperbridgeConfig(ctx context.Context, sourceChainInput, destChainInput string, stateMachineIDHex, destinationContractHex string) (string, []string, error)
+	SetHyperbridgeTokenGatewayConfig(ctx context.Context, input usecases.HyperbridgeTokenGatewayConfigInput) (string, []string, error)
 	SetCCIPConfig(ctx context.Context, input usecases.CCIPConfigInput) (string, []string, error)
 	SetLayerZeroConfig(ctx context.Context, sourceChainInput, destChainInput string, dstEid *uint32, peerHex, optionsHex string) (string, []string, error)
 	ConfigureLayerZeroE2E(ctx context.Context, input usecases.LayerZeroE2EConfigureInput) (*usecases.LayerZeroE2EConfigureResult, error)
@@ -113,6 +114,43 @@ func (h *OnchainAdapterHandler) SetHyperbridgeConfig(c *gin.Context) {
 		input.DestChainID,
 		input.StateMachineIDHex,
 		input.DestinationContractHex,
+	)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, gin.H{
+		"adapterAddress": adapter,
+		"txHashes":       txHashes,
+		"destChainId":    input.DestChainID,
+	})
+}
+
+func (h *OnchainAdapterHandler) SetHyperbridgeTokenGatewayConfig(c *gin.Context) {
+	var input struct {
+		SourceChainID            string  `json:"sourceChainId" binding:"required"`
+		DestChainID              string  `json:"destChainId" binding:"required"`
+		StateMachineIDHex        string  `json:"stateMachineIdHex"`
+		SettlementExecutor       string  `json:"settlementExecutorAddress"`
+		NativeCost               *string `json:"nativeCost"`
+		RelayerFee               *string `json:"relayerFee"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		response.Error(c, domainerrors.BadRequest(err.Error()))
+		return
+	}
+
+	adapter, txHashes, err := h.usecase.SetHyperbridgeTokenGatewayConfig(
+		c.Request.Context(),
+		usecases.HyperbridgeTokenGatewayConfigInput{
+			SourceChainInput:   input.SourceChainID,
+			DestChainInput:     input.DestChainID,
+			StateMachineIDHex:  input.StateMachineIDHex,
+			SettlementExecutor: input.SettlementExecutor,
+			NativeCost:         input.NativeCost,
+			RelayerFee:         input.RelayerFee,
+		},
 	)
 	if err != nil {
 		response.Error(c, err)

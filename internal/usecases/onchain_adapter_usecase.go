@@ -47,6 +47,17 @@ var (
 		{"inputs":[{"internalType":"string","name":"chainId","type":"string"}],"name":"isChainConfigured","outputs":[{"internalType":"bool","name":"configured","type":"bool"}],"stateMutability":"view","type":"function"},
 		{"inputs":[],"name":"swapRouter","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"}
 	]`)
+	FallbackHyperbridgeTokenGatewaySenderAdminABI = mustParseABI(`[
+		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"},{"internalType":"bytes","name":"stateMachineId","type":"bytes"}],"name":"setStateMachineId","outputs":[],"stateMutability":"nonpayable","type":"function"},
+		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"},{"internalType":"address","name":"settlementExecutor","type":"address"}],"name":"setRouteSettlementExecutor","outputs":[],"stateMutability":"nonpayable","type":"function"},
+		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"},{"internalType":"uint256","name":"nativeCost","type":"uint256"}],"name":"setNativeCost","outputs":[],"stateMutability":"nonpayable","type":"function"},
+		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"},{"internalType":"uint256","name":"relayerFee","type":"uint256"}],"name":"setRelayerFee","outputs":[],"stateMutability":"nonpayable","type":"function"},
+		{"inputs":[{"internalType":"string","name":"","type":"string"}],"name":"stateMachineIds","outputs":[{"internalType":"bytes","name":"","type":"bytes"}],"stateMutability":"view","type":"function"},
+		{"inputs":[{"internalType":"string","name":"","type":"string"}],"name":"settlementExecutors","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},
+		{"inputs":[{"internalType":"string","name":"","type":"string"}],"name":"nativeCosts","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+		{"inputs":[{"internalType":"string","name":"","type":"string"}],"name":"relayerFees","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"}],"name":"isRouteConfigured","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"}
+	]`)
 	FallbackCCIPSenderAdminABI = mustParseABI(`[
 		{"inputs":[{"internalType":"string","name":"chainId","type":"string"},{"internalType":"uint64","name":"selector","type":"uint64"}],"name":"setChainSelector","outputs":[],"stateMutability":"nonpayable","type":"function"},
 		{"inputs":[{"internalType":"string","name":"chainId","type":"string"},{"internalType":"uint64","name":"selector","type":"uint64"},{"internalType":"address","name":"destAdapter","type":"address"}],"name":"setChainConfig","outputs":[],"stateMutability":"nonpayable","type":"function"},
@@ -125,14 +136,21 @@ type OnchainAdapterStatus struct {
 	HasAdapterType0                bool   `json:"hasAdapterType0"`
 	HasAdapterType1                bool   `json:"hasAdapterType1"`
 	HasAdapterType2                bool   `json:"hasAdapterType2"`
+	HasAdapterType3                bool   `json:"hasAdapterType3"`
 	AdapterType0                   string `json:"adapterType0"`
 	AdapterType1                   string `json:"adapterType1"`
 	AdapterType2                   string `json:"adapterType2"`
+	AdapterType3                   string `json:"adapterType3"`
 	HasAdapterDefault              bool   `json:"hasAdapterDefault"`
 	AdapterDefaultType             string `json:"adapterDefaultType"`
 	HyperbridgeConfigured          bool   `json:"hyperbridgeConfigured"`
 	HyperbridgeStateMachineID      string `json:"hyperbridgeStateMachineId"`
 	HyperbridgeDestinationContract string `json:"hyperbridgeDestinationContract"`
+	HyperbridgeTokenGatewayConfigured         bool   `json:"hyperbridgeTokenGatewayConfigured"`
+	HyperbridgeTokenGatewayStateMachineID     string `json:"hyperbridgeTokenGatewayStateMachineId"`
+	HyperbridgeTokenGatewaySettlementExecutor string `json:"hyperbridgeTokenGatewaySettlementExecutor"`
+	HyperbridgeTokenGatewayNativeCost         string `json:"hyperbridgeTokenGatewayNativeCost"`
+	HyperbridgeTokenGatewayRelayerFee         string `json:"hyperbridgeTokenGatewayRelayerFee"`
 	CCIPChainSelector              uint64 `json:"ccipChainSelector"`
 	CCIPDestinationAdapter         string `json:"ccipDestinationAdapter"`
 	CCIPDestinationGasLimit        string `json:"ccipDestinationGasLimit"`
@@ -266,14 +284,21 @@ func (u *OnchainAdapterUsecase) GetStatus(ctx context.Context, sourceChainInput,
 	has0, _ := u.callHasAdapter(ctx, evmClient, router.ContractAddress, routerABI, destCAIP2, 0)
 	has1, _ := u.callHasAdapter(ctx, evmClient, router.ContractAddress, routerABI, destCAIP2, 1)
 	has2, _ := u.callHasAdapter(ctx, evmClient, router.ContractAddress, routerABI, destCAIP2, 2)
+	has3, _ := u.callHasAdapter(ctx, evmClient, router.ContractAddress, routerABI, destCAIP2, 3)
 	adapter0, _ := u.callGetAdapter(ctx, evmClient, router.ContractAddress, routerABI, destCAIP2, 0)
 	adapter1, _ := u.callGetAdapter(ctx, evmClient, router.ContractAddress, routerABI, destCAIP2, 1)
 	adapter2, _ := u.callGetAdapter(ctx, evmClient, router.ContractAddress, routerABI, destCAIP2, 2)
+	adapter3, _ := u.callGetAdapter(ctx, evmClient, router.ContractAddress, routerABI, destCAIP2, 3)
 	hasDefault, _ := u.callHasAdapter(ctx, evmClient, router.ContractAddress, routerABI, destCAIP2, defaultType)
 	adapterDefault, _ := u.callGetAdapter(ctx, evmClient, router.ContractAddress, routerABI, destCAIP2, defaultType)
 	hyperConfigured := false
 	hyperStateMachine := ""
 	hyperDestination := ""
+	hyperTokenConfigured := false
+	hyperTokenStateMachine := ""
+	hyperTokenSettlementExecutor := ""
+	hyperTokenNativeCost := ""
+	hyperTokenRelayerFee := ""
 	ccipSelector := uint64(0)
 	ccipDestination := ""
 	ccipGasLimit := ""
@@ -329,6 +354,24 @@ func (u *OnchainAdapterUsecase) GetStatus(ctx context.Context, sourceChainInput,
 			lzOptionsHex = "0x" + common.Bytes2Hex(opts)
 		}
 	}
+	if has3 && adapter3 != "" && adapter3 != "0x0000000000000000000000000000000000000000" {
+		hyperTokenABI, _ := u.ResolveABIWithFallback(ctx, sourceChainID, entities.ContractTypeAdapterHBTokenSender)
+		if configured, cfgErr := u.callTokenGatewayConfigured(ctx, evmClient, adapter3, hyperTokenABI, destCAIP2); cfgErr == nil {
+			hyperTokenConfigured = configured
+		}
+		if sm, smErr := u.callHyperbridgeBytes(ctx, evmClient, adapter3, hyperTokenABI, "stateMachineIds", destCAIP2); smErr == nil && len(sm) > 0 {
+			hyperTokenStateMachine = "0x" + common.Bytes2Hex(sm)
+		}
+		if settlementExecutor, settlementErr := u.callTokenGatewaySettlementExecutor(ctx, evmClient, adapter3, hyperTokenABI, destCAIP2); settlementErr == nil {
+			hyperTokenSettlementExecutor = settlementExecutor.Hex()
+		}
+		if nativeCost, nativeCostErr := u.callTokenGatewayNativeCost(ctx, evmClient, adapter3, hyperTokenABI, destCAIP2); nativeCostErr == nil && nativeCost != nil {
+			hyperTokenNativeCost = nativeCost.String()
+		}
+		if relayerFee, relayerFeeErr := u.callTokenGatewayRelayerFee(ctx, evmClient, adapter3, hyperTokenABI, destCAIP2); relayerFeeErr == nil && relayerFee != nil {
+			hyperTokenRelayerFee = relayerFee.String()
+		}
+	}
 
 	return &OnchainAdapterStatus{
 		SourceChainID:                  sourceChain.GetCAIP2ID(),
@@ -339,14 +382,21 @@ func (u *OnchainAdapterUsecase) GetStatus(ctx context.Context, sourceChainInput,
 		HasAdapterType0:                has0,
 		HasAdapterType1:                has1,
 		HasAdapterType2:                has2,
+		HasAdapterType3:                has3,
 		AdapterType0:                   adapter0,
 		AdapterType1:                   adapter1,
 		AdapterType2:                   adapter2,
+		AdapterType3:                   adapter3,
 		HasAdapterDefault:              hasDefault,
 		AdapterDefaultType:             adapterDefault,
 		HyperbridgeConfigured:          hyperConfigured,
 		HyperbridgeStateMachineID:      hyperStateMachine,
 		HyperbridgeDestinationContract: hyperDestination,
+		HyperbridgeTokenGatewayConfigured:         hyperTokenConfigured,
+		HyperbridgeTokenGatewayStateMachineID:     hyperTokenStateMachine,
+		HyperbridgeTokenGatewaySettlementExecutor: hyperTokenSettlementExecutor,
+		HyperbridgeTokenGatewayNativeCost:         hyperTokenNativeCost,
+		HyperbridgeTokenGatewayRelayerFee:         hyperTokenRelayerFee,
 		CCIPChainSelector:              ccipSelector,
 		CCIPDestinationAdapter:         ccipDestination,
 		CCIPDestinationGasLimit:        ccipGasLimit,
@@ -373,6 +423,13 @@ func (u *OnchainAdapterUsecase) SetHyperbridgeConfig(
 	stateMachineIDHex, destinationContractHex string,
 ) (string, []string, error) {
 	return u.adminOps.SetHyperbridgeConfig(ctx, sourceChainInput, destChainInput, stateMachineIDHex, destinationContractHex)
+}
+
+func (u *OnchainAdapterUsecase) SetHyperbridgeTokenGatewayConfig(
+	ctx context.Context,
+	input HyperbridgeTokenGatewayConfigInput,
+) (string, []string, error) {
+	return u.adminOps.SetHyperbridgeTokenGatewayConfig(ctx, input)
 }
 
 func (u *OnchainAdapterUsecase) SetCCIPConfig(
@@ -809,6 +866,22 @@ func (u *OnchainAdapterUsecase) callCCIPDestinationFeeToken(ctx context.Context,
 
 func (u *OnchainAdapterUsecase) callLayerZeroConfigured(ctx context.Context, client *blockchain.EVMClient, adapterAddress string, parsedABI abi.ABI, destCAIP2 string) (bool, error) {
 	return callTypedView[bool](ctx, client, adapterAddress, parsedABI, "isRouteConfigured", destCAIP2)
+}
+
+func (u *OnchainAdapterUsecase) callTokenGatewayConfigured(ctx context.Context, client *blockchain.EVMClient, adapterAddress string, parsedABI abi.ABI, destCAIP2 string) (bool, error) {
+	return callTypedView[bool](ctx, client, adapterAddress, parsedABI, "isRouteConfigured", destCAIP2)
+}
+
+func (u *OnchainAdapterUsecase) callTokenGatewaySettlementExecutor(ctx context.Context, client *blockchain.EVMClient, adapterAddress string, parsedABI abi.ABI, destCAIP2 string) (common.Address, error) {
+	return callTypedView[common.Address](ctx, client, adapterAddress, parsedABI, "settlementExecutors", destCAIP2)
+}
+
+func (u *OnchainAdapterUsecase) callTokenGatewayNativeCost(ctx context.Context, client *blockchain.EVMClient, adapterAddress string, parsedABI abi.ABI, destCAIP2 string) (*big.Int, error) {
+	return callTypedView[*big.Int](ctx, client, adapterAddress, parsedABI, "nativeCosts", destCAIP2)
+}
+
+func (u *OnchainAdapterUsecase) callTokenGatewayRelayerFee(ctx context.Context, client *blockchain.EVMClient, adapterAddress string, parsedABI abi.ABI, destCAIP2 string) (*big.Int, error) {
+	return callTypedView[*big.Int](ctx, client, adapterAddress, parsedABI, "relayerFees", destCAIP2)
 }
 
 func (u *OnchainAdapterUsecase) callLayerZeroDstEid(ctx context.Context, client *blockchain.EVMClient, adapterAddress string, parsedABI abi.ABI, destCAIP2 string) (uint32, error) {
