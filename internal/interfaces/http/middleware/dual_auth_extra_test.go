@@ -46,7 +46,7 @@ func TestDualAuthMiddleware_ExtraBranches(t *testing.T) {
 	}
 
 	r := gin.New()
-	r.Use(middleware.DualAuthMiddleware(jwtService, apiKeyUsecase, sessionStore))
+	r.Use(middleware.DualAuthMiddleware(jwtService, apiKeyUsecase, new(MockMerchantRepository), sessionStore))
 	r.GET("/test", func(c *gin.Context) { c.Status(http.StatusNoContent) })
 
 	userID := uuid.New()
@@ -99,7 +99,7 @@ func TestDualAuthMiddleware_SessionHeader_WithNilStore_NoPanic(t *testing.T) {
 	_ = os.Setenv("INTERNAL_PROXY_SECRET", "proxy-secret")
 
 	r := gin.New()
-	r.Use(middleware.DualAuthMiddleware(jwtService, nil, nil))
+	r.Use(middleware.DualAuthMiddleware(jwtService, nil, new(MockMerchantRepository), nil))
 	r.GET("/test", func(c *gin.Context) { c.Status(http.StatusNoContent) })
 
 	req, _ := http.NewRequest("GET", "/test", nil)
@@ -146,7 +146,7 @@ func TestDualAuthMiddleware_SessionTokenPrecedenceOverBearer(t *testing.T) {
 	_ = os.Setenv("INTERNAL_PROXY_SECRET", "")
 
 	r := gin.New()
-	r.Use(middleware.DualAuthMiddleware(jwtService, nil, sessionStore))
+	r.Use(middleware.DualAuthMiddleware(jwtService, nil, new(MockMerchantRepository), sessionStore))
 	r.GET("/test", func(c *gin.Context) { c.Status(http.StatusNoContent) })
 
 	req, _ := http.NewRequest("GET", "/test", nil)
@@ -190,7 +190,7 @@ func TestDualAuthMiddleware_SessionInvalidToken_NoBearerFallback(t *testing.T) {
 	_ = os.Setenv("INTERNAL_PROXY_SECRET", "")
 
 	r := gin.New()
-	r.Use(middleware.DualAuthMiddleware(jwtService, nil, sessionStore))
+	r.Use(middleware.DualAuthMiddleware(jwtService, nil, new(MockMerchantRepository), sessionStore))
 	r.GET("/test", func(c *gin.Context) { c.Status(http.StatusNoContent) })
 
 	req, _ := http.NewRequest("GET", "/test", nil)
@@ -234,7 +234,7 @@ func TestDualAuthMiddleware_ExpiredToken_FromSessionFlow(t *testing.T) {
 	_ = os.Setenv("INTERNAL_PROXY_SECRET", "proxy-secret")
 
 	r := gin.New()
-	r.Use(middleware.DualAuthMiddleware(jwtService, nil, sessionStore))
+	r.Use(middleware.DualAuthMiddleware(jwtService, nil, new(MockMerchantRepository), sessionStore))
 	r.GET("/test", func(c *gin.Context) { c.Status(http.StatusNoContent) })
 
 	req, _ := http.NewRequest("GET", "/test", nil)
@@ -258,7 +258,7 @@ func TestDualAuthMiddleware_StrictMode_BlocksBearerFallback(t *testing.T) {
 	_ = os.Setenv("INTERNAL_PROXY_SECRET", "proxy-secret")
 
 	r := gin.New()
-	r.Use(middleware.DualAuthMiddleware(jwtService, nil, nil))
+	r.Use(middleware.DualAuthMiddleware(jwtService, nil, new(MockMerchantRepository), nil))
 	r.GET("/test", func(c *gin.Context) { c.Status(http.StatusNoContent) })
 
 	req, _ := http.NewRequest("GET", "/test", nil)
@@ -317,7 +317,7 @@ func TestDualAuthMiddleware_TrustedSession_WithBodyAndOptionalSignatureValidatio
 	_ = os.Setenv("INTERNAL_PROXY_SECRET", "proxy-secret")
 
 	r := gin.New()
-	r.Use(middleware.DualAuthMiddleware(jwtService, apiKeyUsecase, sessionStore))
+	r.Use(middleware.DualAuthMiddleware(jwtService, apiKeyUsecase, new(MockMerchantRepository), sessionStore))
 	r.POST("/test", func(c *gin.Context) { c.Status(http.StatusNoContent) })
 
 	body := `{"amount":"100"}`

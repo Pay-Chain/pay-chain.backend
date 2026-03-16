@@ -468,6 +468,9 @@ func (m *MockPaymentRequestRepository) GetExpiredPending(ctx context.Context, li
 func (m *MockPaymentRequestRepository) ExpireRequests(ctx context.Context, ids []uuid.UUID) error {
 	return m.Called(ctx, ids).Error(0)
 }
+func (m *MockPaymentRequestRepository) UpdatePaymentCode(ctx context.Context, id uuid.UUID, code string) error {
+	return m.Called(ctx, id, code).Error(0)
+}
 
 // Mock UserRepository
 type MockUserRepository struct {
@@ -568,4 +571,48 @@ func (m *MockEmailVerificationRepository) GetByToken(ctx context.Context, token 
 
 func (m *MockEmailVerificationRepository) MarkVerified(ctx context.Context, token string) error {
 	return m.Called(ctx, token).Error(0)
+}
+
+// Mock WebhookLogRepository
+type MockWebhookLogRepository struct {
+	mock.Mock
+}
+
+func (m *MockWebhookLogRepository) Create(ctx context.Context, log *entities.WebhookDelivery) error {
+	args := m.Called(ctx, log)
+	return args.Error(0)
+}
+
+func (m *MockWebhookLogRepository) Update(ctx context.Context, log *entities.WebhookDelivery) error {
+	args := m.Called(ctx, log)
+	return args.Error(0)
+}
+
+func (m *MockWebhookLogRepository) GetByID(ctx context.Context, id uuid.UUID) (*entities.WebhookDelivery, error) {
+	args := m.Called(ctx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*entities.WebhookDelivery), args.Error(1)
+}
+
+func (m *MockWebhookLogRepository) GetPendingAttempts(ctx context.Context, limit int) ([]entities.WebhookDelivery, error) {
+	args := m.Called(ctx, limit)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]entities.WebhookDelivery), args.Error(1)
+}
+
+func (m *MockWebhookLogRepository) GetMerchantHistory(ctx context.Context, merchantID uuid.UUID, limit, offset int) ([]entities.WebhookDelivery, int64, error) {
+	args := m.Called(ctx, merchantID, limit, offset)
+	if args.Get(0) == nil {
+		return nil, 0, args.Error(2)
+	}
+	return args.Get(0).([]entities.WebhookDelivery), args.Get(1).(int64), args.Error(2)
+}
+
+func (m *MockWebhookLogRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status string, httpCode int, body string) error {
+	args := m.Called(ctx, id, status, httpCode, body)
+	return args.Error(0)
 }

@@ -23,9 +23,9 @@ type onchainAdapterService interface {
 	SetHyperbridgeConfig(ctx context.Context, sourceChainInput, destChainInput string, stateMachineIDHex, destinationContractHex string) (string, []string, error)
 	SetHyperbridgeTokenGatewayConfig(ctx context.Context, input usecases.HyperbridgeTokenGatewayConfigInput) (string, []string, error)
 	SetCCIPConfig(ctx context.Context, input usecases.CCIPConfigInput) (string, []string, error)
-	SetLayerZeroConfig(ctx context.Context, sourceChainInput, destChainInput string, dstEid *uint32, peerHex, optionsHex string) (string, []string, error)
-	ConfigureLayerZeroE2E(ctx context.Context, input usecases.LayerZeroE2EConfigureInput) (*usecases.LayerZeroE2EConfigureResult, error)
-	GetLayerZeroE2EStatus(ctx context.Context, input usecases.LayerZeroE2EStatusInput) (*usecases.LayerZeroE2EStatusResult, error)
+	SetStargateConfig(ctx context.Context, sourceChainInput, destChainInput string, dstEid *uint32, peerHex, optionsHex string) (string, []string, error)
+	ConfigureStargateE2E(ctx context.Context, input usecases.StargateE2EConfigureInput) (*usecases.StargateE2EConfigureResult, error)
+	GetStargateE2EStatus(ctx context.Context, input usecases.StargateE2EStatusInput) (*usecases.StargateE2EStatusResult, error)
 	GenericInteract(ctx context.Context, sourceChainInput, contractAddress, method, abiStr string, args []interface{}) (interface{}, bool, error)
 }
 
@@ -258,7 +258,7 @@ func parseOptionalUint64(raw any) (*uint64, error) {
 	}
 }
 
-func (h *OnchainAdapterHandler) SetLayerZeroConfig(c *gin.Context) {
+func (h *OnchainAdapterHandler) SetStargateConfig(c *gin.Context) {
 	var input struct {
 		SourceChainID string  `json:"sourceChainId" binding:"required"`
 		DestChainID   string  `json:"destChainId" binding:"required"`
@@ -271,7 +271,7 @@ func (h *OnchainAdapterHandler) SetLayerZeroConfig(c *gin.Context) {
 		return
 	}
 
-	adapter, txHashes, err := h.usecase.SetLayerZeroConfig(
+	adapter, txHashes, err := h.usecase.SetStargateConfig(
 		c.Request.Context(),
 		input.SourceChainID,
 		input.DestChainID,
@@ -291,7 +291,7 @@ func (h *OnchainAdapterHandler) SetLayerZeroConfig(c *gin.Context) {
 	})
 }
 
-func (h *OnchainAdapterHandler) ConfigureLayerZeroE2E(c *gin.Context) {
+func (h *OnchainAdapterHandler) ConfigureStargateE2E(c *gin.Context) {
 	var input struct {
 		SourceChainID string `json:"sourceChainId" binding:"required"`
 		DestChainID   string `json:"destChainId" binding:"required"`
@@ -320,10 +320,10 @@ func (h *OnchainAdapterHandler) ConfigureLayerZeroE2E(c *gin.Context) {
 		return
 	}
 
-	result, err := h.usecase.ConfigureLayerZeroE2E(c.Request.Context(), usecases.LayerZeroE2EConfigureInput{
+	result, err := h.usecase.ConfigureStargateE2E(c.Request.Context(), usecases.StargateE2EConfigureInput{
 		SourceChainInput: input.SourceChainID,
 		DestChainInput:   input.DestChainID,
-		Source: usecases.LayerZeroConfigureSourceInput{
+		Source: usecases.StargateConfigureSourceInput{
 			RegisterAdapterIfMissing: input.Source.RegisterAdapterIfMissing,
 			SetDefaultBridgeType:     input.Source.SetDefaultBridgeType,
 			SenderAddress:            input.Source.SenderAddress,
@@ -333,7 +333,7 @@ func (h *OnchainAdapterHandler) ConfigureLayerZeroE2E(c *gin.Context) {
 			RegisterDelegate:         input.Source.RegisterDelegate,
 			AuthorizeVaultSpender:    input.Source.AuthorizeVaultSpender,
 		},
-		Destination: usecases.LayerZeroConfigureDestinationInput{
+		Destination: usecases.StargateConfigureDestinationInput{
 			ReceiverAddress:         input.Destination.ReceiverAddress,
 			SrcEID:                  input.Destination.SrcEID,
 			SrcSenderHex:            input.Destination.SrcSenderHex,
@@ -350,7 +350,7 @@ func (h *OnchainAdapterHandler) ConfigureLayerZeroE2E(c *gin.Context) {
 	response.Success(c, http.StatusOK, gin.H{"result": result})
 }
 
-func (h *OnchainAdapterHandler) GetLayerZeroE2EStatus(c *gin.Context) {
+func (h *OnchainAdapterHandler) GetStargateE2EStatus(c *gin.Context) {
 	sourceChainID := c.Query("sourceChainId")
 	destChainID := c.Query("destChainId")
 	if sourceChainID == "" || destChainID == "" {
@@ -368,7 +368,7 @@ func (h *OnchainAdapterHandler) GetLayerZeroE2EStatus(c *gin.Context) {
 		srcEID = uint32(parsed)
 	}
 
-	status, err := h.usecase.GetLayerZeroE2EStatus(c.Request.Context(), usecases.LayerZeroE2EStatusInput{
+	status, err := h.usecase.GetStargateE2EStatus(c.Request.Context(), usecases.StargateE2EStatusInput{
 		SourceChainInput:           sourceChainID,
 		DestChainInput:             destChainID,
 		DestinationReceiverAddress: c.Query("destinationReceiverAddress"),

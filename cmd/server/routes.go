@@ -1,7 +1,10 @@
 package main
 
 import (
+	"time"
+
 	"github.com/gin-gonic/gin"
+	"payment-kita.backend/internal/domain"
 	"payment-kita.backend/internal/interfaces/http/handlers"
 	"payment-kita.backend/internal/interfaces/http/middleware"
 )
@@ -27,6 +30,8 @@ type routeDeps struct {
 	crosschainPolicyHandler    *handlers.CrosschainPolicyHandler
 	routeErrorHandler          *handlers.RouteErrorHandler
 	rpcHandler                 *handlers.RpcHandler
+	paymentResolveHandler      *handlers.PaymentResolveHandler
+	auditLogRepo               domain.AuditLogRepository
 	dualAuthMiddleware         gin.HandlerFunc
 }
 
@@ -63,15 +68,24 @@ func registerAPIV1Routes(r *gin.Engine, d routeDeps) {
 		paymentRequests := v1.Group("/payment-requests")
 		paymentRequests.Use(d.dualAuthMiddleware)
 		{
-			paymentRequests.POST("", d.paymentRequestHandler.CreatePaymentRequest)
+			paymentRequests.POST("", middleware.IdempotencyMiddleware(), d.paymentRequestHandler.CreatePaymentRequest)
 			paymentRequests.GET("", d.paymentRequestHandler.ListPaymentRequests)
 			paymentRequests.GET("/:id", d.paymentRequestHandler.GetPaymentRequest)
 		}
 
-		// Public payment request route (for payers)
-		v1.GET("/pay/:id", d.paymentRequestHandler.GetPublicPaymentRequest)
+	// Public payment request route (for payers)
+	v1.GET("/pay/:id", d.paymentRequestHandler.GetPublicPaymentRequest)
+	v1.GET("/resolve-payment-code", d.paymentResolveHandler.Resolve)
 
-		// Wallet routes (protected)
+	// Partner Flow (Protected & Audited)
+	partnerGroup := v1.Group("")
+	partnerGroup.Use(middleware.AuditMiddleware(d.auditLogRepo))
+	{
+		// Local Resolve API route (for payers) with Rate Limiting
+		partnerGroup.GET("/payment/:id", middleware.RateLimitMiddleware(middleware.IPIdentifier, 60, time.Minute), d.paymentRequestHandler.ResolvePaymentRequest)
+	}
+
+	// Wallet routes (protected)
 		wallets := v1.Group("/wallets")
 		wallets.Use(d.dualAuthMiddleware)
 		{
@@ -180,6 +194,7 @@ func registerAPIV1Routes(r *gin.Engine, d routeDeps) {
 			admin.POST("/rpcs", d.rpcHandler.CreateRPC)
 			admin.PUT("/rpcs/:id", d.rpcHandler.UpdateRPC)
 			admin.DELETE("/rpcs/:id", d.rpcHandler.DeleteRPC)
+			admin.POST("/webhooks/:id/retry", d.webhookHandler.RetryWebhook)
 
 			admin.GET("/tokens", d.tokenHandler.ListSupportedTokens)
 			admin.POST("/tokens", d.tokenHandler.CreateToken)
@@ -212,9 +227,9 @@ func registerAPIV1Routes(r *gin.Engine, d routeDeps) {
 			admin.POST("/onchain-adapters/hyperbridge-config", d.onchainAdapterHandler.SetHyperbridgeConfig)
 			admin.POST("/onchain-adapters/hyperbridge-token-gateway-config", d.onchainAdapterHandler.SetHyperbridgeTokenGatewayConfig)
 			admin.POST("/onchain-adapters/ccip-config", d.onchainAdapterHandler.SetCCIPConfig)
-			admin.POST("/onchain-adapters/layerzero-config", d.onchainAdapterHandler.SetLayerZeroConfig)
-			admin.POST("/onchain-adapters/layerzero-configure-e2e", d.onchainAdapterHandler.ConfigureLayerZeroE2E)
-			admin.GET("/onchain-adapters/layerzero-e2e-status", d.onchainAdapterHandler.GetLayerZeroE2EStatus)
+			admin.POST("/onchain-adapters/stargate-config", d.onchainAdapterHandler.SetStargateConfig)
+			admin.POST("/onchain-adapters/stargate-configure-e2e", d.onchainAdapterHandler.ConfigureStargateE2E)
+			admin.GET("/onchain-adapters/stargate-e2e-status", d.onchainAdapterHandler.GetStargateE2EStatus)
 			admin.POST("/contracts/interact", d.onchainAdapterHandler.Interact)
 			admin.GET("/contracts/config-check", d.contractConfigAuditHandler.Check)
 			admin.GET("/contracts/:id/config-check", d.contractConfigAuditHandler.CheckByContract)
@@ -230,10 +245,10 @@ func registerAPIV1Routes(r *gin.Engine, d routeDeps) {
 			admin.PUT("/route-policies/:id", d.crosschainPolicyHandler.UpdateRoutePolicy)
 			admin.DELETE("/route-policies/:id", d.crosschainPolicyHandler.DeleteRoutePolicy)
 
-			admin.GET("/layerzero-configs", d.crosschainPolicyHandler.ListLayerZeroConfigs)
-			admin.POST("/layerzero-configs", d.crosschainPolicyHandler.CreateLayerZeroConfig)
-			admin.PUT("/layerzero-configs/:id", d.crosschainPolicyHandler.UpdateLayerZeroConfig)
-			admin.DELETE("/layerzero-configs/:id", d.crosschainPolicyHandler.DeleteLayerZeroConfig)
+			admin.GET("/stargate-configs", d.crosschainPolicyHandler.ListStargateConfigs)
+			admin.POST("/stargate-configs", d.crosschainPolicyHandler.CreateStargateConfig)
+			admin.PUT("/stargate-configs/:id", d.crosschainPolicyHandler.UpdateStargateConfig)
+			admin.DELETE("/stargate-configs/:id", d.crosschainPolicyHandler.DeleteStargateConfig)
 
 			admin.GET("/diagnostics/route-error/:paymentId", d.routeErrorHandler.GetRouteError)
 		}

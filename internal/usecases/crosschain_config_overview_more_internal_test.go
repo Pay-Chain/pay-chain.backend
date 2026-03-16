@@ -54,7 +54,7 @@ func TestCrosschainConfigUsecase_Overview_Paths(t *testing.T) {
 				HyperbridgeConfigured:  true,
 				CCIPChainSelector:      0,
 				CCIPDestinationAdapter: "0x",
-				LayerZeroConfigured:    false,
+				StargateConfigured:    false,
 			}, nil
 		},
 	}

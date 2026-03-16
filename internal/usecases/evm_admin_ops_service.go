@@ -55,21 +55,21 @@ func newEVMAdminOpsService(
 	}
 }
 
-type LayerZeroE2EStepStatus string
+type StargateE2EStepStatus string
 
 const (
-	LayerZeroStepSuccess LayerZeroE2EStepStatus = "SUCCESS"
-	LayerZeroStepSkipped LayerZeroE2EStepStatus = "SKIPPED"
+	StargateStepSuccess StargateE2EStepStatus = "SUCCESS"
+	StargateStepSkipped StargateE2EStepStatus = "SKIPPED"
 )
 
-type LayerZeroE2EStepResult struct {
+type StargateE2EStepResult struct {
 	Name   string                 `json:"name"`
-	Status LayerZeroE2EStepStatus `json:"status"`
+	Status StargateE2EStepStatus `json:"status"`
 	TxHash string                 `json:"txHash,omitempty"`
 	Reason string                 `json:"reason,omitempty"`
 }
 
-type LayerZeroConfigureSourceInput struct {
+type StargateConfigureSourceInput struct {
 	RegisterAdapterIfMissing bool   `json:"registerAdapterIfMissing"`
 	SetDefaultBridgeType     bool   `json:"setDefaultBridgeType"`
 	SenderAddress            string `json:"senderAddress"`
@@ -80,7 +80,7 @@ type LayerZeroConfigureSourceInput struct {
 	AuthorizeVaultSpender    bool   `json:"authorizeVaultSpender"`
 }
 
-type LayerZeroConfigureDestinationInput struct {
+type StargateConfigureDestinationInput struct {
 	ChainID                 uuid.UUID `json:"chainId"`
 	ReceiverAddress         string    `json:"receiverAddress"`
 	SrcEID                  uint32    `json:"srcEid"`
@@ -91,19 +91,19 @@ type LayerZeroConfigureDestinationInput struct {
 	AuthorizeGatewayAdapter bool      `json:"authorizeGatewayAdapter"`
 }
 
-type LayerZeroE2EConfigureInput struct {
+type StargateE2EConfigureInput struct {
 	SourceChainInput string                             `json:"sourceChainId"`
 	DestChainInput   string                             `json:"destChainId"`
-	Source           LayerZeroConfigureSourceInput      `json:"source"`
-	Destination      LayerZeroConfigureDestinationInput `json:"destination"`
+	Source           StargateConfigureSourceInput      `json:"source"`
+	Destination      StargateConfigureDestinationInput `json:"destination"`
 }
 
-type LayerZeroE2EConfigureResult struct {
+type StargateE2EConfigureResult struct {
 	Status string                   `json:"status"`
-	Steps  []LayerZeroE2EStepResult `json:"steps"`
+	Steps  []StargateE2EStepResult `json:"steps"`
 }
 
-type LayerZeroE2EStatusInput struct {
+type StargateE2EStatusInput struct {
 	SourceChainInput           string    `json:"sourceChainId"`
 	DestChainInput             string    `json:"destChainId"`
 	DestinationChainID         uuid.UUID `json:"destinationChainId"`
@@ -114,9 +114,9 @@ type LayerZeroE2EStatusInput struct {
 	DestinationGatewayAddress  string    `json:"destinationGatewayAddress"`
 }
 
-type LayerZeroE2EStatusChecks struct {
+type StargateE2EStatusChecks struct {
 	SourceAdapterRegistered      bool `json:"sourceAdapterRegistered"`
-	SourceDefaultBridgeLayerZero bool `json:"sourceDefaultBridgeLayerZero"`
+	SourceDefaultBridgeStargate bool `json:"sourceDefaultBridgeStargate"`
 	SourceRouteConfigured        bool `json:"sourceRouteConfigured"`
 	SourcePeerMatched            bool `json:"sourcePeerMatched"`
 	SourceSenderVaultAuthorized  bool `json:"sourceSenderVaultAuthorized"`
@@ -126,9 +126,9 @@ type LayerZeroE2EStatusChecks struct {
 	DestinationGatewayAuthorized bool `json:"destinationGatewayAuthorized"`
 }
 
-type LayerZeroE2EStatusResult struct {
+type StargateE2EStatusResult struct {
 	Ready  bool                     `json:"ready"`
-	Checks LayerZeroE2EStatusChecks `json:"checks"`
+	Checks StargateE2EStatusChecks `json:"checks"`
 	Issues []string                 `json:"issues"`
 }
 
@@ -508,7 +508,7 @@ func (s *evmAdminOpsService) SetCCIPConfig(ctx context.Context, input CCIPConfig
 	return adapter, txHashes, nil
 }
 
-func (s *evmAdminOpsService) SetLayerZeroConfig(
+func (s *evmAdminOpsService) SetStargateConfig(
 	ctx context.Context,
 	sourceChainInput, destChainInput string,
 	dstEid *uint32, peerHex, optionsHex string,
@@ -522,10 +522,10 @@ func (s *evmAdminOpsService) SetLayerZeroConfig(
 		return "", nil, err
 	}
 	if !isValidAdapterAddress(adapter) {
-		return "", nil, domainerrors.BadRequest("layerzero adapter (type 2) is not registered")
+		return "", nil, domainerrors.BadRequest("stargate adapter (type 2) is not registered")
 	}
 
-	parsedABI, err := s.resolveABI(ctx, resolved.sourceChainID, entities.ContractTypeAdapterLayerZero)
+	parsedABI, err := s.resolveABI(ctx, resolved.sourceChainID, entities.ContractTypeAdapterStargate)
 	if err != nil {
 		return "", nil, err
 	}
@@ -565,10 +565,10 @@ func (s *evmAdminOpsService) SetLayerZeroConfig(
 	return adapter, txHashes, nil
 }
 
-func (s *evmAdminOpsService) ConfigureLayerZeroE2E(
+func (s *evmAdminOpsService) ConfigureStargateE2E(
 	ctx context.Context,
-	input LayerZeroE2EConfigureInput,
-) (*LayerZeroE2EConfigureResult, error) {
+	input StargateE2EConfigureInput,
+) (*StargateE2EConfigureResult, error) {
 	resolved, err := s.resolveContext(ctx, input.SourceChainInput, input.DestChainInput)
 	if err != nil {
 		return nil, err
@@ -582,7 +582,7 @@ func (s *evmAdminOpsService) ConfigureLayerZeroE2E(
 	if err != nil {
 		return nil, err
 	}
-	senderABI, err := s.resolveABI(ctx, resolved.sourceChainID, entities.ContractTypeAdapterLayerZero)
+	senderABI, err := s.resolveABI(ctx, resolved.sourceChainID, entities.ContractTypeAdapterStargate)
 	if err != nil {
 		return nil, err
 	}
@@ -597,7 +597,7 @@ func (s *evmAdminOpsService) ConfigureLayerZeroE2E(
 
 	var destinationReceiverABI, destinationVaultABI, destinationGatewayABI abi.ABI
 	if input.Destination.ChainID != uuid.Nil {
-		destinationReceiverABI, err = s.resolveABI(ctx, input.Destination.ChainID, entities.ContractTypeReceiverLayerZero)
+		destinationReceiverABI, err = s.resolveABI(ctx, input.Destination.ChainID, entities.ContractTypeReceiverStargate)
 		if err != nil {
 			return nil, err
 		}
@@ -615,12 +615,12 @@ func (s *evmAdminOpsService) ConfigureLayerZeroE2E(
 		}
 	}
 
-	steps := make([]LayerZeroE2EStepResult, 0, 12)
+	steps := make([]StargateE2EStepResult, 0, 12)
 	addSuccess := func(name, txHash string) {
-		steps = append(steps, LayerZeroE2EStepResult{Name: name, Status: LayerZeroStepSuccess, TxHash: txHash})
+		steps = append(steps, StargateE2EStepResult{Name: name, Status: StargateStepSuccess, TxHash: txHash})
 	}
 	addSkipped := func(name, reason string) {
-		steps = append(steps, LayerZeroE2EStepResult{Name: name, Status: LayerZeroStepSkipped, Reason: reason})
+		steps = append(steps, StargateE2EStepResult{Name: name, Status: StargateStepSkipped, Reason: reason})
 	}
 
 	currentSender, err := s.getAdapter(ctx, resolved.sourceChainID, resolved.routerAddress, resolved.destCAIP2, 2)
@@ -639,7 +639,7 @@ func (s *evmAdminOpsService) ConfigureLayerZeroE2E(
 
 	if !isValidAdapterAddress(currentSender) {
 		if !input.Source.RegisterAdapterIfMissing {
-			return nil, domainerrors.BadRequest("layerzero adapter (type 2) is not registered and registerAdapterIfMissing is false")
+			return nil, domainerrors.BadRequest("stargate adapter (type 2) is not registered and registerAdapterIfMissing is false")
 		}
 		if !isValidAdapterAddress(sourceSender) {
 			return nil, domainerrors.BadRequest("senderAddress is required when adapter type 2 is missing")
@@ -678,7 +678,7 @@ func (s *evmAdminOpsService) ConfigureLayerZeroE2E(
 	}
 
 	if !isValidAdapterAddress(sourceSender) {
-		return nil, domainerrors.BadRequest("cannot resolve active layerzero sender adapter")
+		return nil, domainerrors.BadRequest("cannot resolve active stargate sender adapter")
 	}
 
 	if input.Source.SetDefaultBridgeType {
@@ -847,22 +847,22 @@ func (s *evmAdminOpsService) ConfigureLayerZeroE2E(
 		}
 	}
 
-	return &LayerZeroE2EConfigureResult{
+	return &StargateE2EConfigureResult{
 		Status: "SUCCESS",
 		Steps:  steps,
 	}, nil
 }
 
-func (s *evmAdminOpsService) GetLayerZeroE2EStatus(
+func (s *evmAdminOpsService) GetStargateE2EStatus(
 	ctx context.Context,
-	input LayerZeroE2EStatusInput,
-) (*LayerZeroE2EStatusResult, error) {
+	input StargateE2EStatusInput,
+) (*StargateE2EStatusResult, error) {
 	resolved, err := s.resolveContext(ctx, input.SourceChainInput, input.DestChainInput)
 	if err != nil {
 		return nil, err
 	}
-	result := &LayerZeroE2EStatusResult{
-		Checks: LayerZeroE2EStatusChecks{},
+	result := &StargateE2EStatusResult{
+		Checks: StargateE2EStatusChecks{},
 		Issues: make([]string, 0, 8),
 	}
 
@@ -870,7 +870,7 @@ func (s *evmAdminOpsService) GetLayerZeroE2EStatus(
 	if err != nil {
 		return nil, err
 	}
-	senderABI, err := s.resolveABI(ctx, resolved.sourceChainID, entities.ContractTypeAdapterLayerZero)
+	senderABI, err := s.resolveABI(ctx, resolved.sourceChainID, entities.ContractTypeAdapterStargate)
 	if err != nil {
 		return nil, err
 	}
@@ -879,14 +879,14 @@ func (s *evmAdminOpsService) GetLayerZeroE2EStatus(
 	if adapterErr == nil && isValidAdapterAddress(senderAddress) {
 		result.Checks.SourceAdapterRegistered = true
 	} else {
-		result.Issues = append(result.Issues, "source adapter layerzero (type 2) is not registered")
+		result.Issues = append(result.Issues, "source adapter stargate (type 2) is not registered")
 	}
 
 	defaultBridge, defaultErr := s.readUint8(ctx, resolved.sourceChainID, resolved.gatewayAddress, gatewayABI, "defaultBridgeTypes", resolved.destCAIP2)
 	if defaultErr == nil && defaultBridge == 2 {
-		result.Checks.SourceDefaultBridgeLayerZero = true
+		result.Checks.SourceDefaultBridgeStargate = true
 	} else {
-		result.Issues = append(result.Issues, "source gateway default bridge is not LayerZero (2)")
+		result.Issues = append(result.Issues, "source gateway default bridge is not Stargate (2)")
 	}
 
 	if isValidAdapterAddress(senderAddress) {
@@ -923,7 +923,7 @@ func (s *evmAdminOpsService) GetLayerZeroE2EStatus(
 		common.IsHexAddress(input.DestinationReceiverAddress) &&
 		input.DestinationSrcEID != 0 &&
 		strings.TrimSpace(input.DestinationSrcSenderHex) != "" {
-		receiverABI, receiverErr := s.resolveABI(ctx, input.DestinationChainID, entities.ContractTypeReceiverLayerZero)
+		receiverABI, receiverErr := s.resolveABI(ctx, input.DestinationChainID, entities.ContractTypeReceiverStargate)
 		if receiverErr == nil {
 			srcSender, parseErr := parseHexToBytes32(input.DestinationSrcSenderHex)
 			if parseErr == nil {

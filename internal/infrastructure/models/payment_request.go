@@ -21,6 +21,7 @@ type PaymentRequest struct {
 	ExpiresAt     time.Time `gorm:"not null"`
 	TxHash        string    `gorm:"type:varchar(255)"`
 	PayerAddress  string    `gorm:"type:varchar(255)"`
+	PaymentCode   string    `gorm:"column:payment_code;type:text"`
 	CompletedAt   *time.Time
 	CreatedAt     time.Time
 	UpdatedAt     time.Time

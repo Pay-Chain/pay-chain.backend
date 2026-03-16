@@ -20,9 +20,9 @@ type onchainAdapterServiceStub struct {
 	setHyperbridge   func(context.Context, string, string, string, string) (string, []string, error)
 	setHyperbridgeTokenGateway func(context.Context, usecases.HyperbridgeTokenGatewayConfigInput) (string, []string, error)
 	setCCIP          func(context.Context, usecases.CCIPConfigInput) (string, []string, error)
-	setLayerZero     func(context.Context, string, string, *uint32, string, string) (string, []string, error)
-	configureLZE2E   func(context.Context, usecases.LayerZeroE2EConfigureInput) (*usecases.LayerZeroE2EConfigureResult, error)
-	getLZE2EStatus   func(context.Context, usecases.LayerZeroE2EStatusInput) (*usecases.LayerZeroE2EStatusResult, error)
+	setStargate     func(context.Context, string, string, *uint32, string, string) (string, []string, error)
+	configureLZE2E   func(context.Context, usecases.StargateE2EConfigureInput) (*usecases.StargateE2EConfigureResult, error)
+	getLZE2EStatus   func(context.Context, usecases.StargateE2EStatusInput) (*usecases.StargateE2EStatusResult, error)
 	genericInteract  func(context.Context, string, string, string, string, []interface{}) (interface{}, bool, error)
 }
 
@@ -47,18 +47,18 @@ func (s onchainAdapterServiceStub) SetHyperbridgeTokenGatewayConfig(ctx context.
 func (s onchainAdapterServiceStub) SetCCIPConfig(ctx context.Context, input usecases.CCIPConfigInput) (string, []string, error) {
 	return s.setCCIP(ctx, input)
 }
-func (s onchainAdapterServiceStub) SetLayerZeroConfig(ctx context.Context, sourceChainInput, destChainInput string, dstEid *uint32, peerHex, optionsHex string) (string, []string, error) {
-	return s.setLayerZero(ctx, sourceChainInput, destChainInput, dstEid, peerHex, optionsHex)
+func (s onchainAdapterServiceStub) SetStargateConfig(ctx context.Context, sourceChainInput, destChainInput string, dstEid *uint32, peerHex, optionsHex string) (string, []string, error) {
+	return s.setStargate(ctx, sourceChainInput, destChainInput, dstEid, peerHex, optionsHex)
 }
-func (s onchainAdapterServiceStub) ConfigureLayerZeroE2E(ctx context.Context, input usecases.LayerZeroE2EConfigureInput) (*usecases.LayerZeroE2EConfigureResult, error) {
+func (s onchainAdapterServiceStub) ConfigureStargateE2E(ctx context.Context, input usecases.StargateE2EConfigureInput) (*usecases.StargateE2EConfigureResult, error) {
 	if s.configureLZE2E == nil {
-		return &usecases.LayerZeroE2EConfigureResult{Status: "SUCCESS"}, nil
+		return &usecases.StargateE2EConfigureResult{Status: "SUCCESS"}, nil
 	}
 	return s.configureLZE2E(ctx, input)
 }
-func (s onchainAdapterServiceStub) GetLayerZeroE2EStatus(ctx context.Context, input usecases.LayerZeroE2EStatusInput) (*usecases.LayerZeroE2EStatusResult, error) {
+func (s onchainAdapterServiceStub) GetStargateE2EStatus(ctx context.Context, input usecases.StargateE2EStatusInput) (*usecases.StargateE2EStatusResult, error) {
 	if s.getLZE2EStatus == nil {
-		return &usecases.LayerZeroE2EStatusResult{Ready: true}, nil
+		return &usecases.StargateE2EStatusResult{Ready: true}, nil
 	}
 	return s.getLZE2EStatus(ctx, input)
 }
@@ -86,7 +86,7 @@ func TestOnchainAdapterHandler_SuccessPaths(t *testing.T) {
 			setCCIP: func(_ context.Context, _ usecases.CCIPConfigInput) (string, []string, error) {
 				return "0xccip", []string{"0x3"}, nil
 			},
-			setLayerZero: func(_ context.Context, _, _ string, _ *uint32, _, _ string) (string, []string, error) {
+			setStargate: func(_ context.Context, _, _ string, _ *uint32, _, _ string) (string, []string, error) {
 				return "0xlz", []string{"0x4"}, nil
 			},
 			genericInteract: func(_ context.Context, _, _, _, _ string, _ []interface{}) (interface{}, bool, error) {
@@ -102,9 +102,9 @@ func TestOnchainAdapterHandler_SuccessPaths(t *testing.T) {
 	r.POST("/hyperbridge", h.SetHyperbridgeConfig)
 	r.POST("/hyperbridge-token-gateway", h.SetHyperbridgeTokenGatewayConfig)
 	r.POST("/ccip", h.SetCCIPConfig)
-	r.POST("/layerzero", h.SetLayerZeroConfig)
-	r.POST("/layerzero-e2e", h.ConfigureLayerZeroE2E)
-	r.GET("/layerzero-e2e-status", h.GetLayerZeroE2EStatus)
+	r.POST("/stargate", h.SetStargateConfig)
+	r.POST("/stargate-e2e", h.ConfigureStargateE2E)
+	r.GET("/stargate-e2e-status", h.GetStargateE2EStatus)
 
 	req := httptest.NewRequest(http.MethodGet, "/status?sourceChainId=eip155:8453&destChainId=eip155:42161", nil)
 	rec := httptest.NewRecorder()
@@ -162,7 +162,7 @@ func TestOnchainAdapterHandler_SuccessPaths(t *testing.T) {
 			},
 		},
 		{
-			path: "/layerzero",
+			path: "/stargate",
 			body: map[string]interface{}{
 				"sourceChainId": "eip155:8453",
 				"destChainId":   "eip155:42161",
@@ -172,7 +172,7 @@ func TestOnchainAdapterHandler_SuccessPaths(t *testing.T) {
 			},
 		},
 		{
-			path: "/layerzero-e2e",
+			path: "/stargate-e2e",
 			body: map[string]interface{}{
 				"sourceChainId": "eip155:8453",
 				"destChainId":   "eip155:42161",
@@ -203,7 +203,7 @@ func TestOnchainAdapterHandler_SuccessPaths(t *testing.T) {
 
 	req = httptest.NewRequest(
 		http.MethodGet,
-		"/layerzero-e2e-status?sourceChainId=eip155:8453&destChainId=eip155:42161&destinationSrcEid=30184&destinationSrcSenderHex=0x0000000000000000000000001111111111111111111111111111111111111111",
+		"/stargate-e2e-status?sourceChainId=eip155:8453&destChainId=eip155:42161&destinationSrcEid=30184&destinationSrcSenderHex=0x0000000000000000000000001111111111111111111111111111111111111111",
 		nil,
 	)
 	rec = httptest.NewRecorder()

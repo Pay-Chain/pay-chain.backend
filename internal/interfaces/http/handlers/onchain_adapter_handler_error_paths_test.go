@@ -90,7 +90,7 @@ func TestOnchainAdapterHandler_ErrorPathsAfterValidation(t *testing.T) {
 	r.POST("/default-bridge", h.SetDefaultBridgeType)
 	r.POST("/hyperbridge", h.SetHyperbridgeConfig)
 	r.POST("/ccip", h.SetCCIPConfig)
-	r.POST("/layerzero", h.SetLayerZeroConfig)
+	r.POST("/stargate", h.SetStargateConfig)
 
 	req := httptest.NewRequest(http.MethodGet, "/status?sourceChainId=eip155:8453&destChainId=eip155:42161", nil)
 	rec := httptest.NewRecorder()
@@ -137,7 +137,7 @@ func TestOnchainAdapterHandler_ErrorPathsAfterValidation(t *testing.T) {
 			},
 		},
 		{
-			path: "/layerzero",
+			path: "/stargate",
 			body: map[string]interface{}{
 				"sourceChainId": "eip155:8453",
 				"destChainId":   "eip155:42161",

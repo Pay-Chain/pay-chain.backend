@@ -68,6 +68,7 @@ type BlockchainConfig struct {
 type SecurityConfig struct {
 	ApiKeyEncryptionKey  string
 	SessionEncryptionKey string
+	JweMasterKey         string
 }
 
 // Load loads configuration from environment variables
@@ -106,6 +107,7 @@ func Load() *Config {
 		Security: SecurityConfig{
 			ApiKeyEncryptionKey:  getEnv("API_KEY_ENCRYPTION_KEY", "0000000000000000000000000000000000000000000000000000000000000000"), // 32-bytes hex string
 			SessionEncryptionKey: getEnv("SESSION_ENCRYPTION_KEY", "0000000000000000000000000000000000000000000000000000000000000000"), // 32-bytes hex string
+			JweMasterKey:         getEnv("JWE_MASTER_KEY", "0000000000000000000000000000000000000000000000000000000000000000"),         // 32-bytes hex string
 		},
 	}
 }

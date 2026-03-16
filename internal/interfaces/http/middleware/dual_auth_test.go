@@ -7,6 +7,7 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/json"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -84,11 +85,48 @@ func (m *MockUserRepository) List(ctx context.Context, s string) ([]*entities.Us
 	return nil, nil
 }
 
+type MockMerchantRepository struct{ mock.Mock }
+
+func (m *MockMerchantRepository) GetByID(ctx context.Context, id uuid.UUID) (*entities.Merchant, error) {
+	args := m.Called(ctx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*entities.Merchant), args.Error(1)
+}
+func (m *MockMerchantRepository) GetByUserID(ctx context.Context, userID uuid.UUID) (*entities.Merchant, error) {
+	args := m.Called(ctx, userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*entities.Merchant), args.Error(1)
+}
+func (m *MockMerchantRepository) Create(ctx context.Context, merchant *entities.Merchant) error {
+	return m.Called(ctx, merchant).Error(0)
+}
+func (m *MockMerchantRepository) Update(ctx context.Context, merchant *entities.Merchant) error {
+	return m.Called(ctx, merchant).Error(0)
+}
+func (m *MockMerchantRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status entities.MerchantStatus) error {
+	return m.Called(ctx, id, status).Error(0)
+}
+func (m *MockMerchantRepository) List(ctx context.Context) ([]*entities.Merchant, error) {
+	args := m.Called(ctx)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*entities.Merchant), args.Error(1)
+}
+func (m *MockMerchantRepository) SoftDelete(ctx context.Context, id uuid.UUID) error {
+	return m.Called(ctx, id).Error(0)
+}
+
 func TestDualAuthMiddleware_ApiKey(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	mockApiKeyRepo := new(MockApiKeyRepository)
 	mockUserRepo := new(MockUserRepository)
+	// 32 bytes for AES-256
 	encryptionKey := "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
 	apiKeyUsecase := usecases.NewApiKeyUsecase(mockApiKeyRepo, mockUserRepo, encryptionKey)
 
@@ -96,10 +134,17 @@ func TestDualAuthMiddleware_ApiKey(t *testing.T) {
 	// sessionStore would need redis, let's keep it nil for now if the middleware handles it
 
 	r := gin.New()
-	r.Use(middleware.DualAuthMiddleware(jwtService, apiKeyUsecase, nil))
+	mockMerchantRepo := new(MockMerchantRepository)
+	r.Use(middleware.DualAuthMiddleware(jwtService, apiKeyUsecase, mockMerchantRepo, nil))
 	r.GET("/test", func(c *gin.Context) {
 		userID, _ := c.Get(middleware.UserIDKey)
-		c.JSON(http.StatusOK, gin.H{"userId": userID})
+		merchantID, _ := c.Get(middleware.MerchantIDKey)
+		isMerchant, _ := c.Get(middleware.IsMerchantAuthenticatedKey)
+		c.JSON(http.StatusOK, gin.H{
+			"userId":     userID,
+			"merchantId": merchantID,
+			"isMerchant": isMerchant,
+		})
 	})
 
 	userID := uuid.New()
@@ -128,8 +173,10 @@ func TestDualAuthMiddleware_ApiKey(t *testing.T) {
 	stringToSign := fmt.Sprintf("%s%s%s%s", timestamp, "GET", "/test", bodyHash)
 	signature := hmacSha256Hex(secretKey, stringToSign)
 
+	merchantID := uuid.New()
 	mockApiKeyRepo.On("FindByKeyHash", mock.Anything, keyHash).Return(keyEntity, nil)
 	mockApiKeyRepo.On("Update", mock.Anything, mock.Anything).Return(nil)
+	mockMerchantRepo.On("GetByUserID", mock.Anything, userID).Return(&entities.Merchant{ID: merchantID}, nil)
 
 	req, _ := http.NewRequest("GET", "/test", nil)
 	req.Header.Set("X-Api-Key", apiKey)
@@ -140,7 +187,11 @@ func TestDualAuthMiddleware_ApiKey(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Contains(t, w.Body.String(), userID.String())
+	var resp map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.Equal(t, userID.String(), resp["userId"])
+	assert.Equal(t, merchantID.String(), resp["merchantId"])
+	assert.True(t, resp["isMerchant"].(bool))
 }
 
 func TestDualAuthMiddleware_JWT(t *testing.T) {
@@ -150,7 +201,7 @@ func TestDualAuthMiddleware_JWT(t *testing.T) {
 	jwtService := jwt.NewJWTService("secret", time.Hour, time.Hour*24)
 
 	r := gin.New()
-	r.Use(middleware.DualAuthMiddleware(jwtService, nil, nil))
+	r.Use(middleware.DualAuthMiddleware(jwtService, nil, new(MockMerchantRepository), nil))
 	r.GET("/test", func(c *gin.Context) {
 		userID, _ := c.Get(middleware.UserIDKey)
 		c.JSON(http.StatusOK, gin.H{"userId": userID})
@@ -184,7 +235,7 @@ func TestDualAuthMiddleware_JWTWithSignature(t *testing.T) {
 	jwtService := jwt.NewJWTService("secret", time.Hour, time.Hour*24)
 
 	r := gin.New()
-	r.Use(middleware.DualAuthMiddleware(jwtService, apiKeyUsecase, nil))
+	r.Use(middleware.DualAuthMiddleware(jwtService, apiKeyUsecase, new(MockMerchantRepository), nil))
 	r.GET("/test", func(c *gin.Context) {
 		userID, _ := c.Get(middleware.UserIDKey)
 		c.JSON(http.StatusOK, gin.H{"userId": userID})
@@ -232,7 +283,7 @@ func TestDualAuthMiddleware_RequestBodyReadError(t *testing.T) {
 	jwtService := jwt.NewJWTService("secret", time.Hour, time.Hour*24)
 
 	r := gin.New()
-	r.Use(middleware.DualAuthMiddleware(jwtService, nil, nil))
+	r.Use(middleware.DualAuthMiddleware(jwtService, nil, new(MockMerchantRepository), nil))
 	r.POST("/test", func(c *gin.Context) {
 		c.Status(http.StatusOK)
 	})
@@ -255,7 +306,7 @@ func TestDualAuthMiddleware_ApiKeyInvalid(t *testing.T) {
 	jwtService := jwt.NewJWTService("secret", time.Hour, time.Hour*24)
 
 	r := gin.New()
-	r.Use(middleware.DualAuthMiddleware(jwtService, apiKeyUsecase, nil))
+	r.Use(middleware.DualAuthMiddleware(jwtService, apiKeyUsecase, new(MockMerchantRepository), nil))
 	r.GET("/test", func(c *gin.Context) { c.Status(http.StatusOK) })
 
 	apiKey := "pk_bad"
@@ -280,7 +331,7 @@ func TestDualAuthMiddleware_JWTInvalidToken_AndNoAuth(t *testing.T) {
 	jwtService := jwt.NewJWTService("secret", time.Hour, time.Hour*24)
 
 	r := gin.New()
-	r.Use(middleware.DualAuthMiddleware(jwtService, nil, nil))
+	r.Use(middleware.DualAuthMiddleware(jwtService, nil, new(MockMerchantRepository), nil))
 	r.GET("/test", func(c *gin.Context) { c.Status(http.StatusOK) })
 
 	req, _ := http.NewRequest("GET", "/test", nil)
@@ -304,7 +355,7 @@ func TestDualAuthMiddleware_StrictSessionModeWithoutTrustedSession(t *testing.T)
 
 	jwtService := jwt.NewJWTService("secret", time.Hour, time.Hour*24)
 	r := gin.New()
-	r.Use(middleware.DualAuthMiddleware(jwtService, nil, nil))
+	r.Use(middleware.DualAuthMiddleware(jwtService, nil, new(MockMerchantRepository), nil))
 	r.GET("/test", func(c *gin.Context) { c.Status(http.StatusOK) })
 
 	userID := uuid.New()
@@ -324,7 +375,7 @@ func TestDualAuthMiddleware_JWTExpired(t *testing.T) {
 	jwtService := jwt.NewJWTService("secret", -1*time.Second, time.Hour)
 
 	r := gin.New()
-	r.Use(middleware.DualAuthMiddleware(jwtService, nil, nil))
+	r.Use(middleware.DualAuthMiddleware(jwtService, nil, new(MockMerchantRepository), nil))
 	r.GET("/test", func(c *gin.Context) { c.Status(http.StatusOK) })
 
 	userID := uuid.New()
@@ -346,7 +397,7 @@ func TestDualAuthMiddleware_JWTInvalidSignature(t *testing.T) {
 	jwtService := jwt.NewJWTService("secret", time.Hour, time.Hour*24)
 
 	r := gin.New()
-	r.Use(middleware.DualAuthMiddleware(jwtService, apiKeyUsecase, nil))
+	r.Use(middleware.DualAuthMiddleware(jwtService, apiKeyUsecase, new(MockMerchantRepository), nil))
 	r.GET("/test", func(c *gin.Context) { c.Status(http.StatusOK) })
 
 	userID := uuid.New()
@@ -392,7 +443,7 @@ func TestDualAuthMiddleware_TrustedSessionFlow_AndOptionalSignature(t *testing.T
 	}, time.Minute))
 
 	r := gin.New()
-	r.Use(middleware.DualAuthMiddleware(jwtService, nil, sessionStore))
+	r.Use(middleware.DualAuthMiddleware(jwtService, nil, new(MockMerchantRepository), sessionStore))
 	r.GET("/test", func(c *gin.Context) {
 		got, _ := c.Get(middleware.UserIDKey)
 		c.JSON(http.StatusOK, gin.H{"userId": got})
@@ -412,7 +463,7 @@ func TestDualAuthMiddleware_TrustedSessionFlow_AndOptionalSignature(t *testing.T
 	mockApiKeyRepo.On("FindByUserID", mock.Anything, userID).Return([]*entities.ApiKey{}, nil).Once()
 
 	r2 := gin.New()
-	r2.Use(middleware.DualAuthMiddleware(jwtService, apiKeyUsecase, sessionStore))
+	r2.Use(middleware.DualAuthMiddleware(jwtService, apiKeyUsecase, new(MockMerchantRepository), sessionStore))
 	r2.GET("/test", func(c *gin.Context) { c.Status(http.StatusOK) })
 
 	req2, _ := http.NewRequest(http.MethodGet, "/test", nil)

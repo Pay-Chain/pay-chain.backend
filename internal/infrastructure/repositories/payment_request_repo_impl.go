@@ -34,6 +34,7 @@ func (r *PaymentRequestRepositoryImpl) Create(ctx context.Context, req *entities
 		Status:        string(req.Status),
 		ExpiresAt:     req.ExpiresAt,
 		PayerAddress:  req.PayerAddress,
+		PaymentCode:   req.PaymentCode,
 		CreatedAt:     time.Now(),
 		UpdatedAt:     time.Now(),
 	}
@@ -134,6 +135,15 @@ func (r *PaymentRequestRepositoryImpl) ExpireRequests(ctx context.Context, ids [
 		}).Error
 }
 
+func (r *PaymentRequestRepositoryImpl) UpdatePaymentCode(ctx context.Context, id uuid.UUID, code string) error {
+	return r.db.WithContext(ctx).Model(&models.PaymentRequest{}).
+		Where("id = ?", id).
+		Updates(map[string]interface{}{
+			"payment_code": code,
+			"updated_at":   time.Now(),
+		}).Error
+}
+
 func (r *PaymentRequestRepositoryImpl) toEntity(m *models.PaymentRequest) *entities.PaymentRequest {
 	return &entities.PaymentRequest{
 		ID:            m.ID,
@@ -149,6 +159,7 @@ func (r *PaymentRequestRepositoryImpl) toEntity(m *models.PaymentRequest) *entit
 		ExpiresAt:     m.ExpiresAt,
 		TxHash:        m.TxHash,
 		PayerAddress:  m.PayerAddress,
+		PaymentCode:   m.PaymentCode,
 		CompletedAt:   m.CompletedAt,
 		CreatedAt:     m.CreatedAt,
 		UpdatedAt:     m.UpdatedAt,

@@ -77,7 +77,7 @@ func TestDualAuthMiddleware_TrustedSession_WithOptionalSignatureValidationSucces
 	_ = os.Setenv("INTERNAL_PROXY_SECRET", "proxy-secret")
 
 	r := gin.New()
-	r.Use(middleware.DualAuthMiddleware(jwtService, apiKeyUsecase, sessionStore))
+	r.Use(middleware.DualAuthMiddleware(jwtService, apiKeyUsecase, new(MockMerchantRepository), sessionStore))
 	r.GET("/test", func(c *gin.Context) { c.Status(http.StatusNoContent) })
 
 	req, _ := http.NewRequest("GET", "/test", nil)

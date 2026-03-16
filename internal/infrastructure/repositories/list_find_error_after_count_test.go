@@ -59,12 +59,12 @@ func TestRepository_List_FindErrorAfterCount_Branches(t *testing.T) {
 		require.Error(t, err)
 	})
 
-	t.Run("layerzero config list find error after count", func(t *testing.T) {
+	t.Run("stargate config list find error after count", func(t *testing.T) {
 		db := newTestDB(t)
 		createRoutePolicyTables(t, db)
-		repo := NewLayerZeroConfigRepository(db)
+		repo := NewStargateConfigRepository(db)
 
-		registerFindErrorAfterCount(t, db, "layerzero_configs")
+		registerFindErrorAfterCount(t, db, "stargate_configs")
 		_, _, err := repo.List(ctx, nil, nil, nil, utils.PaginationParams{Page: 1, Limit: 10})
 		require.Error(t, err)
 	})

@@ -70,9 +70,11 @@ func TestCrosschainConfigUsecase_RecheckRoute_StatusAndFeeQuoteIssue(t *testing.
 		encOutCC(t, routerABI.Methods["hasAdapter"], true),
 		encOutCC(t, routerABI.Methods["hasAdapter"], false),
 		encOutCC(t, routerABI.Methods["hasAdapter"], false),
+		encOutCC(t, routerABI.Methods["hasAdapter"], false), // type 3
 		encOutCC(t, routerABI.Methods["getAdapter"], adapter0),
 		encOutCC(t, routerABI.Methods["getAdapter"], common.Address{}),
 		encOutCC(t, routerABI.Methods["getAdapter"], common.Address{}),
+		encOutCC(t, routerABI.Methods["getAdapter"], common.Address{}), // type 3
 		encOutCC(t, routerABI.Methods["hasAdapter"], true),
 		encOutCC(t, routerABI.Methods["getAdapter"], adapter0),
 		encOutCC(t, hyperABI.Methods["isChainConfigured"], true),

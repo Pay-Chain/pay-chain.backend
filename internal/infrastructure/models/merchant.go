@@ -18,6 +18,13 @@ type Merchant struct {
 	BusinessAddress    string    `gorm:"type:text"`
 	Documents          string    `gorm:"type:jsonb;default:'{}'"`
 	FeeDiscountPercent string    `gorm:"type:decimal(5,2);default:0"` // Changed to string
+	CallbackURL        string    `gorm:"type:text"`
+	WebhookSecret      string    `gorm:"type:varchar(64)"`
+	WebhookIsActive    bool      `gorm:"type:boolean;default:false"`
+	SupportEmail       string    `gorm:"type:varchar(255)"`
+	LogoURL            string    `gorm:"type:text"`
+	WebhookMetadata    string    `gorm:"type:jsonb;default:'{}'"`
+	Metadata           string    `gorm:"type:jsonb;default:'{}'"`
 	VerifiedAt         *time.Time
 	CreatedAt          time.Time
 	UpdatedAt          time.Time

@@ -73,6 +73,9 @@ func TestPaymentRequestHandler_GenericErrorAndPaginationBranches(t *testing.T) {
 			}
 			return []*entities.PaymentRequest{}, 0, nil
 		},
+		resolveFn: func(context.Context, uuid.UUID) (*usecases.ResolvePaymentRequestOutput, error) {
+			return nil, errors.New("unused")
+		},
 	})
 
 	r := gin.New()

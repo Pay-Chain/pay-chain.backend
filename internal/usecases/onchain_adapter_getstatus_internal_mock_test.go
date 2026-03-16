@@ -32,7 +32,7 @@ func encodeMethodOut(t *testing.T, methodName string, values ...interface{}) []b
 	case "chainSelectors", "destinationAdapters":
 		out, err = FallbackCCIPSenderAdminABI.Methods[methodName].Outputs.Pack(values...)
 	case "isRouteConfigured", "dstEids", "peers", "enforcedOptions":
-		out, err = FallbackLayerZeroSenderAdminABI.Methods[methodName].Outputs.Pack(values...)
+		out, err = FallbackStargateSenderAdminABI.Methods[methodName].Outputs.Pack(values...)
 	default:
 		t.Fatalf("unsupported method: %s", methodName)
 	}
@@ -113,13 +113,13 @@ func TestOnchainAdapterUsecase_GetStatus_WithInjectedClient(t *testing.T) {
 			return encodeMethodOut(t, "chainSelectors", uint64(4949039107694359620)), nil
 		case "0x" + hex.EncodeToString(FallbackCCIPSenderAdminABI.Methods["destinationAdapters"].ID):
 			return encodeMethodOut(t, "destinationAdapters", common.LeftPadBytes(common.HexToAddress("0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb").Bytes(), 32)), nil
-		case "0x" + hex.EncodeToString(FallbackLayerZeroSenderAdminABI.Methods["isRouteConfigured"].ID):
+		case "0x" + hex.EncodeToString(FallbackStargateSenderAdminABI.Methods["isRouteConfigured"].ID):
 			return encodeMethodOut(t, "isRouteConfigured", true), nil
-		case "0x" + hex.EncodeToString(FallbackLayerZeroSenderAdminABI.Methods["dstEids"].ID):
+		case "0x" + hex.EncodeToString(FallbackStargateSenderAdminABI.Methods["dstEids"].ID):
 			return encodeMethodOut(t, "dstEids", uint32(30110)), nil
-		case "0x" + hex.EncodeToString(FallbackLayerZeroSenderAdminABI.Methods["peers"].ID):
+		case "0x" + hex.EncodeToString(FallbackStargateSenderAdminABI.Methods["peers"].ID):
 			return encodeMethodOut(t, "peers", [32]byte{1}), nil
-		case "0x" + hex.EncodeToString(FallbackLayerZeroSenderAdminABI.Methods["enforcedOptions"].ID):
+		case "0x" + hex.EncodeToString(FallbackStargateSenderAdminABI.Methods["enforcedOptions"].ID):
 			return encodeMethodOut(t, "enforcedOptions", []byte{0x01, 0x02}), nil
 		default:
 			return nil, fmt.Errorf("unexpected method id: %s", methodID)
@@ -141,8 +141,8 @@ func TestOnchainAdapterUsecase_GetStatus_WithInjectedClient(t *testing.T) {
 	require.Equal(t, adapter1.Hex(), status.AdapterType1)
 	require.Equal(t, adapter2.Hex(), status.AdapterType2)
 	require.True(t, status.HyperbridgeConfigured)
-	require.True(t, status.LayerZeroConfigured)
-	require.Equal(t, uint32(30110), status.LayerZeroDstEID)
+	require.True(t, status.StargateConfigured)
+	require.Equal(t, uint32(30110), status.StargateDstEID)
 	require.NotEmpty(t, status.CCIPDestinationAdapter)
 }
 

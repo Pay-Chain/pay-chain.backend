@@ -540,7 +540,7 @@ func requiredFunctions(contractType entities.SmartContractType) []string {
 		return []string{"quoteFee", "sendMessage", "setChainConfig", "setDestinationGasLimit"}
 	case entities.ContractTypeAdapterHyperbridge:
 		return []string{"quoteFee", "sendMessage", "setStateMachineId", "setDestinationContract"}
-	case entities.ContractTypeAdapterLayerZero:
+	case entities.ContractTypeAdapterStargate:
 		return []string{"quoteFee", "sendMessage", "setRoute", "setEnforcedOptions"}
 	case entities.ContractTypePrivacyModule:
 		return []string{"setAuthorizedGateway", "authorizedGateway", "forwardFromStealth"}

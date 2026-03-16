@@ -9,18 +9,21 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"payment-kita.backend/internal/domain/entities"
+	domainRepos "payment-kita.backend/internal/domain/repositories"
+	"payment-kita.backend/internal/domain/services"
 	"payment-kita.backend/internal/usecases"
 )
 
 func newPaymentRequestUC(
-	pr *MockPaymentRequestRepository,
-	mr *MockMerchantRepository,
-	wr *MockWalletRepository,
-	cr *MockChainRepository,
-	sr *MockSmartContractRepository,
-	tr *MockTokenRepository,
+	pr domainRepos.PaymentRequestRepository,
+	mr domainRepos.MerchantRepository,
+	wr domainRepos.WalletRepository,
+	cr domainRepos.ChainRepository,
+	sr domainRepos.SmartContractRepository,
+	tr domainRepos.TokenRepository,
+	js services.JWEService,
 ) *usecases.PaymentRequestUsecase {
-	return usecases.NewPaymentRequestUsecase(pr, mr, wr, cr, sr, tr)
+	return usecases.NewPaymentRequestUsecase(pr, mr, wr, cr, sr, tr, js)
 }
 
 func TestPaymentRequestUsecase_CreatePaymentRequest_MerchantNotFound(t *testing.T) {
@@ -30,7 +33,7 @@ func TestPaymentRequestUsecase_CreatePaymentRequest_MerchantNotFound(t *testing.
 	cr := new(MockChainRepository)
 	sr := new(MockSmartContractRepository)
 	tr := new(MockTokenRepository)
-	uc := newPaymentRequestUC(pr, mr, wr, cr, sr, tr)
+	uc := newPaymentRequestUC(pr, mr, wr, cr, sr, tr, nil)
 
 	userID := uuid.New()
 	mr.On("GetByUserID", context.Background(), userID).Return(nil, assert.AnError).Once()
@@ -52,7 +55,7 @@ func TestPaymentRequestUsecase_CreatePaymentRequest_MerchantInactive(t *testing.
 	cr := new(MockChainRepository)
 	sr := new(MockSmartContractRepository)
 	tr := new(MockTokenRepository)
-	uc := newPaymentRequestUC(pr, mr, wr, cr, sr, tr)
+	uc := newPaymentRequestUC(pr, mr, wr, cr, sr, tr, nil)
 
 	userID := uuid.New()
 	mr.On("GetByUserID", context.Background(), userID).Return(&entities.Merchant{
@@ -79,7 +82,7 @@ func TestPaymentRequestUsecase_CreatePaymentRequest_SuccessEVM(t *testing.T) {
 	cr := new(MockChainRepository)
 	sr := new(MockSmartContractRepository)
 	tr := new(MockTokenRepository)
-	uc := newPaymentRequestUC(pr, mr, wr, cr, sr, tr)
+	uc := newPaymentRequestUC(pr, mr, wr, cr, sr, tr, nil)
 
 	userID := uuid.New()
 	merchantID := uuid.New()
@@ -134,7 +137,7 @@ func TestPaymentRequestUsecase_CreatePaymentRequest_DecimalsMismatch(t *testing.
 	cr := new(MockChainRepository)
 	sr := new(MockSmartContractRepository)
 	tr := new(MockTokenRepository)
-	uc := newPaymentRequestUC(pr, mr, wr, cr, sr, tr)
+	uc := newPaymentRequestUC(pr, mr, wr, cr, sr, tr, nil)
 
 	userID := uuid.New()
 	merchantID := uuid.New()
@@ -178,7 +181,7 @@ func TestPaymentRequestUsecase_CreatePaymentRequest_NoPrimaryWallet_UsesFirstWal
 	cr := new(MockChainRepository)
 	sr := new(MockSmartContractRepository)
 	tr := new(MockTokenRepository)
-	uc := newPaymentRequestUC(pr, mr, wr, cr, sr, tr)
+	uc := newPaymentRequestUC(pr, mr, wr, cr, sr, tr, nil)
 
 	userID := uuid.New()
 	merchantID := uuid.New()
@@ -228,7 +231,7 @@ func TestPaymentRequestUsecase_GetPaymentRequest_ExpirePending(t *testing.T) {
 	cr := new(MockChainRepository)
 	sr := new(MockSmartContractRepository)
 	tr := new(MockTokenRepository)
-	uc := newPaymentRequestUC(pr, mr, wr, cr, sr, tr)
+	uc := newPaymentRequestUC(pr, mr, wr, cr, sr, tr, nil)
 
 	requestID := uuid.New()
 	chainID := uuid.New()
@@ -263,7 +266,7 @@ func TestPaymentRequestUsecase_ListAndMarkCompleted(t *testing.T) {
 	cr := new(MockChainRepository)
 	sr := new(MockSmartContractRepository)
 	tr := new(MockTokenRepository)
-	uc := newPaymentRequestUC(pr, mr, wr, cr, sr, tr)
+	uc := newPaymentRequestUC(pr, mr, wr, cr, sr, tr, nil)
 
 	userID := uuid.New()
 	merchantID := uuid.New()
@@ -289,7 +292,7 @@ func TestPaymentRequestUsecase_CreatePaymentRequest_ErrorBranches(t *testing.T) 
 		cr := new(MockChainRepository)
 		sr := new(MockSmartContractRepository)
 		tr := new(MockTokenRepository)
-		uc := newPaymentRequestUC(pr, mr, wr, cr, sr, tr)
+		uc := newPaymentRequestUC(pr, mr, wr, cr, sr, tr, nil)
 
 		userID := uuid.New()
 		mr.On("GetByUserID", context.Background(), userID).Return(&entities.Merchant{
@@ -316,7 +319,7 @@ func TestPaymentRequestUsecase_CreatePaymentRequest_ErrorBranches(t *testing.T) 
 		cr := new(MockChainRepository)
 		sr := new(MockSmartContractRepository)
 		tr := new(MockTokenRepository)
-		uc := newPaymentRequestUC(pr, mr, wr, cr, sr, tr)
+		uc := newPaymentRequestUC(pr, mr, wr, cr, sr, tr, nil)
 
 		userID := uuid.New()
 		mr.On("GetByUserID", context.Background(), userID).Return(&entities.Merchant{
@@ -343,7 +346,7 @@ func TestPaymentRequestUsecase_CreatePaymentRequest_ErrorBranches(t *testing.T) 
 		cr := new(MockChainRepository)
 		sr := new(MockSmartContractRepository)
 		tr := new(MockTokenRepository)
-		uc := newPaymentRequestUC(pr, mr, wr, cr, sr, tr)
+		uc := newPaymentRequestUC(pr, mr, wr, cr, sr, tr, nil)
 
 		userID := uuid.New()
 		mr.On("GetByUserID", context.Background(), userID).Return(&entities.Merchant{
@@ -372,7 +375,7 @@ func TestPaymentRequestUsecase_CreatePaymentRequest_ErrorBranches(t *testing.T) 
 		cr := new(MockChainRepository)
 		sr := new(MockSmartContractRepository)
 		tr := new(MockTokenRepository)
-		uc := newPaymentRequestUC(pr, mr, wr, cr, sr, tr)
+		uc := newPaymentRequestUC(pr, mr, wr, cr, sr, tr, nil)
 
 		userID := uuid.New()
 		chainID := uuid.New()
@@ -403,7 +406,7 @@ func TestPaymentRequestUsecase_CreatePaymentRequest_ErrorBranches(t *testing.T) 
 		cr := new(MockChainRepository)
 		sr := new(MockSmartContractRepository)
 		tr := new(MockTokenRepository)
-		uc := newPaymentRequestUC(pr, mr, wr, cr, sr, tr)
+		uc := newPaymentRequestUC(pr, mr, wr, cr, sr, tr, nil)
 
 		userID := uuid.New()
 		chainID := uuid.New()
@@ -434,7 +437,7 @@ func TestPaymentRequestUsecase_CreatePaymentRequest_ErrorBranches(t *testing.T) 
 		cr := new(MockChainRepository)
 		sr := new(MockSmartContractRepository)
 		tr := new(MockTokenRepository)
-		uc := newPaymentRequestUC(pr, mr, wr, cr, sr, tr)
+		uc := newPaymentRequestUC(pr, mr, wr, cr, sr, tr, nil)
 
 		userID := uuid.New()
 		chainID := uuid.New()
@@ -464,7 +467,7 @@ func TestPaymentRequestUsecase_CreatePaymentRequest_ErrorBranches(t *testing.T) 
 func TestPaymentRequestUsecase_GetAndList_ErrorBranches(t *testing.T) {
 	t.Run("get payment request not found", func(t *testing.T) {
 		pr := new(MockPaymentRequestRepository)
-		uc := newPaymentRequestUC(pr, new(MockMerchantRepository), new(MockWalletRepository), new(MockChainRepository), new(MockSmartContractRepository), new(MockTokenRepository))
+		uc := newPaymentRequestUC(pr, new(MockMerchantRepository), new(MockWalletRepository), new(MockChainRepository), new(MockSmartContractRepository), new(MockTokenRepository), nil)
 		requestID := uuid.New()
 		pr.On("GetByID", context.Background(), requestID).Return(nil, assert.AnError).Once()
 
@@ -475,7 +478,7 @@ func TestPaymentRequestUsecase_GetAndList_ErrorBranches(t *testing.T) {
 	t.Run("list payment requests merchant not found", func(t *testing.T) {
 		pr := new(MockPaymentRequestRepository)
 		mr := new(MockMerchantRepository)
-		uc := newPaymentRequestUC(pr, mr, new(MockWalletRepository), new(MockChainRepository), new(MockSmartContractRepository), new(MockTokenRepository))
+		uc := newPaymentRequestUC(pr, mr, new(MockWalletRepository), new(MockChainRepository), new(MockSmartContractRepository), new(MockTokenRepository), nil)
 		userID := uuid.New()
 		mr.On("GetByUserID", context.Background(), userID).Return(nil, assert.AnError).Once()
 

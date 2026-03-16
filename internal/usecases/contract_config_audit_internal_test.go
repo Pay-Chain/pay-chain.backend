@@ -36,8 +36,8 @@ func TestRequiredFunctions(t *testing.T) {
 	t.Run("hyperbridge adapter", func(t *testing.T) {
 		require.Contains(t, requiredFunctions(entities.ContractTypeAdapterHyperbridge), "setStateMachineId")
 	})
-	t.Run("layerzero adapter", func(t *testing.T) {
-		require.Contains(t, requiredFunctions(entities.ContractTypeAdapterLayerZero), "setRoute")
+	t.Run("stargate adapter", func(t *testing.T) {
+		require.Contains(t, requiredFunctions(entities.ContractTypeAdapterStargate), "setRoute")
 	})
 	t.Run("privacy module", func(t *testing.T) {
 		require.Contains(t, requiredFunctions(entities.ContractTypePrivacyModule), "forwardFromStealth")

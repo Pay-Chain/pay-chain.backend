@@ -131,8 +131,8 @@ base_target_contracts AS (
                 ]$$::jsonb
             ),
             (
-                'ADAPTER_LAYERZERO',
-                'LayerZeroSenderAdapter',
+                'ADAPTER_STARGATE',
+                'StargateSenderAdapter',
                 '2.1.0',
                 '0x11bfD843dCEbF421d2f2A07D2C8BA5Db85E501E9',
                 $$[
@@ -144,8 +144,8 @@ base_target_contracts AS (
                 ]$$::jsonb
             ),
             (
-                'RECEIVER_LAYERZERO',
-                'LayerZeroReceiverAdapter',
+                'RECEIVER_STARGATE',
+                'StargateReceiverAdapter',
                 '2.1.0',
                 '0xc4c28aeeE5bb312970a7266461838565E1eEEc1a',
                 $$[
@@ -343,14 +343,14 @@ arbitrum_target_contracts AS (
               {"inputs":[{"components":[{"internalType":"bytes32","name":"paymentId","type":"bytes32"},{"internalType":"address","name":"receiver","type":"address"},{"internalType":"address","name":"sourceToken","type":"address"},{"internalType":"address","name":"destToken","type":"address"},{"internalType":"uint256","name":"amount","type":"uint256"},{"internalType":"string","name":"destChainId","type":"string"},{"internalType":"uint256","name":"minAmountOut","type":"uint256"},{"internalType":"address","name":"payer","type":"address"}],"internalType":"struct BridgeMessage","name":"message","type":"tuple"}],"name":"sendMessage","outputs":[],"stateMutability":"payable","type":"function"},
               {"inputs":[{"internalType":"string","name":"chainId","type":"string"}],"name":"isChainConfigured","outputs":[{"internalType":"bool","name":"configured","type":"bool"}],"stateMutability":"view","type":"function"}
             ]$$::jsonb),
-            ('ADAPTER_LAYERZERO','LayerZeroSenderAdapter','2.1.0','0x64505be2844d35284ab58984f93dceb21bc77464',$$[
+            ('ADAPTER_STARGATE','StargateSenderAdapter','2.1.0','0x64505be2844d35284ab58984f93dceb21bc77464',$$[
               {"inputs":[],"name":"registerDelegate","outputs":[],"stateMutability":"nonpayable","type":"function"},
               {"inputs":[{"internalType":"uint32","name":"dstEid","type":"uint32"},{"internalType":"bytes32","name":"peer","type":"bytes32"}],"name":"setTrustedPeer","outputs":[],"stateMutability":"nonpayable","type":"function"},
               {"inputs":[{"internalType":"uint32","name":"dstEid","type":"uint32"},{"internalType":"uint256","name":"fee","type":"uint256"}],"name":"setMessageFee","outputs":[],"stateMutability":"nonpayable","type":"function"},
               {"inputs":[{"internalType":"uint32","name":"dstEid","type":"uint32"},{"internalType":"uint128","name":"gasLimit","type":"uint128"}],"name":"setEnforcedGas","outputs":[],"stateMutability":"nonpayable","type":"function"},
               {"inputs":[{"internalType":"string","name":"chainId","type":"string"}],"name":"isChainConfigured","outputs":[{"internalType":"bool","name":"configured","type":"bool"}],"stateMutability":"view","type":"function"}
             ]$$::jsonb),
-            ('RECEIVER_LAYERZERO','LayerZeroReceiverAdapter','2.1.0','0x0c6c2cc9c2fb42d2fe591f2c3fee4db428090ad4',$$[
+            ('RECEIVER_STARGATE','StargateReceiverAdapter','2.1.0','0x0c6c2cc9c2fb42d2fe591f2c3fee4db428090ad4',$$[
               {"inputs":[{"internalType":"address","name":"swapper","type":"address"}],"name":"setSwapper","outputs":[],"stateMutability":"nonpayable","type":"function"},
               {"inputs":[{"internalType":"uint32","name":"srcEid","type":"uint32"},{"internalType":"bytes32","name":"peer","type":"bytes32"}],"name":"setTrustedPeer","outputs":[],"stateMutability":"nonpayable","type":"function"},
               {"inputs":[{"internalType":"uint32","name":"srcEid","type":"uint32"}],"name":"getTrustConfig","outputs":[{"internalType":"bool","name":"trusted","type":"bool"},{"internalType":"bytes32","name":"configuredPeer","type":"bytes32"},{"internalType":"uint64","name":"expectedNonce","type":"uint64"}],"stateMutability":"view","type":"function"},

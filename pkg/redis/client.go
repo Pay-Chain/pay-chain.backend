@@ -65,3 +65,13 @@ func Del(ctx context.Context, key string) error {
 func SetNX(ctx context.Context, key string, value interface{}, expiration time.Duration) (bool, error) {
 	return client.SetNX(ctx, key, value, expiration).Result()
 }
+
+// Incr increments a key
+func Incr(ctx context.Context, key string) (int64, error) {
+	return client.Incr(ctx, key).Result()
+}
+
+// Expire sets expiration for a key
+func Expire(ctx context.Context, key string, expiration time.Duration) (bool, error) {
+	return client.Expire(ctx, key, expiration).Result()
+}

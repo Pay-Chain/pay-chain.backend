@@ -11,13 +11,14 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"payment-kita.backend/internal/domain/repositories"
 	"payment-kita.backend/internal/usecases"
 	"payment-kita.backend/pkg/jwt"
 	"payment-kita.backend/pkg/redis"
 )
 
 // DualAuthMiddleware handles both JWT and API Key authentication
-func DualAuthMiddleware(jwtService *jwt.JWTService, apiKeyUsecase *usecases.ApiKeyUsecase, sessionStore *redis.SessionStore) gin.HandlerFunc {
+func DualAuthMiddleware(jwtService *jwt.JWTService, apiKeyUsecase *usecases.ApiKeyUsecase, merchantRepo repositories.MerchantRepository, sessionStore *redis.SessionStore) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		strictSessionMode := os.Getenv("INTERNAL_PROXY_SECRET") != ""
 		apiKey := c.GetHeader("X-Api-Key")
@@ -52,13 +53,16 @@ func DualAuthMiddleware(jwtService *jwt.JWTService, apiKeyUsecase *usecases.ApiK
 			)
 
 			if err != nil {
-				// Avoid leaking specific error details unless useful
-				// u.ValidateApiKey returns domain errors which are safe
-				// BUT we should map them to HTTP status.
-				// For now, assume Unauthorized unless Internal.
 				log.Printf("[DualAuth] API Key validation failed: %v", err)
 				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid API Key or Signature"})
 				return
+			}
+
+			// Resolve Merchant context if exists (Step 2.2)
+			merchant, err := merchantRepo.GetByUserID(c.Request.Context(), user.ID)
+			if err == nil && merchant != nil {
+				c.Set(MerchantIDKey, merchant.ID)
+				c.Set(IsMerchantAuthenticatedKey, true)
 			}
 
 			// Set context

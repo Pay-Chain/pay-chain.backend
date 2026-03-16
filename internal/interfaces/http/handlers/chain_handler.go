@@ -51,7 +51,7 @@ func (h *ChainHandler) ListChains(c *gin.Context) {
 		LogoURL           string `json:"logoUrl"`
 		IsActive          bool   `json:"isActive"`
 		CCIPChainSelector string `json:"ccipChainSelector"`
-		LayerZeroEID      int    `json:"layerZeroEid"`
+		StargateEID      int    `json:"stargateEid"`
 	}
 
 	var resp []chainResponse
@@ -68,7 +68,7 @@ func (h *ChainHandler) ListChains(c *gin.Context) {
 			LogoURL:           chain.ImageURL,
 			IsActive:          chain.IsActive,
 			CCIPChainSelector: chain.CCIPChainSelector,
-			LayerZeroEID:      chain.LayerZeroEID,
+			StargateEID:      chain.StargateEID,
 		})
 	}
 
@@ -95,7 +95,7 @@ func (h *ChainHandler) CreateChain(c *gin.Context) {
 		Symbol            string `json:"symbol" binding:"required"`
 		LogoURL           string `json:"logoUrl"`
 		CCIPChainSelector string `json:"ccipChainSelector"`
-		LayerZeroEID      int    `json:"layerZeroEid"`
+		StargateEID      int    `json:"stargateEid"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -114,7 +114,7 @@ func (h *ChainHandler) CreateChain(c *gin.Context) {
 		ImageURL:          input.LogoURL,
 		IsActive:          true,
 		CCIPChainSelector: input.CCIPChainSelector,
-		LayerZeroEID:      input.LayerZeroEID,
+		StargateEID:      input.StargateEID,
 		CreatedAt:         time.Now(),
 	}
 
@@ -146,7 +146,7 @@ func (h *ChainHandler) UpdateChain(c *gin.Context) {
 		LogoURL           string `json:"logoUrl"`
 		IsActive          bool   `json:"isActive"`
 		CCIPChainSelector string `json:"ccipChainSelector"`
-		LayerZeroEID      int    `json:"layerZeroEid"`
+		StargateEID      int    `json:"stargateEid"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -166,7 +166,7 @@ func (h *ChainHandler) UpdateChain(c *gin.Context) {
 		ImageURL:          input.LogoURL,
 		IsActive:          input.IsActive,
 		CCIPChainSelector: input.CCIPChainSelector,
-		LayerZeroEID:      input.LayerZeroEID,
+		StargateEID:      input.StargateEID,
 	}
 
 	if err := h.chainRepo.Update(c.Request.Context(), chain); err != nil {

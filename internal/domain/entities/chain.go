@@ -40,7 +40,7 @@ type Chain struct {
 
 	// Bridge Metadata
 	CCIPChainSelector string `json:"ccipChainSelector" gorm:"type:varchar(255);default:'';column:ccip_chain_selector"`
-	LayerZeroEID      int    `json:"layerZeroEid" gorm:"type:integer;default:0;column:layerzero_eid"`
+	StargateEID      int    `json:"stargateEid" gorm:"type:integer;default:0;column:stargate_eid"`
 }
 
 // ChainRPC represents a blockchain RPC endpoint

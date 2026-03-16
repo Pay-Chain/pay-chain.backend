@@ -24,12 +24,12 @@ func TestPaymentUsecase_Helpers(t *testing.T) {
 
 	assert.Equal(t, "Hyperbridge", bridgeTypeToName(0))
 	assert.Equal(t, "CCIP", bridgeTypeToName(1))
-	assert.Equal(t, "LayerZero", bridgeTypeToName(2))
+	assert.Equal(t, "Stargate", bridgeTypeToName(2))
 	assert.Equal(t, "HyperbridgeTokenGateway", bridgeTypeToName(3))
 	assert.Equal(t, "Hyperbridge", bridgeTypeToName(99))
 
 	assert.Equal(t, uint8(1), bridgeNameToType("CCIP"))
-	assert.Equal(t, uint8(2), bridgeNameToType("LayerZero"))
+	assert.Equal(t, uint8(2), bridgeNameToType("Stargate"))
 	assert.Equal(t, uint8(3), bridgeNameToType("HyperbridgeTokenGateway"))
 	assert.Equal(t, uint8(3), bridgeNameToType("HYPERBRIDGE_TOKEN_GATEWAY"))
 	assert.Equal(t, uint8(0), bridgeNameToType("Hyperbridge"))

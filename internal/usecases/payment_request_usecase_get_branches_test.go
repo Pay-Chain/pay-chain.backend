@@ -19,7 +19,7 @@ func TestPaymentRequestUsecase_GetPaymentRequest_ChainResolutionBranches(t *test
 		cr := new(MockChainRepository)
 		sr := new(MockSmartContractRepository)
 		tr := new(MockTokenRepository)
-		uc := usecases.NewPaymentRequestUsecase(pr, mr, wr, cr, sr, tr)
+		uc := usecases.NewPaymentRequestUsecase(pr, mr, wr, cr, sr, tr, nil)
 
 		requestID := uuid.New()
 		resolvedChainID := uuid.New()
@@ -58,7 +58,7 @@ func TestPaymentRequestUsecase_GetPaymentRequest_ChainResolutionBranches(t *test
 		cr := new(MockChainRepository)
 		sr := new(MockSmartContractRepository)
 		tr := new(MockTokenRepository)
-		uc := usecases.NewPaymentRequestUsecase(pr, mr, wr, cr, sr, tr)
+		uc := usecases.NewPaymentRequestUsecase(pr, mr, wr, cr, sr, tr, nil)
 
 		requestID := uuid.New()
 		chainID := uuid.New()

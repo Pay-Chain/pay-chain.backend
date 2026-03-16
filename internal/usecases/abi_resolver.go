@@ -77,10 +77,10 @@ func (u *ABIResolverMixin) ResolveABI(
 
 // ResolveABIWithFallback attempts to resolve ABI from DB, defaulting to hardcoded fallbacks if not found in DB
 func (u *ABIResolverMixin) ResolveABIWithFallback(ctx context.Context, chainID uuid.UUID, contractType entities.SmartContractType) (abi.ABI, error) {
-	// RECEIVER_LAYERZERO execution in admin flows uses stable admin ABI and
+	// RECEIVER_STARGATE execution in admin flows uses stable admin ABI and
 	// explicit contract address from payload; avoid hard dependency on DB ABI row.
-	if contractType == entities.ContractTypeReceiverLayerZero {
-		return FallbackLayerZeroReceiverAdminABI, nil
+	if contractType == entities.ContractTypeReceiverStargate {
+		return FallbackStargateReceiverAdminABI, nil
 	}
 
 	parsed, _, err := u.ResolveABI(ctx, chainID, contractType)
@@ -100,7 +100,7 @@ func (u *ABIResolverMixin) ResolveABIWithFallback(ctx context.Context, chainID u
 			if !isValid {
 				fmt.Printf("[ResolveABI] ABI for %s has %d methods but missing 'setChainSelector'/'setChainConfig'. Using fallback.\n", contractType, len(parsed.Methods))
 			}
-		case entities.ContractTypeAdapterLayerZero:
+		case entities.ContractTypeAdapterStargate:
 			_, isValid = parsed.Methods["setRoute"]
 			if !isValid {
 				fmt.Printf("[ResolveABI] ABI for %s has %d methods but missing 'setRoute'. Using fallback.\n", contractType, len(parsed.Methods))
@@ -137,12 +137,12 @@ func (u *ABIResolverMixin) ResolveABIWithFallback(ctx context.Context, chainID u
 		return FallbackHyperbridgeSenderAdminABI, nil
 	case entities.ContractTypeAdapterCCIP:
 		return FallbackCCIPSenderAdminABI, nil
-	case entities.ContractTypeAdapterLayerZero:
-		return FallbackLayerZeroSenderAdminABI, nil
+	case entities.ContractTypeAdapterStargate:
+		return FallbackStargateSenderAdminABI, nil
 	case entities.ContractTypeAdapterHBTokenSender:
 		return FallbackHyperbridgeTokenGatewaySenderAdminABI, nil
-	case entities.ContractTypeReceiverLayerZero:
-		return FallbackLayerZeroReceiverAdminABI, nil
+	case entities.ContractTypeReceiverStargate:
+		return FallbackStargateReceiverAdminABI, nil
 	}
 	if err != nil {
 		return abi.ABI{}, err

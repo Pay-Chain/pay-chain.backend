@@ -23,13 +23,13 @@ func TestOnchainAdapterUsecase_CallHelpers_PackErrorByEmptyABI(t *testing.T) {
 	origRouter := FallbackPaymentKitaRouterAdminABI
 	origHyper := FallbackHyperbridgeSenderAdminABI
 	origCCIP := FallbackCCIPSenderAdminABI
-	origLZ := FallbackLayerZeroSenderAdminABI
+	origLZ := FallbackStargateSenderAdminABI
 	t.Cleanup(func() {
 		FallbackPaymentKitaGatewayABI = origGateway
 		FallbackPaymentKitaRouterAdminABI = origRouter
 		FallbackHyperbridgeSenderAdminABI = origHyper
 		FallbackCCIPSenderAdminABI = origCCIP
-		FallbackLayerZeroSenderAdminABI = origLZ
+		FallbackStargateSenderAdminABI = origLZ
 	})
 
 	// Empty ABIs force Pack(...) to fail deterministically.
@@ -37,7 +37,7 @@ func TestOnchainAdapterUsecase_CallHelpers_PackErrorByEmptyABI(t *testing.T) {
 	FallbackPaymentKitaRouterAdminABI = abi.ABI{}
 	FallbackHyperbridgeSenderAdminABI = abi.ABI{}
 	FallbackCCIPSenderAdminABI = abi.ABI{}
-	FallbackLayerZeroSenderAdminABI = abi.ABI{}
+	FallbackStargateSenderAdminABI = abi.ABI{}
 
 	_, err := u.callDefaultBridgeType(ctx, client, addr, FallbackPaymentKitaGatewayABI, dest)
 	require.Error(t, err)
@@ -60,15 +60,15 @@ func TestOnchainAdapterUsecase_CallHelpers_PackErrorByEmptyABI(t *testing.T) {
 	_, err = u.callCCIPDestinationAdapter(ctx, client, addr, FallbackCCIPSenderAdminABI, dest)
 	require.Error(t, err)
 
-	_, err = u.callLayerZeroConfigured(ctx, client, addr, FallbackLayerZeroSenderAdminABI, dest)
+	_, err = u.callStargateConfigured(ctx, client, addr, FallbackStargateSenderAdminABI, dest)
 	require.Error(t, err)
 
-	_, err = u.callLayerZeroDstEid(ctx, client, addr, FallbackLayerZeroSenderAdminABI, dest)
+	_, err = u.callStargateDstEid(ctx, client, addr, FallbackStargateSenderAdminABI, dest)
 	require.Error(t, err)
 
-	_, err = u.callLayerZeroPeer(ctx, client, addr, FallbackLayerZeroSenderAdminABI, dest)
+	_, err = u.callStargatePeer(ctx, client, addr, FallbackStargateSenderAdminABI, dest)
 	require.Error(t, err)
 
-	_, err = u.callLayerZeroOptions(ctx, client, addr, FallbackLayerZeroSenderAdminABI, dest)
+	_, err = u.callStargateOptions(ctx, client, addr, FallbackStargateSenderAdminABI, dest)
 	require.Error(t, err)
 }

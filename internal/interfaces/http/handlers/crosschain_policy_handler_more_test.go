@@ -36,28 +36,28 @@ func (s *routePolicyRepoListDeleteStub) Create(context.Context, *entities.RouteP
 func (s *routePolicyRepoListDeleteStub) Update(context.Context, *entities.RoutePolicy) error { return nil }
 func (s *routePolicyRepoListDeleteStub) Delete(context.Context, uuid.UUID) error             { return nil }
 
-type layerZeroRepoListDeleteStub struct {
-	item *entities.LayerZeroConfig
+type stargateRepoListDeleteStub struct {
+	item *entities.StargateConfig
 }
 
-func (s *layerZeroRepoListDeleteStub) GetByID(context.Context, uuid.UUID) (*entities.LayerZeroConfig, error) {
+func (s *stargateRepoListDeleteStub) GetByID(context.Context, uuid.UUID) (*entities.StargateConfig, error) {
 	if s.item == nil {
-		s.item = &entities.LayerZeroConfig{ID: utils.GenerateUUIDv7()}
+		s.item = &entities.StargateConfig{ID: utils.GenerateUUIDv7()}
 	}
 	return s.item, nil
 }
-func (s *layerZeroRepoListDeleteStub) GetByRoute(context.Context, uuid.UUID, uuid.UUID) (*entities.LayerZeroConfig, error) {
+func (s *stargateRepoListDeleteStub) GetByRoute(context.Context, uuid.UUID, uuid.UUID) (*entities.StargateConfig, error) {
 	return s.item, nil
 }
-func (s *layerZeroRepoListDeleteStub) List(context.Context, *uuid.UUID, *uuid.UUID, *bool, utils.PaginationParams) ([]*entities.LayerZeroConfig, int64, error) {
+func (s *stargateRepoListDeleteStub) List(context.Context, *uuid.UUID, *uuid.UUID, *bool, utils.PaginationParams) ([]*entities.StargateConfig, int64, error) {
 	if s.item == nil {
-		s.item = &entities.LayerZeroConfig{ID: utils.GenerateUUIDv7()}
+		s.item = &entities.StargateConfig{ID: utils.GenerateUUIDv7()}
 	}
-	return []*entities.LayerZeroConfig{s.item}, 1, nil
+	return []*entities.StargateConfig{s.item}, 1, nil
 }
-func (s *layerZeroRepoListDeleteStub) Create(context.Context, *entities.LayerZeroConfig) error { return nil }
-func (s *layerZeroRepoListDeleteStub) Update(context.Context, *entities.LayerZeroConfig) error { return nil }
-func (s *layerZeroRepoListDeleteStub) Delete(context.Context, uuid.UUID) error                 { return nil }
+func (s *stargateRepoListDeleteStub) Create(context.Context, *entities.StargateConfig) error { return nil }
+func (s *stargateRepoListDeleteStub) Update(context.Context, *entities.StargateConfig) error { return nil }
+func (s *stargateRepoListDeleteStub) Delete(context.Context, uuid.UUID) error                 { return nil }
 
 func TestCrosschainPolicyHandler_ListAndDeleteSuccess(t *testing.T) {
 	gin.SetMode(gin.TestMode)
@@ -88,14 +88,14 @@ func TestCrosschainPolicyHandler_ListAndDeleteSuccess(t *testing.T) {
 	}
 
 	routeRepo := &routePolicyRepoListDeleteStub{}
-	lzRepo := &layerZeroRepoListDeleteStub{}
+	lzRepo := &stargateRepoListDeleteStub{}
 	h := NewCrosschainPolicyHandler(routeRepo, lzRepo, chainRepo)
 
 	r := gin.New()
 	r.GET("/route-policies", h.ListRoutePolicies)
 	r.DELETE("/route-policies/:id", h.DeleteRoutePolicy)
-	r.GET("/lz-configs", h.ListLayerZeroConfigs)
-	r.DELETE("/lz-configs/:id", h.DeleteLayerZeroConfig)
+	r.GET("/lz-configs", h.ListStargateConfigs)
+	r.DELETE("/lz-configs/:id", h.DeleteStargateConfig)
 
 	req := httptest.NewRequest(http.MethodGet, "/route-policies?sourceChainId=8453&destChainId=eip155:42161&page=1&limit=20", nil)
 	w := httptest.NewRecorder()
@@ -122,6 +122,6 @@ func TestCrosschainPolicyHandler_ListAndDeleteSuccess(t *testing.T) {
 	w = httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	require.Equal(t, http.StatusOK, w.Code)
-	require.Contains(t, w.Body.String(), "LayerZero config deleted")
+	require.Contains(t, w.Body.String(), "Stargate config deleted")
 }
 

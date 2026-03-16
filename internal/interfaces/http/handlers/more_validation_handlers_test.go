@@ -19,7 +19,7 @@ func TestOnchainAdapterHandler_ValidationBranches(t *testing.T) {
 	r.POST("/default-bridge", h.SetDefaultBridgeType)
 	r.POST("/hyperbridge-config", h.SetHyperbridgeConfig)
 	r.POST("/ccip-config", h.SetCCIPConfig)
-	r.POST("/layerzero-config", h.SetLayerZeroConfig)
+	r.POST("/stargate-config", h.SetStargateConfig)
 
 	tests := []struct {
 		method string
@@ -31,7 +31,7 @@ func TestOnchainAdapterHandler_ValidationBranches(t *testing.T) {
 		{http.MethodPost, "/default-bridge", `{}`},
 		{http.MethodPost, "/hyperbridge-config", `{}`},
 		{http.MethodPost, "/ccip-config", `{}`},
-		{http.MethodPost, "/layerzero-config", `{}`},
+		{http.MethodPost, "/stargate-config", `{}`},
 	}
 
 	for _, tc := range tests {

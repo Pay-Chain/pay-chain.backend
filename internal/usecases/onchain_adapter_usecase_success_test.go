@@ -70,9 +70,11 @@ func TestOnchainAdapterUsecase_GetStatus_Success(t *testing.T) {
 		encodeOut(t, routerABI.Methods["hasAdapter"], true),                         // has type0
 		encodeOut(t, routerABI.Methods["hasAdapter"], false),                        // has type1
 		encodeOut(t, routerABI.Methods["hasAdapter"], false),                        // has type2
+		encodeOut(t, routerABI.Methods["hasAdapter"], false),                        // has type3
 		encodeOut(t, routerABI.Methods["getAdapter"], adapter0),                     // adapter type0
 		encodeOut(t, routerABI.Methods["getAdapter"], common.Address{}),             // adapter type1
 		encodeOut(t, routerABI.Methods["getAdapter"], common.Address{}),             // adapter type2
+		encodeOut(t, routerABI.Methods["getAdapter"], common.Address{}),             // adapter type3
 		encodeOut(t, routerABI.Methods["hasAdapter"], true),                         // has default
 		encodeOut(t, routerABI.Methods["getAdapter"], adapter0),                     // adapter default
 		encodeOut(t, hyperABI.Methods["isChainConfigured"], true),                   // hyper configured
@@ -167,7 +169,7 @@ func TestOnchainAdapterUsecase_GetStatus_AllBridgeAdapters(t *testing.T) {
 		{"inputs":[{"internalType":"string","name":"chainId","type":"string"}],"name":"destinationExtraArgs","outputs":[{"internalType":"bytes","name":"","type":"bytes"}],"stateMutability":"view","type":"function"},
 		{"inputs":[{"internalType":"string","name":"chainId","type":"string"}],"name":"destinationFeeTokens","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"}
 	]`)
-	layerZeroABI := mustParseABI(t, `[
+	stargateABI := mustParseABI(t, `[
 		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"}],"name":"isRouteConfigured","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},
 		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"}],"name":"dstEids","outputs":[{"internalType":"uint32","name":"","type":"uint32"}],"stateMutability":"view","type":"function"},
 		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"}],"name":"peers","outputs":[{"internalType":"bytes32","name":"","type":"bytes32"}],"stateMutability":"view","type":"function"},
@@ -177,7 +179,7 @@ func TestOnchainAdapterUsecase_GetStatus_AllBridgeAdapters(t *testing.T) {
 	adapter0 := common.HexToAddress("0x1111111111111111111111111111111111111111")
 	adapter1 := common.HexToAddress("0x2222222222222222222222222222222222222222")
 	adapter2 := common.HexToAddress("0x3333333333333333333333333333333333333333")
-	lzPeer := [32]byte{9}
+	stargatePeer := [32]byte{9}
 	ccipDest := common.LeftPadBytes(common.HexToAddress("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").Bytes(), 32)
 	hyperDest := common.LeftPadBytes(common.HexToAddress("0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb").Bytes(), 32)
 
@@ -186,9 +188,11 @@ func TestOnchainAdapterUsecase_GetStatus_AllBridgeAdapters(t *testing.T) {
 		encodeOut(t, routerABI.Methods["hasAdapter"], true),
 		encodeOut(t, routerABI.Methods["hasAdapter"], true),
 		encodeOut(t, routerABI.Methods["hasAdapter"], true),
+		encodeOut(t, routerABI.Methods["hasAdapter"], false),
 		encodeOut(t, routerABI.Methods["getAdapter"], adapter0),
 		encodeOut(t, routerABI.Methods["getAdapter"], adapter1),
 		encodeOut(t, routerABI.Methods["getAdapter"], adapter2),
+		encodeOut(t, routerABI.Methods["getAdapter"], common.Address{}),
 		encodeOut(t, routerABI.Methods["hasAdapter"], true),
 		encodeOut(t, routerABI.Methods["getAdapter"], adapter2),
 		encodeOut(t, hyperABI.Methods["isChainConfigured"], true),
@@ -199,10 +203,10 @@ func TestOnchainAdapterUsecase_GetStatus_AllBridgeAdapters(t *testing.T) {
 		encodeOut(t, ccipABI.Methods["destinationGasLimits"], common.Big1),
 		encodeOut(t, ccipABI.Methods["destinationExtraArgs"], []byte{0x97, 0x10, 0xa9, 0xd0}),
 		encodeOut(t, ccipABI.Methods["destinationFeeTokens"], common.HexToAddress("0x0000000000000000000000000000000000000000")),
-		encodeOut(t, layerZeroABI.Methods["isRouteConfigured"], true),
-		encodeOut(t, layerZeroABI.Methods["dstEids"], uint32(30110)),
-		encodeOut(t, layerZeroABI.Methods["peers"], lzPeer),
-		encodeOut(t, layerZeroABI.Methods["enforcedOptions"], []byte{0x01, 0x02}),
+		encodeOut(t, stargateABI.Methods["isRouteConfigured"], true),
+		encodeOut(t, stargateABI.Methods["dstEids"], uint32(30110)),
+		encodeOut(t, stargateABI.Methods["peers"], stargatePeer),
+		encodeOut(t, stargateABI.Methods["enforcedOptions"], []byte{0x01, 0x02}),
 	}
 
 	var (
@@ -265,10 +269,10 @@ func TestOnchainAdapterUsecase_GetStatus_AllBridgeAdapters(t *testing.T) {
 		ContractAddress: adapter1.Hex(),
 		IsActive:        true,
 	}, nil)
-	contractRepo.On("GetActiveContract", mock.Anything, sourceID, entities.ContractTypeAdapterLayerZero).Return(&entities.SmartContract{
+	contractRepo.On("GetActiveContract", mock.Anything, sourceID, entities.ContractTypeAdapterStargate).Return(&entities.SmartContract{
 		ID:              uuid.New(),
 		ChainUUID:       sourceID,
-		Type:            entities.ContractTypeAdapterLayerZero,
+		Type:            entities.ContractTypeAdapterStargate,
 		ContractAddress: adapter2.Hex(),
 		IsActive:        true,
 	}, nil)
@@ -281,8 +285,8 @@ func TestOnchainAdapterUsecase_GetStatus_AllBridgeAdapters(t *testing.T) {
 	require.True(t, status.HyperbridgeConfigured)
 	require.NotEmpty(t, status.CCIPDestinationAdapter)
 	require.Equal(t, uint64(4949039107694359620), status.CCIPChainSelector)
-	require.True(t, status.LayerZeroConfigured)
-	require.Equal(t, uint32(30110), status.LayerZeroDstEID)
-	require.NotEqual(t, "0x", status.LayerZeroPeer)
-	require.NotEmpty(t, status.LayerZeroOptionsHex)
+	require.True(t, status.StargateConfigured)
+	require.Equal(t, uint32(30110), status.StargateDstEID)
+	require.NotEqual(t, "0x", status.StargatePeer)
+	require.NotEmpty(t, status.StargateOptionsHex)
 }

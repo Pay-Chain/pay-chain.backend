@@ -20,7 +20,7 @@ type Chain struct {
 	IsActive          bool   `gorm:"default:true"`
 	StateMachineID    string `gorm:"type:varchar(100)"`
 	CCIPChainSelector string `gorm:"type:varchar(255);column:ccip_chain_selector"`
-	LayerZeroEID      int    `gorm:"type:integer;column:layerzero_eid"`
+	StargateEID      int    `gorm:"type:integer;column:stargate_eid"`
 	CreatedAt         time.Time
 	UpdatedAt         time.Time
 	DeletedAt         gorm.DeletedAt `gorm:"index"`

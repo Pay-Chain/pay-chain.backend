@@ -47,19 +47,19 @@ func TestOnchainAdapterUsecase_CallHelpers_CallViewErrorBranches(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "call view failed")
 
-	_, err = u.callLayerZeroConfigured(ctx, client, addr, FallbackLayerZeroSenderAdminABI, dest)
+	_, err = u.callStargateConfigured(ctx, client, addr, FallbackStargateSenderAdminABI, dest)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "call view failed")
 
-	_, err = u.callLayerZeroDstEid(ctx, client, addr, FallbackLayerZeroSenderAdminABI, dest)
+	_, err = u.callStargateDstEid(ctx, client, addr, FallbackStargateSenderAdminABI, dest)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "call view failed")
 
-	_, err = u.callLayerZeroPeer(ctx, client, addr, FallbackLayerZeroSenderAdminABI, dest)
+	_, err = u.callStargatePeer(ctx, client, addr, FallbackStargateSenderAdminABI, dest)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "call view failed")
 
-	_, err = u.callLayerZeroOptions(ctx, client, addr, FallbackLayerZeroSenderAdminABI, dest)
+	_, err = u.callStargateOptions(ctx, client, addr, FallbackStargateSenderAdminABI, dest)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "call view failed")
 }

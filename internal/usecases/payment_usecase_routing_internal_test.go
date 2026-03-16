@@ -111,7 +111,7 @@ func TestPaymentUsecase_DecideBridge_Priority(t *testing.T) {
 			},
 		}
 		bridgeName, bridgeID := u.decideBridge(context.Background(), sourceID, destID, "eip155:8453", "eip155:42161")
-		require.Equal(t, "LayerZero", bridgeName)
+		require.Equal(t, "Stargate", bridgeName)
 		require.Nil(t, bridgeID)
 	})
 

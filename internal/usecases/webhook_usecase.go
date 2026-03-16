@@ -7,10 +7,13 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
+	"github.com/volatiletech/null/v8"
 	"payment-kita.backend/internal/domain/entities"
 	"payment-kita.backend/internal/domain/repositories"
+	"payment-kita.backend/internal/infrastructure/metrics"
 )
 
 // WebhookUsecase handles incoming notifications from the indexer
@@ -18,6 +21,9 @@ type WebhookUsecase struct {
 	paymentRepo        repositories.PaymentRepository
 	paymentEventRepo   repositories.PaymentEventRepository
 	paymentRequestRepo repositories.PaymentRequestRepository
+	merchantRepo       repositories.MerchantRepository
+	webhookLogRepo     repositories.WebhookLogRepository
+	dispatcher         *WebhookDispatcher
 	uow                repositories.UnitOfWork
 }
 
@@ -26,12 +32,18 @@ func NewWebhookUsecase(
 	paymentRepo repositories.PaymentRepository,
 	paymentEventRepo repositories.PaymentEventRepository,
 	paymentRequestRepo repositories.PaymentRequestRepository,
+	merchantRepo repositories.MerchantRepository,
+	webhookLogRepo repositories.WebhookLogRepository,
+	dispatcher *WebhookDispatcher,
 	uow repositories.UnitOfWork,
 ) *WebhookUsecase {
 	return &WebhookUsecase{
 		paymentRepo:        paymentRepo,
 		paymentEventRepo:   paymentEventRepo,
 		paymentRequestRepo: paymentRequestRepo,
+		merchantRepo:       merchantRepo,
+		webhookLogRepo:     webhookLogRepo,
+		dispatcher:         dispatcher,
 		uow:                uow,
 	}
 }
@@ -78,14 +90,10 @@ func (u *WebhookUsecase) ProcessIndexerWebhook(ctx context.Context, eventType st
 			lockCtx := u.uow.WithLock(txCtx)
 
 			// 1. Get current Payment with Lock
-			// Note: We need GetByID on repository. Assuming it's available.
 			_, err := u.paymentRepo.GetByID(lockCtx, paymentUUID)
 			if err != nil {
-				return err // Or ignore if not found?
+				return err
 			}
-
-			// 2. Validate Transition (Optional state machine check can be added here)
-			// For now, we trust the indexer but having the lock ensures we serialize updates.
 
 			// 3. Update status
 			if err := u.paymentRepo.UpdateStatus(lockCtx, paymentUUID, newStatus); err != nil {
@@ -106,6 +114,19 @@ func (u *WebhookUsecase) ProcessIndexerWebhook(ctx context.Context, eventType st
 			return err
 		}
 
+		// Trigger Webhook if terminal state
+		if newStatus == entities.PaymentStatusCompleted || newStatus == entities.PaymentStatusRefunded {
+			_ = u.enqueueWebhookDelivery(ctx, paymentUUID, string(newStatus), data)
+
+			// Record Settlement Latency
+			if newStatus == entities.PaymentStatusCompleted {
+				if payment, err := u.paymentRepo.GetByID(ctx, paymentUUID); err == nil {
+					duration := time.Since(payment.CreatedAt).Seconds()
+					metrics.RecordSettlementLatency(payment.DestChainID.String(), duration)
+				}
+			}
+		}
+
 	case "PAYMENT_FAILED":
 		var failureData struct {
 			PaymentId    string `json:"paymentId"`
@@ -120,14 +141,12 @@ func (u *WebhookUsecase) ProcessIndexerWebhook(ctx context.Context, eventType st
 
 		paymentUUID, _ := uuid.Parse(failureData.PaymentId)
 		newStatus := mapStatus(failureData.Status)
-		if newStatus == entities.PaymentStatusPending { // Fallback if status not explicitly failed in payload
+		if newStatus == entities.PaymentStatusPending {
 			newStatus = entities.PaymentStatusFailed
 		}
 
-		// Try to decode revert data if present and reason is generic or empty
 		decodedReason := failureData.Reason
 		if failureData.RevertData != "" {
-			// decodeRouteErrorData is available in the same package
 			if revertBytes, err := hex.DecodeString(strings.TrimPrefix(failureData.RevertData, "0x")); err == nil {
 				decoded := decodeRouteErrorData(revertBytes)
 				if decoded.Message != "" {
@@ -142,14 +161,10 @@ func (u *WebhookUsecase) ProcessIndexerWebhook(ctx context.Context, eventType st
 
 		err := u.uow.Do(ctx, func(txCtx context.Context) error {
 			lockCtx := u.uow.WithLock(txCtx)
-
-			// 1. Get current Payment
 			payment, err := u.paymentRepo.GetByID(lockCtx, paymentUUID)
 			if err != nil {
 				return err
 			}
-
-			// 2. Update status and failure fields
 			payment.Status = newStatus
 			payment.FailureReason.String = decodedReason
 			payment.FailureReason.Valid = decodedReason != ""
@@ -160,12 +175,11 @@ func (u *WebhookUsecase) ProcessIndexerWebhook(ctx context.Context, eventType st
 				return err
 			}
 
-			// 3. Create event
 			return u.paymentEventRepo.Create(lockCtx, &entities.PaymentEvent{
 				PaymentID: paymentUUID,
 				EventType: entities.PaymentEventType(eventType),
 				TxHash:    failureData.SourceTxHash,
-				Metadata:  string(data), // Store full failure payload in metadata
+				Metadata:  string(data),
 			})
 		})
 
@@ -174,14 +188,15 @@ func (u *WebhookUsecase) ProcessIndexerWebhook(ctx context.Context, eventType st
 			return err
 		}
 
+		// Trigger Webhook for failure
+		_ = u.enqueueWebhookDelivery(ctx, paymentUUID, string(entities.PaymentStatusFailed), data)
+
 	case "PAYMENT_REQUEST_CREATED":
-		// No action needed if backend already created it,
-		// but we could sync if it originated from elsewhere
 		log.Printf("Payment request created on-chain: %s", data)
 
 	case "REQUEST_PAYMENT_RECEIVED":
 		var requestData struct {
-			Id     string `json:"id"` // requestId
+			Id     string `json:"id"`
 			Payer  string `json:"payer"`
 			TxHash string `json:"txHash"`
 		}
@@ -200,4 +215,42 @@ func (u *WebhookUsecase) ProcessIndexerWebhook(ctx context.Context, eventType st
 	}
 
 	return nil
+}
+
+func (u *WebhookUsecase) enqueueWebhookDelivery(ctx context.Context, paymentID uuid.UUID, eventType string, data json.RawMessage) error {
+	payment, err := u.paymentRepo.GetByID(ctx, paymentID)
+	if err != nil || payment.MerchantID == nil {
+		return nil
+	}
+
+	delivery := &entities.WebhookDelivery{
+		ID:             uuid.New(),
+		MerchantID:     *payment.MerchantID,
+		PaymentID:      paymentID,
+		EventType:      eventType,
+		Payload:        null.JSONFrom(data),
+		DeliveryStatus: entities.WebhookDeliveryStatusPending,
+		RetryCount:     0,
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
+	}
+
+	if err := u.webhookLogRepo.Create(ctx, delivery); err != nil {
+		log.Printf("[WebhookUsecase] Failed to create delivery log: %v", err)
+		return err
+	}
+
+	log.Printf("[WebhookUsecase] Enqueued webhook delivery %s for merchant %s", delivery.ID, delivery.MerchantID)
+	return nil
+}
+
+// ManualRetry triggers a manual webhook delivery attempt
+func (u *WebhookUsecase) ManualRetry(ctx context.Context, deliveryID uuid.UUID) error {
+	delivery, err := u.webhookLogRepo.GetByID(ctx, deliveryID)
+	if err != nil {
+		return fmt.Errorf("webhook delivery not found: %w", err)
+	}
+
+	log.Printf("[WebhookUsecase] Manually retrying webhook delivery %s", deliveryID)
+	return u.dispatcher.Dispatch(ctx, delivery)
 }

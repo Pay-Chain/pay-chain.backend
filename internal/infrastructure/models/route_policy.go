@@ -32,7 +32,7 @@ func (RoutePolicy) TableName() string {
 	return "route_policies"
 }
 
-type LayerZeroConfig struct {
+type StargateConfig struct {
 	ID            uuid.UUID `gorm:"type:uuid;primaryKey;default:uuid_generate_v7()"`
 	SourceChainID uuid.UUID `gorm:"type:uuid;not null;index"`
 	DestChainID   uuid.UUID `gorm:"type:uuid;not null;index"`
@@ -45,6 +45,6 @@ type LayerZeroConfig struct {
 	DeletedAt     gorm.DeletedAt `gorm:"index"`
 }
 
-func (LayerZeroConfig) TableName() string {
-	return "layerzero_configs"
+func (StargateConfig) TableName() string {
+	return "stargate_configs"
 }

@@ -48,17 +48,17 @@ func TestCrosschainPolicyHandler_GapValidationBranches(t *testing.T) {
 	routeRepo := &routePolicyRepoErrMatrixStub{
 		item: &entities.RoutePolicy{ID: routeID},
 	}
-	lzRepo := &layerZeroRepoErrMatrixStub{
-		item: &entities.LayerZeroConfig{ID: lzID},
+	lzRepo := &stargateRepoErrMatrixStub{
+		item: &entities.StargateConfig{ID: lzID},
 	}
 
 	h := NewCrosschainPolicyHandler(routeRepo, lzRepo, chainRepo)
 	r := gin.New()
 	r.GET("/route", h.ListRoutePolicies)
 	r.PUT("/route/:id", h.UpdateRoutePolicy)
-	r.GET("/lz", h.ListLayerZeroConfigs)
-	r.POST("/lz", h.CreateLayerZeroConfig)
-	r.PUT("/lz/:id", h.UpdateLayerZeroConfig)
+	r.GET("/lz", h.ListStargateConfigs)
+	r.POST("/lz", h.CreateStargateConfig)
+	r.PUT("/lz/:id", h.UpdateStargateConfig)
 
 	t.Run("list route invalid dest query", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/route?sourceChainId=8453&destChainId=bad-dest", nil)
@@ -111,14 +111,14 @@ func TestCrosschainPolicyHandler_GapValidationBranches(t *testing.T) {
 		require.Equal(t, http.StatusBadRequest, w.Code)
 	})
 
-	t.Run("list layerzero invalid dest query", func(t *testing.T) {
+	t.Run("list stargate invalid dest query", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/lz?sourceChainId=8453&destChainId=bad-dest", nil)
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, req)
 		require.Equal(t, http.StatusBadRequest, w.Code)
 	})
 
-	t.Run("create layerzero invalid source chain", func(t *testing.T) {
+	t.Run("create stargate invalid source chain", func(t *testing.T) {
 		body := `{"sourceChainId":"bad-source","destChainId":"42161","dstEid":1,"peerHex":"` + peerHex + `"}`
 		req := httptest.NewRequest(http.MethodPost, "/lz", strings.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
@@ -127,7 +127,7 @@ func TestCrosschainPolicyHandler_GapValidationBranches(t *testing.T) {
 		require.Equal(t, http.StatusBadRequest, w.Code)
 	})
 
-	t.Run("create layerzero invalid dest chain", func(t *testing.T) {
+	t.Run("create stargate invalid dest chain", func(t *testing.T) {
 		body := `{"sourceChainId":"8453","destChainId":"bad-dest","dstEid":1,"peerHex":"` + peerHex + `"}`
 		req := httptest.NewRequest(http.MethodPost, "/lz", strings.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
@@ -136,7 +136,7 @@ func TestCrosschainPolicyHandler_GapValidationBranches(t *testing.T) {
 		require.Equal(t, http.StatusBadRequest, w.Code)
 	})
 
-	t.Run("update layerzero invalid json bind", func(t *testing.T) {
+	t.Run("update stargate invalid json bind", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPut, "/lz/"+lzID.String(), strings.NewReader("{"))
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
@@ -144,7 +144,7 @@ func TestCrosschainPolicyHandler_GapValidationBranches(t *testing.T) {
 		require.Equal(t, http.StatusBadRequest, w.Code)
 	})
 
-	t.Run("update layerzero source equals dest", func(t *testing.T) {
+	t.Run("update stargate source equals dest", func(t *testing.T) {
 		body := `{"sourceChainId":"8453","destChainId":"8453","dstEid":1,"peerHex":"` + peerHex + `"}`
 		req := httptest.NewRequest(http.MethodPut, "/lz/"+lzID.String(), strings.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")

@@ -13,7 +13,7 @@ import (
 	"payment-kita.backend/internal/domain/entities"
 )
 
-func TestCrosschainPolicyHandler_UpdateLayerZeroConfig_NormalizationAndOptionalActive(t *testing.T) {
+func TestCrosschainPolicyHandler_UpdateStargateConfig_NormalizationAndOptionalActive(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	sourceID := uuid.New()
@@ -43,7 +43,7 @@ func TestCrosschainPolicyHandler_UpdateLayerZeroConfig_NormalizationAndOptionalA
 		},
 	}
 
-	existing := &entities.LayerZeroConfig{
+	existing := &entities.StargateConfig{
 		ID:            configID,
 		SourceChainID: sourceID,
 		DestChainID:   destID,
@@ -53,9 +53,9 @@ func TestCrosschainPolicyHandler_UpdateLayerZeroConfig_NormalizationAndOptionalA
 		IsActive:      true,
 	}
 
-	lzRepo := &layerZeroRepoErrMatrixStub{
+	lzRepo := &stargateRepoErrMatrixStub{
 		item: existing,
-		getByIDFn: func(_ context.Context, id uuid.UUID) (*entities.LayerZeroConfig, error) {
+		getByIDFn: func(_ context.Context, id uuid.UUID) (*entities.StargateConfig, error) {
 			if id == configID {
 				return existing, nil
 			}
@@ -65,7 +65,7 @@ func TestCrosschainPolicyHandler_UpdateLayerZeroConfig_NormalizationAndOptionalA
 
 	h := NewCrosschainPolicyHandler(routePolicyRepoNoop{}, lzRepo, chainRepo)
 	r := gin.New()
-	r.PUT("/lz/:id", h.UpdateLayerZeroConfig)
+	r.PUT("/lz/:id", h.UpdateStargateConfig)
 
 	// optionsHex omitted + peer without 0x should normalize; isActive omitted should preserve existing value.
 	body := `{"sourceChainId":"eip155:8453","destChainId":"42161","dstEid":30111,"peerHex":"` + strings.Repeat("b", 64) + `"}`

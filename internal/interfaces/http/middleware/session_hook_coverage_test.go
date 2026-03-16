@@ -90,7 +90,7 @@ func TestDualAuthMiddleware_SessionHookAndOptionalSignatureBranch(t *testing.T) 
 
 	_ = os.Setenv("INTERNAL_PROXY_SECRET", "proxy-secret")
 	r := gin.New()
-	r.Use(DualAuthMiddleware(j, apiKeyUsecase, &redis.SessionStore{}))
+	r.Use(DualAuthMiddleware(j, apiKeyUsecase, internalMerchantRepoStub{}, &redis.SessionStore{}))
 	r.POST("/dual", func(c *gin.Context) { c.Status(http.StatusNoContent) })
 
 	// Cover trusted-session path and successful body restore.

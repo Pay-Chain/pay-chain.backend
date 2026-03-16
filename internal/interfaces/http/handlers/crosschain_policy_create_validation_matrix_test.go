@@ -54,7 +54,7 @@ func TestCrosschainPolicyHandler_CreateRoutePolicy_ValidationMatrix(t *testing.T
 		},
 	}
 
-	h := NewCrosschainPolicyHandler(routePolicyRepoCreateNoop{}, layerZeroRepoNoop{}, chainRepo)
+	h := NewCrosschainPolicyHandler(routePolicyRepoCreateNoop{}, stargateRepoNoop{}, chainRepo)
 	r := gin.New()
 	r.POST("/route", h.CreateRoutePolicy)
 

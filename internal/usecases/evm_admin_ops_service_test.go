@@ -164,7 +164,7 @@ func TestEVMAdminOpsService_SetHyperbridgeConfig(t *testing.T) {
 	})
 }
 
-func TestEVMAdminOpsService_SetCCIPAndLayerZeroConfig(t *testing.T) {
+func TestEVMAdminOpsService_SetCCIPAndStargateConfig(t *testing.T) {
 	ctx := context.Background()
 	sourceID := uuid.New()
 	resolved := &evmAdminContext{
@@ -202,7 +202,7 @@ func TestEVMAdminOpsService_SetCCIPAndLayerZeroConfig(t *testing.T) {
 		require.Len(t, txs, 2)
 	})
 
-	t.Run("layerzero invalid peer and success", func(t *testing.T) {
+	t.Run("stargate invalid peer and success", func(t *testing.T) {
 		svc := newEVMAdminOpsService(
 			func(context.Context, string, string) (*evmAdminContext, error) { return resolved, nil },
 			func(context.Context, uuid.UUID, string, string, uint8) (string, error) {
@@ -214,10 +214,10 @@ func TestEVMAdminOpsService_SetCCIPAndLayerZeroConfig(t *testing.T) {
 			mockResolveABI,
 		)
 
-		_, _, err := svc.SetLayerZeroConfig(ctx, "eip155:8453", "eip155:42161", &lzEid, "0x12", "")
+		_, _, err := svc.SetStargateConfig(ctx, "eip155:8453", "eip155:42161", &lzEid, "0x12", "")
 		require.Error(t, err)
 
-		adapter, txs, err := svc.SetLayerZeroConfig(
+		adapter, txs, err := svc.SetStargateConfig(
 			ctx,
 			"eip155:8453",
 			"eip155:42161",
@@ -265,7 +265,7 @@ func TestEVMAdminOpsService_SetCCIPAndLayerZeroConfig(t *testing.T) {
 		require.Error(t, err)
 	})
 
-	t.Run("layerzero adapter lookup error and partial payload error", func(t *testing.T) {
+	t.Run("stargate adapter lookup error and partial payload error", func(t *testing.T) {
 		svcLookupErr := newEVMAdminOpsService(
 			func(context.Context, string, string) (*evmAdminContext, error) { return resolved, nil },
 			func(context.Context, uuid.UUID, string, string, uint8) (string, error) {
@@ -276,7 +276,7 @@ func TestEVMAdminOpsService_SetCCIPAndLayerZeroConfig(t *testing.T) {
 			},
 			mockResolveABI,
 		)
-		_, _, err := svcLookupErr.SetLayerZeroConfig(ctx, "eip155:8453", "eip155:42161", &lzEid, "0x"+strings.Repeat("1", 64), "")
+		_, _, err := svcLookupErr.SetStargateConfig(ctx, "eip155:8453", "eip155:42161", &lzEid, "0x"+strings.Repeat("1", 64), "")
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "adapter lookup failed")
 
@@ -290,13 +290,13 @@ func TestEVMAdminOpsService_SetCCIPAndLayerZeroConfig(t *testing.T) {
 			},
 			mockResolveABI,
 		)
-		_, _, err = svcPartial.SetLayerZeroConfig(ctx, "eip155:8453", "eip155:42161", &lzEid, "", "")
+		_, _, err = svcPartial.SetStargateConfig(ctx, "eip155:8453", "eip155:42161", &lzEid, "", "")
 		require.Error(t, err)
-		_, _, err = svcPartial.SetLayerZeroConfig(ctx, "eip155:8453", "eip155:42161", nil, "0x"+strings.Repeat("1", 64), "")
+		_, _, err = svcPartial.SetStargateConfig(ctx, "eip155:8453", "eip155:42161", nil, "0x"+strings.Repeat("1", 64), "")
 		require.Error(t, err)
 	})
 
-	t.Run("layerzero options only success", func(t *testing.T) {
+	t.Run("stargate options only success", func(t *testing.T) {
 		svc := newEVMAdminOpsService(
 			func(context.Context, string, string) (*evmAdminContext, error) { return resolved, nil },
 			func(context.Context, uuid.UUID, string, string, uint8) (string, error) {
@@ -308,7 +308,7 @@ func TestEVMAdminOpsService_SetCCIPAndLayerZeroConfig(t *testing.T) {
 			},
 			mockResolveABI,
 		)
-		adapter, txs, err := svc.SetLayerZeroConfig(ctx, "eip155:8453", "eip155:42161", nil, "", "0102")
+		adapter, txs, err := svc.SetStargateConfig(ctx, "eip155:8453", "eip155:42161", nil, "", "0102")
 		require.NoError(t, err)
 		require.Equal(t, "0x5555555555555555555555555555555555555555", adapter)
 		require.Equal(t, []string{"0xtx-options"}, txs)
@@ -366,7 +366,7 @@ func TestEVMAdminOpsService_SetCCIPAndLayerZeroConfig(t *testing.T) {
 		require.Contains(t, appErr.Message, "set destination failed")
 	})
 
-	t.Run("layerzero adapter missing", func(t *testing.T) {
+	t.Run("stargate adapter missing", func(t *testing.T) {
 		svc := newEVMAdminOpsService(
 			func(context.Context, string, string) (*evmAdminContext, error) { return resolved, nil },
 			func(context.Context, uuid.UUID, string, string, uint8) (string, error) {
@@ -377,11 +377,11 @@ func TestEVMAdminOpsService_SetCCIPAndLayerZeroConfig(t *testing.T) {
 			},
 			mockResolveABI,
 		)
-		_, _, err := svc.SetLayerZeroConfig(ctx, "eip155:8453", "eip155:42161", &lzEid, "0x"+strings.Repeat("1", 64), "")
+		_, _, err := svc.SetStargateConfig(ctx, "eip155:8453", "eip155:42161", &lzEid, "0x"+strings.Repeat("1", 64), "")
 		require.Error(t, err)
 	})
 
-	t.Run("layerzero setRoute tx error", func(t *testing.T) {
+	t.Run("stargate setRoute tx error", func(t *testing.T) {
 		svc := newEVMAdminOpsService(
 			func(context.Context, string, string) (*evmAdminContext, error) { return resolved, nil },
 			func(context.Context, uuid.UUID, string, string, uint8) (string, error) {
@@ -395,7 +395,7 @@ func TestEVMAdminOpsService_SetCCIPAndLayerZeroConfig(t *testing.T) {
 			},
 			mockResolveABI,
 		)
-		_, _, err := svc.SetLayerZeroConfig(ctx, "eip155:8453", "eip155:42161", &lzEid, "0x"+strings.Repeat("1", 64), "")
+		_, _, err := svc.SetStargateConfig(ctx, "eip155:8453", "eip155:42161", &lzEid, "0x"+strings.Repeat("1", 64), "")
 		require.Error(t, err)
 		var appErr *derrs.AppError
 		require.ErrorAs(t, err, &appErr)
@@ -403,7 +403,7 @@ func TestEVMAdminOpsService_SetCCIPAndLayerZeroConfig(t *testing.T) {
 		require.Contains(t, appErr.Message, "set route failed")
 	})
 
-	t.Run("layerzero options tx error", func(t *testing.T) {
+	t.Run("stargate options tx error", func(t *testing.T) {
 		svc := newEVMAdminOpsService(
 			func(context.Context, string, string) (*evmAdminContext, error) { return resolved, nil },
 			func(context.Context, uuid.UUID, string, string, uint8) (string, error) {
@@ -417,7 +417,7 @@ func TestEVMAdminOpsService_SetCCIPAndLayerZeroConfig(t *testing.T) {
 			},
 			mockResolveABI,
 		)
-		_, _, err := svc.SetLayerZeroConfig(ctx, "eip155:8453", "eip155:42161", nil, "", "0x0102")
+		_, _, err := svc.SetStargateConfig(ctx, "eip155:8453", "eip155:42161", nil, "", "0x0102")
 		require.Error(t, err)
 		var appErr *derrs.AppError
 		require.ErrorAs(t, err, &appErr)
@@ -425,7 +425,7 @@ func TestEVMAdminOpsService_SetCCIPAndLayerZeroConfig(t *testing.T) {
 		require.Contains(t, appErr.Message, "set options failed")
 	})
 
-	t.Run("layerzero payload required", func(t *testing.T) {
+	t.Run("stargate payload required", func(t *testing.T) {
 		svc := newEVMAdminOpsService(
 			func(context.Context, string, string) (*evmAdminContext, error) { return resolved, nil },
 			func(context.Context, uuid.UUID, string, string, uint8) (string, error) {
@@ -436,7 +436,7 @@ func TestEVMAdminOpsService_SetCCIPAndLayerZeroConfig(t *testing.T) {
 			},
 			mockResolveABI,
 		)
-		_, _, err := svc.SetLayerZeroConfig(ctx, "eip155:8453", "eip155:42161", nil, "", "")
+		_, _, err := svc.SetStargateConfig(ctx, "eip155:8453", "eip155:42161", nil, "", "")
 		require.Error(t, err)
 		var appErr *derrs.AppError
 		require.ErrorAs(t, err, &appErr)

@@ -13,7 +13,7 @@ import (
 	"payment-kita.backend/internal/domain/entities"
 )
 
-func TestCrosschainPolicyHandler_CreateLayerZeroConfig_NormalizationDefaults(t *testing.T) {
+func TestCrosschainPolicyHandler_CreateStargateConfig_NormalizationDefaults(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	sourceID := uuid.New()
@@ -42,9 +42,9 @@ func TestCrosschainPolicyHandler_CreateLayerZeroConfig_NormalizationDefaults(t *
 		},
 	}
 
-	var created *entities.LayerZeroConfig
-	lzRepo := &layerZeroRepoErrMatrixStub{
-		createFn: func(_ context.Context, cfg *entities.LayerZeroConfig) error {
+	var created *entities.StargateConfig
+	lzRepo := &stargateRepoErrMatrixStub{
+		createFn: func(_ context.Context, cfg *entities.StargateConfig) error {
 			created = cfg
 			return nil
 		},
@@ -52,7 +52,7 @@ func TestCrosschainPolicyHandler_CreateLayerZeroConfig_NormalizationDefaults(t *
 
 	h := NewCrosschainPolicyHandler(routePolicyRepoNoop{}, lzRepo, chainRepo)
 	r := gin.New()
-	r.POST("/lz", h.CreateLayerZeroConfig)
+	r.POST("/lz", h.CreateStargateConfig)
 
 	body := `{"sourceChainId":"eip155:8453","destChainId":"42161","dstEid":30110,"peerHex":"` + strings.Repeat("f", 64) + `"}`
 	req := httptest.NewRequest(http.MethodPost, "/lz", strings.NewReader(body))

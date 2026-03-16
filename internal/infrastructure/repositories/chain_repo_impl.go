@@ -204,7 +204,7 @@ func (r *chainRepo) Create(ctx context.Context, chain *entities.Chain) error {
 		IsActive:          chain.IsActive,
 		StateMachineID:    "", // Entity doesn't have this field
 		CCIPChainSelector: chain.CCIPChainSelector,
-		LayerZeroEID:      chain.LayerZeroEID,
+		StargateEID:      chain.StargateEID,
 		CreatedAt:         chain.CreatedAt,
 	}
 
@@ -228,7 +228,7 @@ func (r *chainRepo) Update(ctx context.Context, chain *entities.Chain) error {
 		"image_url":           chain.ImageURL,
 		"is_active":           chain.IsActive,
 		"ccip_chain_selector": chain.CCIPChainSelector,
-		"layerzero_eid":       chain.LayerZeroEID,
+		"stargate_eid":       chain.StargateEID,
 		// "state_machine_id": chain.StateMachineID, // Removed
 	}
 
@@ -278,7 +278,7 @@ func (r *chainRepo) toEntity(m *models.Chain) *entities.Chain {
 		ImageURL:          m.LogoURL,
 		IsActive:          m.IsActive,
 		CCIPChainSelector: m.CCIPChainSelector,
-		LayerZeroEID:      m.LayerZeroEID,
+		StargateEID:      m.StargateEID,
 		CreatedAt:         m.CreatedAt,
 		UpdatedAt:         m.UpdatedAt,
 		// DeletedAt:      &m.DeletedAt.Time, // GORM DeletedAt is struct?

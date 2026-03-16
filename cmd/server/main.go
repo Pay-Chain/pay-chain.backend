@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"os"
@@ -17,9 +18,11 @@ import (
 	"gorm.io/gorm"
 
 	"payment-kita.backend/internal/config"
+	"payment-kita.backend/internal/domain/services"
 	"payment-kita.backend/internal/infrastructure/blockchain"
 	"payment-kita.backend/internal/infrastructure/jobs"
 	"payment-kita.backend/internal/infrastructure/repositories"
+	servicesimpl "payment-kita.backend/internal/infrastructure/services"
 	"payment-kita.backend/internal/interfaces/http/handlers"
 	"payment-kita.backend/internal/interfaces/http/middleware"
 	"payment-kita.backend/internal/usecases"
@@ -116,11 +119,14 @@ func runMainProcess() error {
 	bridgeConfigRepo := repositories.NewBridgeConfigRepository(db)
 	feeConfigRepo := repositories.NewFeeConfigRepository(db)
 	routePolicyRepo := repositories.NewRoutePolicyRepository(db)
-	layerZeroConfigRepo := repositories.NewLayerZeroConfigRepository(db)
+	stargateConfigRepo := repositories.NewStargateConfigRepository(db)
 	smartContractRepo := repositories.NewSmartContractRepository(db, chainRepo)
 	paymentRequestRepo := repositories.NewPaymentRequestRepository(db)
 	teamRepo := repositories.NewTeamRepository(db)
-	apiKeyRepo := repositories.NewApiKeyRepository(db) // Added
+	apiKeyRepo := repositories.NewApiKeyRepository(db)
+	webhookLogRepo := repositories.NewGormWebhookLogRepository(db)
+	auditLogRepo := repositories.NewAuditLogRepository(db)
+	resolveAuditRepo := repositories.NewResolveAuditRepository(db)
 	uow := repositories.NewUnitOfWork(db)
 
 	// Initialize Session Store
@@ -128,6 +134,15 @@ func runMainProcess() error {
 	if err != nil {
 		return fmt.Errorf("failed to initialize session store: %w", err)
 	}
+
+	// Initialize JWEService for Partner Flow
+	jweKey, _ := hex.DecodeString(cfg.Security.JweMasterKey)
+	jweService, err := services.NewJWEService(jweKey)
+	if err != nil {
+		return fmt.Errorf("failed to initialize jwe service: %w", err)
+	}
+	hmacService := servicesimpl.NewHMACService()
+	complianceService := services.NewComplianceService(80)
 
 	// Initialize blockchain client factory
 	clientFactory := blockchain.NewClientFactory()
@@ -141,8 +156,13 @@ func runMainProcess() error {
 	paymentAppUsecase := usecases.NewPaymentAppUsecase(paymentUsecase, userRepo, walletRepo, chainRepo)
 	merchantUsecase := usecases.NewMerchantUsecase(merchantRepo, userRepo)
 	walletUsecase := usecases.NewWalletUsecase(walletRepo, userRepo, chainRepo)
-	paymentRequestUsecase := usecases.NewPaymentRequestUsecase(paymentRequestRepo, merchantRepo, walletRepo, chainRepo, smartContractRepo, tokenRepo)
-	webhookUsecase := usecases.NewWebhookUsecase(paymentRepo, paymentEventRepo, paymentRequestRepo, uow)
+
+	paymentRequestUsecase := usecases.NewPaymentRequestUsecase(paymentRequestRepo, merchantRepo, walletRepo, chainRepo, smartContractRepo, tokenRepo, jweService)
+	// Step 3: Webhook Delivery Engine
+	webhookDispatcher := usecases.NewWebhookDispatcher(webhookLogRepo, merchantRepo, hmacService)
+	webhookJob := jobs.NewWebhookDeliveryJob(webhookLogRepo, webhookDispatcher)
+
+	webhookUsecase := usecases.NewWebhookUsecase(paymentRepo, paymentEventRepo, paymentRequestRepo, merchantRepo, webhookLogRepo, webhookDispatcher, uow)
 	onchainAdapterUsecase := usecases.NewOnchainAdapterUsecase(chainRepo, smartContractRepo, clientFactory, cfg.Blockchain.OwnerPrivateKey)
 	contractConfigAuditUsecase := usecases.NewContractConfigAuditUsecase(chainRepo, smartContractRepo, clientFactory)
 	crosschainConfigUsecase := usecases.NewCrosschainConfigUsecase(chainRepo, tokenRepo, smartContractRepo, clientFactory, onchainAdapterUsecase)
@@ -162,16 +182,17 @@ func runMainProcess() error {
 	teamHandler := handlers.NewTeamHandler(teamRepo)
 	apiKeyHandler := handlers.NewApiKeyHandler(apiKeyUsecase)             // Added
 	paymentAppHandler := handlers.NewPaymentAppHandler(paymentAppUsecase) // Added
+	paymentResolveHandler := handlers.NewPaymentResolveHandler(jweService, complianceService, resolveAuditRepo, paymentRequestUsecase)
 	paymentConfigHandler := handlers.NewPaymentConfigHandler(paymentBridgeRepo, bridgeConfigRepo, feeConfigRepo, chainRepo, tokenRepo)
 	onchainAdapterHandler := handlers.NewOnchainAdapterHandler(onchainAdapterUsecase)
 	contractConfigAuditHandler := handlers.NewContractConfigAuditHandler(contractConfigAuditUsecase)
 	crosschainConfigHandler := handlers.NewCrosschainConfigHandler(crosschainConfigUsecase)
-	crosschainPolicyHandler := handlers.NewCrosschainPolicyHandler(routePolicyRepo, layerZeroConfigRepo, chainRepo)
+	crosschainPolicyHandler := handlers.NewCrosschainPolicyHandler(routePolicyRepo, stargateConfigRepo, chainRepo)
 	routeErrorHandler := handlers.NewRouteErrorHandler(routeErrorUsecase)
 	rpcHandler := handlers.NewRpcHandler(chainRepo)
 
 	// Create dual auth middleware
-	dualAuthMiddleware := middleware.DualAuthMiddleware(jwtService, apiKeyUsecase, sessionStore) // Added
+	dualAuthMiddleware := middleware.DualAuthMiddleware(jwtService, apiKeyUsecase, merchantRepo, sessionStore)
 
 	// Start background jobs
 	ctx, cancel := context.WithCancel(context.Background())
@@ -179,6 +200,7 @@ func runMainProcess() error {
 
 	expiryJob := jobs.NewPaymentRequestExpiryJob(paymentRequestRepo)
 	go expiryJob.Start(ctx)
+	go webhookJob.Run(ctx)
 
 	// Initialize router
 	// Initialize router
@@ -210,6 +232,8 @@ func runMainProcess() error {
 		crosschainPolicyHandler:    crosschainPolicyHandler,
 		routeErrorHandler:          routeErrorHandler,
 		rpcHandler:                 rpcHandler,
+		paymentResolveHandler:      paymentResolveHandler,
+		auditLogRepo:               auditLogRepo,
 		dualAuthMiddleware:         dualAuthMiddleware,
 	})
 

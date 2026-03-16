@@ -24,6 +24,16 @@ func TestPaymentRequestHandler_ExtraBranches(t *testing.T) {
 
 	var gotListLimit int
 	var gotListOffset int
+
+	// Define stub manually since we are in different file but same package scope
+	// ... wait, the stub is defined in success_test.go which is in the same package (handlers_test)
+	// No, they are in package handlers.
+	// But the test files are likely in package handlers_test or handlers.
+	// Let's check package name. 
+	// Branches test says: package handlers
+	// Success test says: package handlers
+	// So they share the stub.
+
 	service := paymentRequestServiceStub{
 		createFn: func(_ context.Context, _ usecases.CreatePaymentRequestInput) (*usecases.CreatePaymentRequestOutput, error) {
 			return nil, errors.New("create failed")
@@ -48,6 +58,9 @@ func TestPaymentRequestHandler_ExtraBranches(t *testing.T) {
 			gotListLimit = limit
 			gotListOffset = offset
 			return []*entities.PaymentRequest{}, 0, nil
+		},
+		resolveFn: func(_ context.Context, _ uuid.UUID) (*usecases.ResolvePaymentRequestOutput, error) {
+			return nil, errors.New("resolve failed")
 		},
 	}
 

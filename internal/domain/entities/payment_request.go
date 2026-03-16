@@ -36,6 +36,7 @@ type PaymentRequest struct {
 	CreatedAt     time.Time            `json:"createdAt"`
 	UpdatedAt     time.Time            `json:"updatedAt"`
 	DeletedAt     *time.Time           `json:"-"`
+	PaymentCode   string               `json:"paymentCode,omitempty" gorm:"column:payment_code"`
 
 	// Joins
 	Merchant *Merchant `json:"merchant,omitempty" gorm:"foreignKey:MerchantID"`

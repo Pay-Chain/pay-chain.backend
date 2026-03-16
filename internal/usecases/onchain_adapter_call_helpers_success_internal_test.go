@@ -34,10 +34,10 @@ func TestOnchainAdapterUsecase_CallHelpers_Success(t *testing.T) {
 		mustEncodeOutputFromABI(t, FallbackHyperbridgeSenderAdminABI, "stateMachineIds", hyperBytes),
 		mustEncodeOutputFromABI(t, FallbackCCIPSenderAdminABI, "chainSelectors", uint64(12345)),
 		mustEncodeOutputFromABI(t, FallbackCCIPSenderAdminABI, "destinationAdapters", ccipDest),
-		mustEncodeOutputFromABI(t, FallbackLayerZeroSenderAdminABI, "isRouteConfigured", true),
-		mustEncodeOutputFromABI(t, FallbackLayerZeroSenderAdminABI, "dstEids", uint32(40161)),
-		mustEncodeOutputFromABI(t, FallbackLayerZeroSenderAdminABI, "peers", [32]byte(peerHash)),
-		mustEncodeOutputFromABI(t, FallbackLayerZeroSenderAdminABI, "enforcedOptions", lzOptions),
+		mustEncodeOutputFromABI(t, FallbackStargateSenderAdminABI, "isRouteConfigured", true),
+		mustEncodeOutputFromABI(t, FallbackStargateSenderAdminABI, "dstEids", uint32(40161)),
+		mustEncodeOutputFromABI(t, FallbackStargateSenderAdminABI, "peers", [32]byte(peerHash)),
+		mustEncodeOutputFromABI(t, FallbackStargateSenderAdminABI, "enforcedOptions", lzOptions),
 	})
 
 	vBridge, err := u.callDefaultBridgeType(context.Background(), client, routerAddr.Hex(), FallbackPaymentKitaGatewayABI, dest)
@@ -68,19 +68,19 @@ func TestOnchainAdapterUsecase_CallHelpers_Success(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, ccipDest, vCCIPDest)
 
-	vLZCfg, err := u.callLayerZeroConfigured(context.Background(), client, adapterAddr.Hex(), FallbackLayerZeroSenderAdminABI, dest)
+	vLZCfg, err := u.callStargateConfigured(context.Background(), client, adapterAddr.Hex(), FallbackStargateSenderAdminABI, dest)
 	require.NoError(t, err)
 	require.True(t, vLZCfg)
 
-	vDstEid, err := u.callLayerZeroDstEid(context.Background(), client, adapterAddr.Hex(), FallbackLayerZeroSenderAdminABI, dest)
+	vDstEid, err := u.callStargateDstEid(context.Background(), client, adapterAddr.Hex(), FallbackStargateSenderAdminABI, dest)
 	require.NoError(t, err)
 	require.Equal(t, uint32(40161), vDstEid)
 
-	vPeer, err := u.callLayerZeroPeer(context.Background(), client, adapterAddr.Hex(), FallbackLayerZeroSenderAdminABI, dest)
+	vPeer, err := u.callStargatePeer(context.Background(), client, adapterAddr.Hex(), FallbackStargateSenderAdminABI, dest)
 	require.NoError(t, err)
 	require.Equal(t, peerHash, vPeer)
 
-	vOpts, err := u.callLayerZeroOptions(context.Background(), client, adapterAddr.Hex(), FallbackLayerZeroSenderAdminABI, dest)
+	vOpts, err := u.callStargateOptions(context.Background(), client, adapterAddr.Hex(), FallbackStargateSenderAdminABI, dest)
 	require.NoError(t, err)
 	require.Equal(t, lzOptions, vOpts)
 }

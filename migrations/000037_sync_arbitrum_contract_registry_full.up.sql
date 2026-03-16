@@ -139,8 +139,8 @@ target_contracts AS (
                 ]$$::jsonb
             ),
             (
-                'ADAPTER_LAYERZERO',
-                'LayerZeroSenderAdapter',
+                'ADAPTER_STARGATE',
+                'StargateSenderAdapter',
                 '2.1.0',
                 '0x64505be2844d35284ab58984f93dceb21bc77464',
                 $$[
@@ -157,8 +157,8 @@ target_contracts AS (
                 ]$$::jsonb
             ),
             (
-                'RECEIVER_LAYERZERO',
-                'LayerZeroReceiverAdapter',
+                'RECEIVER_STARGATE',
+                'StargateReceiverAdapter',
                 '2.1.0',
                 '0x0c6c2cc9c2fb42d2fe591f2c3fee4db428090ad4',
                 $$[

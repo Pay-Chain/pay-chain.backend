@@ -1,0 +1,29 @@
+groups:
+  - name: MerchantWebhooks
+    rules:
+      - alert: HighDeliveryFailureRate
+        expr: (sum(rate(pk_webhook_attempts_total{status!=\"200\"}[5m])) / sum(rate(pk_webhook_attempts_total[5m]))) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Merchant Webhook failures exceeding 5%"
+          description: "Over 5% of webhooks are failing to deliver in the last 5 minutes. Initial success criteria not met."
+
+      - alert: HighWebhookLatency
+        expr: histogram_quantile(0.95, sum(rate(pk_webhook_latency_ms_bucket[5m])) by (le)) > 30000
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Webhook latency > 30s"
+          description: "95th percentile of webhook delivery latency is higher than 30s."
+
+      - alert: WebhookBacklogGrowing
+        expr: delta(pk_webhook_queue_size[15m]) > 500
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Webhook Backlog Growing"
+          description: "The delivery queue has increased by more than 500 items in the last 15 minutes."

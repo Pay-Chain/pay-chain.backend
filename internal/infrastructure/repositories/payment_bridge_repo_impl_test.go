@@ -68,7 +68,7 @@ func TestPaymentBridgeRepository_Create_AssignsIDWhenNil(t *testing.T) {
 	repo := NewPaymentBridgeRepository(db)
 	ctx := context.Background()
 
-	bridge := &entities.PaymentBridge{Name: "LayerZero"}
+	bridge := &entities.PaymentBridge{Name: "Stargate"}
 	require.NoError(t, repo.Create(ctx, bridge))
 	require.NotEqual(t, uuid.Nil, bridge.ID)
 }

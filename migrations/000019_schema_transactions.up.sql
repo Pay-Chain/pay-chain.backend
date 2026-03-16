@@ -45,7 +45,7 @@ END $$;
 -- Payment Bridge (Lookup)
 CREATE TABLE IF NOT EXISTS payment_bridge (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v7(),
-    name VARCHAR(50) UNIQUE NOT NULL, -- 'CCIP', 'Hyperlane', 'LayerZero'
+    name VARCHAR(50) UNIQUE NOT NULL, -- 'CCIP', 'Hyperlane', 'Stargate'
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW(),
     deleted_at TIMESTAMP

@@ -19,18 +19,18 @@ import (
 
 type CrosschainPolicyHandler struct {
 	routePolicyRepo     repositories.RoutePolicyRepository
-	layerZeroConfigRepo repositories.LayerZeroConfigRepository
+	stargateConfigRepo repositories.StargateConfigRepository
 	chainRepo           repositories.ChainRepository
 }
 
 func NewCrosschainPolicyHandler(
 	routePolicyRepo repositories.RoutePolicyRepository,
-	layerZeroConfigRepo repositories.LayerZeroConfigRepository,
+	stargateConfigRepo repositories.StargateConfigRepository,
 	chainRepo repositories.ChainRepository,
 ) *CrosschainPolicyHandler {
 	return &CrosschainPolicyHandler{
 		routePolicyRepo:     routePolicyRepo,
-		layerZeroConfigRepo: layerZeroConfigRepo,
+		stargateConfigRepo: stargateConfigRepo,
 		chainRepo:           chainRepo,
 	}
 }
@@ -339,7 +339,7 @@ func (h *CrosschainPolicyHandler) DeleteRoutePolicy(c *gin.Context) {
 	response.Success(c, http.StatusOK, gin.H{"message": "Route policy deleted"})
 }
 
-func (h *CrosschainPolicyHandler) ListLayerZeroConfigs(c *gin.Context) {
+func (h *CrosschainPolicyHandler) ListStargateConfigs(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
 	pagination := utils.GetPaginationParams(page, limit)
@@ -360,7 +360,7 @@ func (h *CrosschainPolicyHandler) ListLayerZeroConfigs(c *gin.Context) {
 		activeOnly = &v
 	}
 
-	items, total, err := h.layerZeroConfigRepo.List(c.Request.Context(), sourceChainID, destChainID, activeOnly, pagination)
+	items, total, err := h.stargateConfigRepo.List(c.Request.Context(), sourceChainID, destChainID, activeOnly, pagination)
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -371,7 +371,7 @@ func (h *CrosschainPolicyHandler) ListLayerZeroConfigs(c *gin.Context) {
 	})
 }
 
-func (h *CrosschainPolicyHandler) CreateLayerZeroConfig(c *gin.Context) {
+func (h *CrosschainPolicyHandler) CreateStargateConfig(c *gin.Context) {
 	var input struct {
 		SourceChainID string `json:"sourceChainId" binding:"required"`
 		DestChainID   string `json:"destChainId" binding:"required"`
@@ -409,7 +409,7 @@ func (h *CrosschainPolicyHandler) CreateLayerZeroConfig(c *gin.Context) {
 		optionsHex = "0x"
 	}
 
-	item := &entities.LayerZeroConfig{
+	item := &entities.StargateConfig{
 		ID:            utils.GenerateUUIDv7(),
 		SourceChainID: sourceChainID,
 		DestChainID:   destChainID,
@@ -423,20 +423,20 @@ func (h *CrosschainPolicyHandler) CreateLayerZeroConfig(c *gin.Context) {
 	if input.IsActive != nil {
 		item.IsActive = *input.IsActive
 	}
-	if err := h.layerZeroConfigRepo.Create(c.Request.Context(), item); err != nil {
+	if err := h.stargateConfigRepo.Create(c.Request.Context(), item); err != nil {
 		response.Error(c, err)
 		return
 	}
 	response.Success(c, http.StatusCreated, gin.H{"config": item})
 }
 
-func (h *CrosschainPolicyHandler) UpdateLayerZeroConfig(c *gin.Context) {
+func (h *CrosschainPolicyHandler) UpdateStargateConfig(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		response.Error(c, domainerrors.BadRequest("invalid layerzero config id"))
+		response.Error(c, domainerrors.BadRequest("invalid stargate config id"))
 		return
 	}
-	existing, err := h.layerZeroConfigRepo.GetByID(c.Request.Context(), id)
+	existing, err := h.stargateConfigRepo.GetByID(c.Request.Context(), id)
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -489,24 +489,24 @@ func (h *CrosschainPolicyHandler) UpdateLayerZeroConfig(c *gin.Context) {
 	}
 	existing.UpdatedAt = time.Now()
 
-	if err := h.layerZeroConfigRepo.Update(c.Request.Context(), existing); err != nil {
+	if err := h.stargateConfigRepo.Update(c.Request.Context(), existing); err != nil {
 		response.Error(c, err)
 		return
 	}
 	response.Success(c, http.StatusOK, gin.H{"config": existing})
 }
 
-func (h *CrosschainPolicyHandler) DeleteLayerZeroConfig(c *gin.Context) {
+func (h *CrosschainPolicyHandler) DeleteStargateConfig(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		response.Error(c, domainerrors.BadRequest("invalid layerzero config id"))
+		response.Error(c, domainerrors.BadRequest("invalid stargate config id"))
 		return
 	}
-	if err := h.layerZeroConfigRepo.Delete(c.Request.Context(), id); err != nil {
+	if err := h.stargateConfigRepo.Delete(c.Request.Context(), id); err != nil {
 		response.Error(c, err)
 		return
 	}
-	response.Success(c, http.StatusOK, gin.H{"message": "LayerZero config deleted"})
+	response.Success(c, http.StatusOK, gin.H{"message": "Stargate config deleted"})
 }
 
 func (h *CrosschainPolicyHandler) parseChainID(ctx context.Context, input string) (uuid.UUID, error) {

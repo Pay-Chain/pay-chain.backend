@@ -1,0 +1,106 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "title": "Webhook Success Rate",
+      "type": "gauge",
+      "gridPos": { "h": 8, "w": 6, "x": 0, "y": 0 },
+      "targets": [
+        { "expr": "100 * (sum(pk_webhook_attempts_total{status=\"200\"}) / sum(pk_webhook_attempts_total))", "refId": "A" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0, "max": 100, "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 95 },
+              { "color": "green", "value": 99 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Delivery Latency (P99)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 18, "x": 6, "y": 0 },
+      "targets": [
+        { "expr": "histogram_quantile(0.99, sum(rate(pk_webhook_latency_ms_bucket[5m])) by (le))", "refId": "A" }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "ms" }
+      }
+    },
+    {
+      "title": "Active Delivery Backlog",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "targets": [
+        { "expr": "sum(pk_webhook_queue_size{status=~\"pending|retrying\"})", "refId": "A" }
+      ]
+    },
+    {
+      "title": "Error Distribution",
+      "type": "piechart",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "targets": [
+        { "expr": "sum(pk_webhook_attempts_total) by (status_class)", "refId": "A" }
+      ]
+    },
+    {
+      "title": "Partner Session Creation",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 6, "x": 0, "y": 16 },
+      "targets": [
+        { "expr": "sum(rate(pk_partner_create_payment_requests_total[5m])) by (status)", "refId": "A" }
+      ]
+    },
+    {
+      "title": "Settlement Latency (Avg)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 6, "x": 6, "y": 16 },
+      "targets": [
+        { "expr": "sum(rate(pk_settlement_duration_seconds_sum[5m])) / sum(rate(pk_settlement_duration_seconds_count[5m]))", "refId": "A" }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "s" }
+      }
+    },
+    {
+      "title": "Indexer Lag",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 6, "x": 12, "y": 16 },
+      "targets": [
+        { "expr": "pk_indexer_lag_seconds", "refId": "A" }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "s" }
+      }
+    },
+    {
+      "title": "JWE Decryption Errors",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 6, "x": 18, "y": 16 },
+      "targets": [
+        { "expr": "sum(rate(pk_jwe_decryption_errors_total[5m])) by (reason)", "refId": "A" }
+      ]
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 36,
+  "style": "dark",
+  "tags": ["merchant", "webhooks", "production"],
+  "templating": { "list": [] },
+  "time": { "from": "now-6h", "to": "now" },
+  "title": "Merchant Webhook Health",
+  "uid": "pk-merchant-webhooks",
+  "version": 1
+}

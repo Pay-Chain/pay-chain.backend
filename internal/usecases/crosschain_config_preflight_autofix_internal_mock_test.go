@@ -81,7 +81,7 @@ func TestCrosschainConfigUsecase_Preflight_WithAdapterStub(t *testing.T) {
 				HyperbridgeConfigured:  true,
 				CCIPChainSelector:      0,
 				CCIPDestinationAdapter: "0x",
-				LayerZeroConfigured:    false,
+				StargateConfigured:    false,
 			}, nil
 		},
 	}
@@ -274,6 +274,6 @@ func TestCrosschainConfigUsecase_AutoFix_BranchMatrix(t *testing.T) {
 		require.Equal(t, "SKIPPED", res.Steps[0].Status)
 		require.Equal(t, "SKIPPED", res.Steps[1].Status)
 		require.Equal(t, "SKIPPED", res.Steps[2].Status)
-		require.Equal(t, "setLayerZeroConfig", res.Steps[2].Step)
+		require.Equal(t, "setStargateConfig", res.Steps[2].Step)
 	})
 }

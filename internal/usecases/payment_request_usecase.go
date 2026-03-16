@@ -2,12 +2,14 @@ package usecases
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
 	"payment-kita.backend/internal/domain/entities"
 	"payment-kita.backend/internal/domain/errors"
 	domainRepos "payment-kita.backend/internal/domain/repositories"
+	"payment-kita.backend/internal/domain/services"
 	"payment-kita.backend/pkg/utils"
 )
 
@@ -23,6 +25,7 @@ type PaymentRequestUsecase struct {
 	contractRepo       domainRepos.SmartContractRepository
 	tokenRepo          domainRepos.TokenRepository
 	chainResolver      *ChainResolver
+	jweService         services.JWEService
 }
 
 func NewPaymentRequestUsecase(
@@ -32,6 +35,7 @@ func NewPaymentRequestUsecase(
 	chainRepo domainRepos.ChainRepository,
 	contractRepo domainRepos.SmartContractRepository,
 	tokenRepo domainRepos.TokenRepository,
+	jweService services.JWEService,
 ) *PaymentRequestUsecase {
 	return &PaymentRequestUsecase{
 		paymentRequestRepo: paymentRequestRepo,
@@ -40,6 +44,7 @@ func NewPaymentRequestUsecase(
 		chainRepo:          chainRepo,
 		contractRepo:       contractRepo,
 		tokenRepo:          tokenRepo,
+		jweService:         jweService,
 		chainResolver:      NewChainResolver(chainRepo),
 	}
 }
@@ -58,6 +63,22 @@ type CreatePaymentRequestOutput struct {
 	TxData        *entities.PaymentRequestTxData `json:"txData"`
 	ExpiresAt     time.Time                      `json:"expiresAt"`
 	ExpiresInSecs int                            `json:"expiresInSeconds"`
+}
+
+type ResolvePaymentRequestOutput struct {
+	PaymentID          string `json:"payment_id"`
+	MerchantID         string `json:"merchant_id"`
+	Amount             string `json:"amount"`
+	DestChain          string `json:"dest_chain"`
+	DestToken          string `json:"dest_token"`
+	DestWallet         string `json:"dest_wallet"`
+	ExpireTime         int64  `json:"expire_time"`
+	PaymentCode        string `json:"payment_code"`
+	PaymentInstruction struct {
+		QRData   string `json:"qr_data"`
+		DeepLink string `json:"deep_link"`
+	} `json:"payment_instruction"`
+	Status entities.PaymentRequestStatus `json:"status"`
 }
 
 func (uc *PaymentRequestUsecase) CreatePaymentRequest(ctx context.Context, input CreatePaymentRequestInput) (*CreatePaymentRequestOutput, error) {
@@ -138,6 +159,28 @@ func (uc *PaymentRequestUsecase) CreatePaymentRequest(ctx context.Context, input
 	if err := uc.paymentRequestRepo.Create(ctx, paymentRequest); err != nil {
 		return nil, errors.InternalError(err)
 	}
+
+	// ---------------------------------------------------------
+	// NEW: Generate JWE Payment Code for Partner Flow
+	// ---------------------------------------------------------
+	// Only generate if jweService is available
+	if uc.jweService != nil {
+		jwePayload := services.JWEPayload{
+			SessionID:  paymentRequest.ID.String(),
+			Amount:     input.Amount,
+			MerchantID: merchant.ID.String(),
+			Currency:   caip2ID,
+			ExpiresAt:  expiresAt.Unix(),
+		}
+		paymentCode, err := uc.jweService.Encrypt(jwePayload)
+		if err == nil {
+			// Update the record with the payment code (internal field)
+			// payment_code is part of the PaymentRequest entity
+			paymentRequest.PaymentCode = paymentCode
+			_ = uc.paymentRequestRepo.UpdatePaymentCode(ctx, paymentRequest.ID, paymentCode)
+		}
+	}
+	// ---------------------------------------------------------
 
 	// Build transaction data
 	txData := uc.buildTransactionData(paymentRequest, contract)
@@ -236,12 +279,57 @@ func (uc *PaymentRequestUsecase) GetPaymentRequest(ctx context.Context, requestI
 	}
 	contract, _ := uc.contractRepo.GetActiveContract(ctx, chainID, entities.ContractTypeGateway)
 
-	// Get wallet (by address now)
-	// _, _ = uc.walletRepo.GetByID(ctx, request.WalletID) // WalletID removed
-
 	txData := uc.buildTransactionData(request, contract)
 
 	return request, txData, nil
+}
+
+func (uc *PaymentRequestUsecase) ResolvePaymentRequest(ctx context.Context, requestID uuid.UUID) (*ResolvePaymentRequestOutput, error) {
+	request, err := uc.paymentRequestRepo.GetByID(ctx, requestID)
+	if err != nil {
+		return nil, errors.NotFound("payment request not found")
+	}
+
+	// Check if expired
+	if request.Status == entities.PaymentRequestStatusPending && time.Now().After(request.ExpiresAt) {
+		request.Status = entities.PaymentRequestStatusExpired
+		_ = uc.paymentRequestRepo.UpdateStatus(ctx, requestID, entities.PaymentRequestStatusExpired)
+	}
+
+	// Enrich with chain info if missing
+	chainID := request.ChainID
+	if chainID == uuid.Nil && request.NetworkID != "" {
+		if cid, _, resolveErr := uc.chainResolver.ResolveFromAny(ctx, request.NetworkID); resolveErr == nil {
+			chainID = cid
+			request.ChainID = cid
+		}
+	}
+
+	// Format instructions
+	qrData := request.PaymentCode
+	if qrData == "" {
+		// Fallback if JWE encryption failed or was not available at creation
+		qrData = fmt.Sprintf("pay:%s", request.ID)
+	}
+
+	// Simple deep link format (can be improved later)
+	deepLink := fmt.Sprintf("paymentkita://pay?code=%s", qrData)
+
+	output := &ResolvePaymentRequestOutput{
+		PaymentID:   request.ID.String(),
+		MerchantID:  request.MerchantID.String(),
+		Amount:      request.Amount,
+		DestChain:   request.NetworkID,
+		DestToken:   request.TokenAddress,
+		DestWallet:  request.WalletAddress,
+		ExpireTime:  request.ExpiresAt.Unix(),
+		PaymentCode: request.PaymentCode,
+		Status:      request.Status,
+	}
+	output.PaymentInstruction.QRData = qrData
+	output.PaymentInstruction.DeepLink = deepLink
+
+	return output, nil
 }
 
 func (uc *PaymentRequestUsecase) ListPaymentRequests(ctx context.Context, userID uuid.UUID, limit, offset int) ([]*entities.PaymentRequest, int, error) {

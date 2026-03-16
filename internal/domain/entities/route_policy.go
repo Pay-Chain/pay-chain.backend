@@ -34,7 +34,7 @@ type RoutePolicy struct {
 	DeletedAt              *time.Time         `json:"-"`
 }
 
-type LayerZeroConfig struct {
+type StargateConfig struct {
 	ID            uuid.UUID  `json:"id"`
 	SourceChainID uuid.UUID  `json:"sourceChainId"`
 	DestChainID   uuid.UUID  `json:"destChainId"`

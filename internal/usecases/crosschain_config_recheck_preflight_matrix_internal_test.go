@@ -57,7 +57,7 @@ func TestCrosschainConfigUsecase_RecheckRoute_IssueMatrix(t *testing.T) {
 					HyperbridgeConfigured:  false,
 					CCIPChainSelector:      0,
 					CCIPDestinationAdapter: "0x",
-					LayerZeroConfigured:    false,
+					StargateConfigured:    false,
 				}, nil
 			},
 		}
@@ -79,7 +79,7 @@ func TestCrosschainConfigUsecase_RecheckRoute_IssueMatrix(t *testing.T) {
 					HyperbridgeConfigured:  true,
 					CCIPChainSelector:      0,
 					CCIPDestinationAdapter: "0x",
-					LayerZeroConfigured:    false,
+					StargateConfigured:    false,
 				}, nil
 			},
 		}
@@ -91,7 +91,7 @@ func TestCrosschainConfigUsecase_RecheckRoute_IssueMatrix(t *testing.T) {
 		require.True(t, hasIssueCode(res.Issues, "FEE_QUOTE_FAILED"))
 	})
 
-	t.Run("default layerzero but not configured", func(t *testing.T) {
+	t.Run("default stargate but not configured", func(t *testing.T) {
 		adapter := &crosschainAdapterStub{
 			statusFn: func(context.Context, string, string) (*OnchainAdapterStatus, error) {
 				return &OnchainAdapterStatus{
@@ -101,7 +101,7 @@ func TestCrosschainConfigUsecase_RecheckRoute_IssueMatrix(t *testing.T) {
 					HyperbridgeConfigured:  true,
 					CCIPChainSelector:      4949039107694359620,
 					CCIPDestinationAdapter: "0x11",
-					LayerZeroConfigured:    false,
+					StargateConfigured:    false,
 				}, nil
 			},
 		}
@@ -109,7 +109,7 @@ func TestCrosschainConfigUsecase_RecheckRoute_IssueMatrix(t *testing.T) {
 		res, err := u.RecheckRoute(context.Background(), source.GetCAIP2ID(), dest.GetCAIP2ID())
 		require.NoError(t, err)
 		require.Equal(t, "ERROR", res.OverallStatus)
-		require.True(t, hasIssueCode(res.Issues, "LAYERZERO_NOT_CONFIGURED"))
+		require.True(t, hasIssueCode(res.Issues, "STARGATE_NOT_CONFIGURED"))
 		require.True(t, hasIssueCode(res.Issues, "FEE_QUOTE_FAILED"))
 	})
 
@@ -123,7 +123,7 @@ func TestCrosschainConfigUsecase_RecheckRoute_IssueMatrix(t *testing.T) {
 					HyperbridgeConfigured:  false,
 					CCIPChainSelector:      0,
 					CCIPDestinationAdapter: "0x",
-					LayerZeroConfigured:    false,
+					StargateConfigured:    false,
 				}, nil
 			},
 		}
@@ -155,7 +155,7 @@ func TestCrosschainConfigUsecase_Preflight_FeeQuoteFailedBranch(t *testing.T) {
 				HyperbridgeConfigured:  true,
 				CCIPChainSelector:      0,
 				CCIPDestinationAdapter: "0x",
-				LayerZeroConfigured:    false,
+				StargateConfigured:    false,
 			}, nil
 		},
 	}
@@ -177,7 +177,7 @@ func TestCrosschainConfigUsecase_Preflight_FeeQuoteFailedBranch(t *testing.T) {
 	require.Equal(t, "FEE_QUOTE_FAILED", row0.ErrorCode)
 }
 
-func TestCrosschainConfigUsecase_Preflight_DefaultLayerZeroPolicyExecutable(t *testing.T) {
+func TestCrosschainConfigUsecase_Preflight_DefaultStargatePolicyExecutable(t *testing.T) {
 	sourceID := uuid.New()
 	destID := uuid.New()
 	rpcServer := newCrosschainFeeRPCServer(t)
@@ -224,7 +224,7 @@ func TestCrosschainConfigUsecase_Preflight_DefaultLayerZeroPolicyExecutable(t *t
 				AdapterDefaultType:  "0x3333333333333333333333333333333333333333",
 				HasAdapterType2:     true,
 				AdapterType2:        "0x3333333333333333333333333333333333333333",
-				LayerZeroConfigured: true,
+				StargateConfigured: true,
 			}, nil
 		},
 	}
@@ -372,7 +372,7 @@ func TestCrosschainConfigUsecase_Preflight_DefaultHyperbridgePolicyExecutable(t 
 				HyperbridgeConfigured:  true,
 				CCIPChainSelector:      0,
 				CCIPDestinationAdapter: "0x",
-				LayerZeroConfigured:    false,
+				StargateConfigured:    false,
 			}, nil
 		},
 	}

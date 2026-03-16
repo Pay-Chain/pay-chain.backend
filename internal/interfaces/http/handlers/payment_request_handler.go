@@ -21,6 +21,7 @@ type PaymentRequestHandler struct {
 type PaymentRequestService interface {
 	CreatePaymentRequest(ctx context.Context, input usecases.CreatePaymentRequestInput) (*usecases.CreatePaymentRequestOutput, error)
 	GetPaymentRequest(ctx context.Context, requestID uuid.UUID) (*entities.PaymentRequest, *entities.PaymentRequestTxData, error)
+	ResolvePaymentRequest(ctx context.Context, requestID uuid.UUID) (*usecases.ResolvePaymentRequestOutput, error)
 	ListPaymentRequests(ctx context.Context, userID uuid.UUID, limit, offset int) ([]*entities.PaymentRequest, int, error)
 }
 
@@ -171,4 +172,23 @@ func (h *PaymentRequestHandler) GetPublicPaymentRequest(c *gin.Context) {
 			"base64":    txData.Base64,
 		},
 	})
+}
+
+// ResolvePaymentRequest resolves a payment request for the partner flow
+// GET /api/v1/payment/:id
+func (h *PaymentRequestHandler) ResolvePaymentRequest(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		response.Error(c, domainerrors.BadRequest("invalid payment ID"))
+		return
+	}
+
+	result, err := h.usecase.ResolvePaymentRequest(c.Request.Context(), id)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, result)
 }

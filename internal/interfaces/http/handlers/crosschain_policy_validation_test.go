@@ -18,7 +18,7 @@ func TestCrosschainPolicyHandler_InvalidParamAndBodyBranches(t *testing.T) {
 
 	h := NewCrosschainPolicyHandler(
 		routePolicyRepoNoop{},
-		layerZeroRepoNoop{},
+		stargateRepoNoop{},
 		&crosschainChainRepoStub{
 			getByChainID: func(_ context.Context, _ string) (*entities.Chain, error) {
 				return nil, domainerrors.ErrNotFound
@@ -32,10 +32,10 @@ func TestCrosschainPolicyHandler_InvalidParamAndBodyBranches(t *testing.T) {
 	r := gin.New()
 	r.DELETE("/route/:id", h.DeleteRoutePolicy)
 	r.PUT("/route/:id", h.UpdateRoutePolicy)
-	r.GET("/lz", h.ListLayerZeroConfigs)
-	r.POST("/lz", h.CreateLayerZeroConfig)
-	r.PUT("/lz/:id", h.UpdateLayerZeroConfig)
-	r.DELETE("/lz/:id", h.DeleteLayerZeroConfig)
+	r.GET("/lz", h.ListStargateConfigs)
+	r.POST("/lz", h.CreateStargateConfig)
+	r.PUT("/lz/:id", h.UpdateStargateConfig)
+	r.DELETE("/lz/:id", h.DeleteStargateConfig)
 
 	req := httptest.NewRequest(http.MethodDelete, "/route/bad-id", nil)
 	w := httptest.NewRecorder()

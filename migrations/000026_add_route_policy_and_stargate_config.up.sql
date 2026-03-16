@@ -19,7 +19,7 @@ CREATE INDEX IF NOT EXISTS idx_route_policies_dest_chain_id ON route_policies(de
 CREATE INDEX IF NOT EXISTS idx_route_policies_default_bridge_type ON route_policies(default_bridge_type);
 CREATE INDEX IF NOT EXISTS idx_route_policies_deleted_at ON route_policies(deleted_at);
 
-CREATE TABLE IF NOT EXISTS layerzero_configs (
+CREATE TABLE IF NOT EXISTS stargate_configs (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v7(),
     source_chain_id UUID NOT NULL REFERENCES chains(id) ON DELETE CASCADE,
     dest_chain_id UUID NOT NULL REFERENCES chains(id) ON DELETE CASCADE,
@@ -32,11 +32,11 @@ CREATE TABLE IF NOT EXISTS layerzero_configs (
     deleted_at TIMESTAMP
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_layerzero_configs_unique_active
-    ON layerzero_configs (source_chain_id, dest_chain_id)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_stargate_configs_unique_active
+    ON stargate_configs (source_chain_id, dest_chain_id)
     WHERE deleted_at IS NULL;
 
-CREATE INDEX IF NOT EXISTS idx_layerzero_configs_source_chain_id ON layerzero_configs(source_chain_id);
-CREATE INDEX IF NOT EXISTS idx_layerzero_configs_dest_chain_id ON layerzero_configs(dest_chain_id);
-CREATE INDEX IF NOT EXISTS idx_layerzero_configs_is_active ON layerzero_configs(is_active);
-CREATE INDEX IF NOT EXISTS idx_layerzero_configs_deleted_at ON layerzero_configs(deleted_at);
+CREATE INDEX IF NOT EXISTS idx_stargate_configs_source_chain_id ON stargate_configs(source_chain_id);
+CREATE INDEX IF NOT EXISTS idx_stargate_configs_dest_chain_id ON stargate_configs(dest_chain_id);
+CREATE INDEX IF NOT EXISTS idx_stargate_configs_is_active ON stargate_configs(is_active);
+CREATE INDEX IF NOT EXISTS idx_stargate_configs_deleted_at ON stargate_configs(deleted_at);

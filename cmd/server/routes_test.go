@@ -56,7 +56,7 @@ func TestRegisterAPIV1Routes_RegistersKeyRoutes(t *testing.T) {
 		{"GET", "/api/v1/admin/stats"},
 		{"POST", "/api/v1/admin/onchain-adapters/register"},
 		{"POST", "/api/v1/admin/onchain-adapters/hyperbridge-token-gateway-config"},
-		{"POST", "/api/v1/admin/layerzero-configs"},
+		{"POST", "/api/v1/admin/stargate-configs"},
 	}
 
 	for _, exp := range expects {

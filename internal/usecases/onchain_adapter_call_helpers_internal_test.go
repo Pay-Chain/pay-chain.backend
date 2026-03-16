@@ -14,13 +14,13 @@ func TestOnchainAdapterUsecase_CallHelpers_PackError(t *testing.T) {
 	origRouterABI := FallbackPaymentKitaRouterAdminABI
 	origHyperABI := FallbackHyperbridgeSenderAdminABI
 	origCCIPABI := FallbackCCIPSenderAdminABI
-	origLZABI := FallbackLayerZeroSenderAdminABI
+	origLZABI := FallbackStargateSenderAdminABI
 	t.Cleanup(func() {
 		FallbackPaymentKitaGatewayABI = origGatewayABI
 		FallbackPaymentKitaRouterAdminABI = origRouterABI
 		FallbackHyperbridgeSenderAdminABI = origHyperABI
 		FallbackCCIPSenderAdminABI = origCCIPABI
-		FallbackLayerZeroSenderAdminABI = origLZABI
+		FallbackStargateSenderAdminABI = origLZABI
 	})
 
 	// Force Pack(...) to fail before any RPC call.
@@ -28,7 +28,7 @@ func TestOnchainAdapterUsecase_CallHelpers_PackError(t *testing.T) {
 	FallbackPaymentKitaRouterAdminABI = abi.ABI{}
 	FallbackHyperbridgeSenderAdminABI = abi.ABI{}
 	FallbackCCIPSenderAdminABI = abi.ABI{}
-	FallbackLayerZeroSenderAdminABI = abi.ABI{}
+	FallbackStargateSenderAdminABI = abi.ABI{}
 
 	u := &OnchainAdapterUsecase{}
 	ctx := context.Background()
@@ -48,12 +48,12 @@ func TestOnchainAdapterUsecase_CallHelpers_PackError(t *testing.T) {
 	require.Error(t, err)
 	_, err = u.callCCIPDestinationAdapter(ctx, client, "0x0", FallbackCCIPSenderAdminABI, "eip155:42161")
 	require.Error(t, err)
-	_, err = u.callLayerZeroConfigured(ctx, client, "0x0", FallbackLayerZeroSenderAdminABI, "eip155:42161")
+	_, err = u.callStargateConfigured(ctx, client, "0x0", FallbackStargateSenderAdminABI, "eip155:42161")
 	require.Error(t, err)
-	_, err = u.callLayerZeroDstEid(ctx, client, "0x0", FallbackLayerZeroSenderAdminABI, "eip155:42161")
+	_, err = u.callStargateDstEid(ctx, client, "0x0", FallbackStargateSenderAdminABI, "eip155:42161")
 	require.Error(t, err)
-	_, err = u.callLayerZeroPeer(ctx, client, "0x0", FallbackLayerZeroSenderAdminABI, "eip155:42161")
+	_, err = u.callStargatePeer(ctx, client, "0x0", FallbackStargateSenderAdminABI, "eip155:42161")
 	require.Error(t, err)
-	_, err = u.callLayerZeroOptions(ctx, client, "0x0", FallbackLayerZeroSenderAdminABI, "eip155:42161")
+	_, err = u.callStargateOptions(ctx, client, "0x0", FallbackStargateSenderAdminABI, "eip155:42161")
 	require.Error(t, err)
 }

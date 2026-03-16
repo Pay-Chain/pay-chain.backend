@@ -39,6 +39,13 @@ type Merchant struct {
 	BusinessAddress    null.String    `json:"businessAddress,omitempty"`
 	Documents          null.JSON      `json:"documents,omitempty"`
 	FeeDiscountPercent string         `json:"feeDiscountPercent" gorm:"type:decimal(5,2)"` // Changed to string
+	CallbackURL        string         `json:"callbackUrl,omitempty"`
+	WebhookSecret      string         `json:"webhookSecret,omitempty"`
+	WebhookIsActive    bool           `json:"webhookIsActive"`
+	SupportEmail       string         `json:"supportEmail,omitempty"`
+	LogoURL            string         `json:"logoUrl,omitempty"`
+	WebhookMetadata    null.JSON      `json:"webhookMetadata,omitempty"`
+	Metadata           null.JSON      `json:"metadata,omitempty"`
 	VerifiedAt         *time.Time     `json:"verifiedAt,omitempty"`
 	CreatedAt          time.Time      `json:"createdAt"`
 	UpdatedAt          time.Time      `json:"updatedAt"`

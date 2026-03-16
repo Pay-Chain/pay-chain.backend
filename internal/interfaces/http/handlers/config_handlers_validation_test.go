@@ -76,7 +76,7 @@ func TestOnchainAdapterHandler_ValidationPaths(t *testing.T) {
 	r.POST("/default-bridge", h.SetDefaultBridgeType)
 	r.POST("/hyperbridge", h.SetHyperbridgeConfig)
 	r.POST("/ccip", h.SetCCIPConfig)
-	r.POST("/layerzero", h.SetLayerZeroConfig)
+	r.POST("/stargate", h.SetStargateConfig)
 
 	// GetStatus requires sourceChainId + destChainId
 	req := httptest.NewRequest(http.MethodGet, "/status", nil)
@@ -94,7 +94,7 @@ func TestOnchainAdapterHandler_ValidationPaths(t *testing.T) {
 		{path: "/default-bridge", body: `{"sourceChainId":"eip155:8453"}`},
 		{path: "/hyperbridge", body: `{"sourceChainId":""}`},
 		{path: "/ccip", body: `{"sourceChainId":""}`},
-		{path: "/layerzero", body: `{"sourceChainId":""}`},
+		{path: "/stargate", body: `{"sourceChainId":""}`},
 	} {
 		req = httptest.NewRequest(http.MethodPost, tc.path, bytes.NewReader([]byte(tc.body)))
 		req.Header.Set("Content-Type", "application/json")

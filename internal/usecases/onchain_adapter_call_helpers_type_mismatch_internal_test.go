@@ -27,13 +27,13 @@ func TestOnchainAdapterUsecase_CallHelpers_InvalidReturnTypeBranches(t *testing.
 	origRouterABI := FallbackPaymentKitaRouterAdminABI
 	origHyperABI := FallbackHyperbridgeSenderAdminABI
 	origCCIPABI := FallbackCCIPSenderAdminABI
-	origLZABI := FallbackLayerZeroSenderAdminABI
+	origLZABI := FallbackStargateSenderAdminABI
 	t.Cleanup(func() {
 		FallbackPaymentKitaGatewayABI = origGatewayABI
 		FallbackPaymentKitaRouterAdminABI = origRouterABI
 		FallbackHyperbridgeSenderAdminABI = origHyperABI
 		FallbackCCIPSenderAdminABI = origCCIPABI
-		FallbackLayerZeroSenderAdminABI = origLZABI
+		FallbackStargateSenderAdminABI = origLZABI
 	})
 
 	gatewayMismatch := mustParseABI(`[
@@ -101,23 +101,23 @@ func TestOnchainAdapterUsecase_CallHelpers_InvalidReturnTypeBranches(t *testing.
 		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"}],"name":"peers","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
 		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"}],"name":"enforcedOptions","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}
 	]`)
-	FallbackLayerZeroSenderAdminABI = lzMismatch
+	FallbackStargateSenderAdminABI = lzMismatch
 	client = newTestEVMClient(t, []string{
 		mustEncodeOutMismatch(t, lzMismatch, "isRouteConfigured", big.NewInt(1)),
 		mustEncodeOutMismatch(t, lzMismatch, "dstEids", true),
 		mustEncodeOutMismatch(t, lzMismatch, "peers", big.NewInt(1)),
 		mustEncodeOutMismatch(t, lzMismatch, "enforcedOptions", big.NewInt(1)),
 	})
-	_, err = u.callLayerZeroConfigured(ctx, client, addr, FallbackLayerZeroSenderAdminABI, dest)
+	_, err = u.callStargateConfigured(ctx, client, addr, FallbackStargateSenderAdminABI, dest)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid isRouteConfigured return type")
-	_, err = u.callLayerZeroDstEid(ctx, client, addr, FallbackLayerZeroSenderAdminABI, dest)
+	_, err = u.callStargateDstEid(ctx, client, addr, FallbackStargateSenderAdminABI, dest)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid dstEids return type")
-	_, err = u.callLayerZeroPeer(ctx, client, addr, FallbackLayerZeroSenderAdminABI, dest)
+	_, err = u.callStargatePeer(ctx, client, addr, FallbackStargateSenderAdminABI, dest)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid peers return type")
-	_, err = u.callLayerZeroOptions(ctx, client, addr, FallbackLayerZeroSenderAdminABI, dest)
+	_, err = u.callStargateOptions(ctx, client, addr, FallbackStargateSenderAdminABI, dest)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid enforcedOptions return type")
 }

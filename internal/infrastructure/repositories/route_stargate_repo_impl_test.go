@@ -83,17 +83,17 @@ func TestRoutePolicyRepository_Create_DefaultsAndGeneratedID(t *testing.T) {
 	require.Equal(t, []uint8{0}, got.FallbackOrder)
 }
 
-func TestLayerZeroConfigRepository_CRUDAndNotFound(t *testing.T) {
+func TestStargateConfigRepository_CRUDAndNotFound(t *testing.T) {
 	db := newTestDB(t)
 	createRoutePolicyTables(t, db)
 	ctx := context.Background()
-	repo := NewLayerZeroConfigRepository(db)
+	repo := NewStargateConfigRepository(db)
 
 	id := uuid.New()
 	sourceID := uuid.New()
 	destID := uuid.New()
 
-	err := repo.Create(ctx, &entities.LayerZeroConfig{
+	err := repo.Create(ctx, &entities.StargateConfig{
 		ID:            id,
 		SourceChainID: sourceID,
 		DestChainID:   destID,
@@ -128,17 +128,17 @@ func TestLayerZeroConfigRepository_CRUDAndNotFound(t *testing.T) {
 	_, err = repo.GetByRoute(ctx, sourceID, destID)
 	require.ErrorIs(t, err, domainerrors.ErrNotFound)
 
-	require.ErrorIs(t, repo.Update(ctx, &entities.LayerZeroConfig{ID: uuid.New()}), domainerrors.ErrNotFound)
+	require.ErrorIs(t, repo.Update(ctx, &entities.StargateConfig{ID: uuid.New()}), domainerrors.ErrNotFound)
 	require.ErrorIs(t, repo.Delete(ctx, uuid.New()), domainerrors.ErrNotFound)
 }
 
-func TestRouteAndLayerZeroRepository_DBErrorBranches(t *testing.T) {
+func TestRouteAndStargateRepository_DBErrorBranches(t *testing.T) {
 	db := newTestDB(t)
 	// intentionally skip table creation
 	ctx := context.Background()
 
 	routeRepo := NewRoutePolicyRepository(db)
-	layerZeroRepo := NewLayerZeroConfigRepository(db)
+	stargateRepo := NewStargateConfigRepository(db)
 
 	_, err := routeRepo.GetByID(ctx, uuid.New())
 	require.Error(t, err)
@@ -149,12 +149,12 @@ func TestRouteAndLayerZeroRepository_DBErrorBranches(t *testing.T) {
 	err = routeRepo.Delete(ctx, uuid.New())
 	require.Error(t, err)
 
-	_, err = layerZeroRepo.GetByID(ctx, uuid.New())
+	_, err = stargateRepo.GetByID(ctx, uuid.New())
 	require.Error(t, err)
-	_, err = layerZeroRepo.GetByRoute(ctx, uuid.New(), uuid.New())
+	_, err = stargateRepo.GetByRoute(ctx, uuid.New(), uuid.New())
 	require.Error(t, err)
-	_, _, err = layerZeroRepo.List(ctx, nil, nil, nil, utils.PaginationParams{Page: 1, Limit: 10})
+	_, _, err = stargateRepo.List(ctx, nil, nil, nil, utils.PaginationParams{Page: 1, Limit: 10})
 	require.Error(t, err)
-	err = layerZeroRepo.Delete(ctx, uuid.New())
+	err = stargateRepo.Delete(ctx, uuid.New())
 	require.Error(t, err)
 }

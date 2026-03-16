@@ -132,10 +132,14 @@ func TestProcessIndexerWebhook_Locking(t *testing.T) {
 	lockedKey := "locked"
 	lockedCtx := context.WithValue(ctx, lockedKey, true)
 
+	mockWebhookLogRepo := new(MockWebhookLogRepository)
 	uc := usecases.NewWebhookUsecase(
 		mockPaymentRepo,
 		mockEventRepo,
 		mockRequestRepo,
+		new(MockMerchantRepository),
+		mockWebhookLogRepo,
+		nil, // WebhookDispatcher
 		mockUOW,
 	)
 
@@ -159,17 +163,26 @@ func TestProcessIndexerWebhook_Locking(t *testing.T) {
 	// WithLock Expectation
 	mockUOW.On("WithLock", ctx).Return(lockedCtx)
 
-	// Payment Repo Expectation - MUST be called with lockedCtx
+	// Payment Repo Expectation - MUST be called with lockedCtx in loop, but with ctx in enqueue
 	mockPaymentRepo.On("GetByID", lockedCtx, paymentID).Return(&entities.Payment{
 		ID:           paymentID,
 		Status:       entities.PaymentStatusPending,
+		MerchantID:   &paymentID, // Use paymentID as merchantID for simplicity in test
 		SourceAmount: "1000000000000000000",
 	}, nil)
+
+	mockPaymentRepo.On("GetByID", ctx, paymentID).Return(&entities.Payment{
+		ID:           paymentID,
+		Status:       entities.PaymentStatusPending,
+		MerchantID:   &paymentID,
+		SourceAmount: "1000000000000000000",
+	}, nil).Maybe()
 
 	mockPaymentRepo.On("UpdateStatus", lockedCtx, paymentID, entities.PaymentStatusCompleted).Return(nil)
 
 	// Event Repo Expectation
 	mockEventRepo.On("Create", lockedCtx, mock.AnythingOfType("*entities.PaymentEvent")).Return(nil)
+	mockWebhookLogRepo.On("Create", ctx, mock.AnythingOfType("*entities.WebhookDelivery")).Return(nil).Maybe()
 
 	// Execute
 	err := uc.ProcessIndexerWebhook(ctx, "PAYMENT_COMPLETED", json.RawMessage(dataBytes))

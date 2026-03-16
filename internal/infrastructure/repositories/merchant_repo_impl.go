@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/volatiletech/null/v8"
 	"gorm.io/gorm"
 	"payment-kita.backend/internal/domain/entities"
 	domainerrors "payment-kita.backend/internal/domain/errors"
@@ -24,9 +25,6 @@ func NewMerchantRepository(db *gorm.DB) *MerchantRepository {
 
 // Create creates a new merchant
 func (r *MerchantRepository) Create(ctx context.Context, merchant *entities.Merchant) error {
-	// Need to check Null types in entity vs GORM model (string/jsonb)
-	// Entity has Documents null.JSON
-
 	docs := "{}"
 	if merchant.Documents.Valid {
 		docs = string(merchant.Documents.JSON)
@@ -42,6 +40,16 @@ func (r *MerchantRepository) Create(ctx context.Context, merchant *entities.Merc
 		addr = merchant.BusinessAddress.String
 	}
 
+	webhookMeta := "{}"
+	if merchant.WebhookMetadata.Valid {
+		webhookMeta = string(merchant.WebhookMetadata.JSON)
+	}
+
+	meta := "{}"
+	if merchant.Metadata.Valid {
+		meta = string(merchant.Metadata.JSON)
+	}
+
 	m := &models.Merchant{
 		ID:                 merchant.ID,
 		UserID:             merchant.UserID,
@@ -53,6 +61,14 @@ func (r *MerchantRepository) Create(ctx context.Context, merchant *entities.Merc
 		BusinessAddress:    addr,
 		Documents:          docs,
 		FeeDiscountPercent: merchant.FeeDiscountPercent,
+		CallbackURL:        merchant.CallbackURL,
+		WebhookSecret:      merchant.WebhookSecret,
+		WebhookIsActive:    merchant.WebhookIsActive,
+		SupportEmail:       merchant.SupportEmail,
+		LogoURL:            merchant.LogoURL,
+		WebhookMetadata:    webhookMeta,
+		Metadata:           meta,
+		VerifiedAt:         merchant.VerifiedAt,
 		CreatedAt:          merchant.CreatedAt,
 		UpdatedAt:          merchant.UpdatedAt,
 	}
@@ -86,7 +102,6 @@ func (r *MerchantRepository) GetByUserID(ctx context.Context, userID uuid.UUID) 
 
 // Update updates a merchant
 func (r *MerchantRepository) Update(ctx context.Context, merchant *entities.Merchant) error {
-	// Marshal fields
 	docs := "{}"
 	if merchant.Documents.Valid {
 		docs = string(merchant.Documents.JSON)
@@ -99,6 +114,14 @@ func (r *MerchantRepository) Update(ctx context.Context, merchant *entities.Merc
 	if merchant.BusinessAddress.Valid {
 		addr = merchant.BusinessAddress.String
 	}
+	webhookMeta := "{}"
+	if merchant.WebhookMetadata.Valid {
+		webhookMeta = string(merchant.WebhookMetadata.JSON)
+	}
+	meta := "{}"
+	if merchant.Metadata.Valid {
+		meta = string(merchant.Metadata.JSON)
+	}
 
 	updates := map[string]interface{}{
 		"business_name":        merchant.BusinessName,
@@ -109,6 +132,13 @@ func (r *MerchantRepository) Update(ctx context.Context, merchant *entities.Merc
 		"business_address":     addr,
 		"documents":            docs,
 		"fee_discount_percent": merchant.FeeDiscountPercent,
+		"callback_url":         merchant.CallbackURL,
+		"webhook_secret":       merchant.WebhookSecret,
+		"webhook_is_active":    merchant.WebhookIsActive,
+		"support_email":        merchant.SupportEmail,
+		"logo_url":             merchant.LogoURL,
+		"webhook_metadata":     webhookMeta,
+		"metadata":             meta,
 		"updated_at":           time.Now(),
 	}
 
@@ -177,29 +207,26 @@ func (r *MerchantRepository) SoftDelete(ctx context.Context, id uuid.UUID) error
 }
 
 func (r *MerchantRepository) toEntity(m *models.Merchant) *entities.Merchant {
-	// Construct entity, handling type conversions
-	// Need volatiletech/null/v8 to be imported if we want to set Valid/String cleanly
-	// Or we can assume default zero value is empty/invalid logic if we don't import.
-	// For robustness I will not use null pkg constructors if I don't import it,
-	// but I will try to populate the fields correctly if I can.
-
-	// I'll leave null fields checks aside or use basic struct lit.
-	// Since I can't construct `null.String` easily without import, and I didn't add import...
-	// Gosh, I should add the import!
-
 	return &entities.Merchant{
-		ID:            m.ID,
-		UserID:        m.UserID,
-		BusinessName:  m.BusinessName,
-		BusinessEmail: m.BusinessEmail,
-		MerchantType:  entities.MerchantType(m.MerchantType),
-		Status:        entities.MerchantStatus(m.Status),
-		// TaxID:              null.StringFrom(m.TaxID),
-		// BusinessAddress:    null.StringFrom(m.BusinessAddress),
-		// Documents:          null.JSONFrom([]byte(m.Documents)),
+		ID:                 m.ID,
+		UserID:             m.UserID,
+		BusinessName:       m.BusinessName,
+		BusinessEmail:      m.BusinessEmail,
+		MerchantType:       entities.MerchantType(m.MerchantType),
+		Status:             entities.MerchantStatus(m.Status),
+		TaxID:              null.StringFrom(m.TaxID),
+		BusinessAddress:    null.StringFrom(m.BusinessAddress),
+		Documents:          null.JSONFrom([]byte(m.Documents)),
 		FeeDiscountPercent: m.FeeDiscountPercent,
-		// VerifiedAt:         null.TimeFromPtr(m.VerifiedAt),
-		CreatedAt: m.CreatedAt,
-		UpdatedAt: m.UpdatedAt,
+		CallbackURL:        m.CallbackURL,
+		WebhookSecret:      m.WebhookSecret,
+		WebhookIsActive:    m.WebhookIsActive,
+		SupportEmail:       m.SupportEmail,
+		LogoURL:            m.LogoURL,
+		WebhookMetadata:    null.JSONFrom([]byte(m.WebhookMetadata)),
+		Metadata:           null.JSONFrom([]byte(m.Metadata)),
+		VerifiedAt:         m.VerifiedAt,
+		CreatedAt:          m.CreatedAt,
+		UpdatedAt:          m.UpdatedAt,
 	}
 }

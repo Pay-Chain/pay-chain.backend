@@ -35,7 +35,7 @@ func TestOnchainAdapterUsecase_Setters_InvalidSourceChain(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid input")
 
-	_, _, err = u.SetLayerZeroConfig(context.Background(), "invalid-source", "eip155:42161", nil, "", "")
+	_, _, err = u.SetStargateConfig(context.Background(), "invalid-source", "eip155:42161", nil, "", "")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid input")
 }
@@ -65,7 +65,7 @@ func TestOnchainAdapterUsecase_Setters_InvalidDestChain(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid input")
 
-	_, _, err = u.SetLayerZeroConfig(context.Background(), "eip155:8453", "invalid-dest", nil, "", "")
+	_, _, err = u.SetStargateConfig(context.Background(), "eip155:8453", "invalid-dest", nil, "", "")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid input")
 }
@@ -145,7 +145,7 @@ func TestOnchainAdapterUsecase_RegisterAndDefaultBridge_OwnerKeyMissing(t *testi
 	require.Contains(t, err.Error(), "invalid input")
 }
 
-func TestOnchainAdapterUsecase_SetLayerZeroConfig_ClientFactoryNotConfigured(t *testing.T) {
+func TestOnchainAdapterUsecase_SetStargateConfig_ClientFactoryNotConfigured(t *testing.T) {
 	chainRepo := new(MockChainRepository)
 	contractRepo := new(MockSmartContractRepository)
 
@@ -163,7 +163,7 @@ func TestOnchainAdapterUsecase_SetLayerZeroConfig_ClientFactoryNotConfigured(t *
 
 	u := uc.NewOnchainAdapterUsecase(chainRepo, contractRepo, nil, "")
 	dstEid := uint32(30110)
-	_, _, err := u.SetLayerZeroConfig(
+	_, _, err := u.SetStargateConfig(
 		context.Background(),
 		"eip155:8453",
 		"eip155:42161",

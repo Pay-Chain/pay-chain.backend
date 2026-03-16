@@ -16,6 +16,7 @@ type PaymentRequestRepository interface {
 	MarkCompleted(ctx context.Context, id uuid.UUID, txHash string) error
 	GetExpiredPending(ctx context.Context, limit int) ([]*entities.PaymentRequest, error)
 	ExpireRequests(ctx context.Context, ids []uuid.UUID) error
+	UpdatePaymentCode(ctx context.Context, id uuid.UUID, code string) error
 }
 
 // Note: MarkCompleted/Expired methods were inferred from usage (webhook usecase and expiry job)

@@ -63,7 +63,7 @@ func buildStatusRPCServer(t *testing.T, cfg rpcStatusConfig) *httptest.Server {
 		{"inputs":[{"internalType":"string","name":"","type":"string"},{"internalType":"uint8","name":"","type":"uint8"}],"name":"hasAdapter","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},
 		{"inputs":[{"internalType":"string","name":"","type":"string"},{"internalType":"uint8","name":"","type":"uint8"}],"name":"getAdapter","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"}
 	]`)
-	layerZeroABI := mustParseABIPreflight(t, `[
+	stargateABI := mustParseABIPreflight(t, `[
 		{"inputs":[{"internalType":"string","name":"","type":"string"}],"name":"isRouteConfigured","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},
 		{"inputs":[{"internalType":"string","name":"","type":"string"}],"name":"dstEids","outputs":[{"internalType":"uint32","name":"","type":"uint32"}],"stateMutability":"view","type":"function"},
 		{"inputs":[{"internalType":"string","name":"","type":"string"}],"name":"peers","outputs":[{"internalType":"bytes32","name":"","type":"bytes32"}],"stateMutability":"view","type":"function"},
@@ -78,10 +78,10 @@ func buildStatusRPCServer(t *testing.T, cfg rpcStatusConfig) *httptest.Server {
 	defaultMethodID := "0x" + hex.EncodeToString(gatewayABI.Methods["defaultBridgeTypes"].ID)
 	hasMethodID := "0x" + hex.EncodeToString(routerABI.Methods["hasAdapter"].ID)
 	getMethodID := "0x" + hex.EncodeToString(routerABI.Methods["getAdapter"].ID)
-	lzConfiguredMethodID := "0x" + hex.EncodeToString(layerZeroABI.Methods["isRouteConfigured"].ID)
-	lzDstEidMethodID := "0x" + hex.EncodeToString(layerZeroABI.Methods["dstEids"].ID)
-	lzPeerMethodID := "0x" + hex.EncodeToString(layerZeroABI.Methods["peers"].ID)
-	lzOptionsMethodID := "0x" + hex.EncodeToString(layerZeroABI.Methods["enforcedOptions"].ID)
+	lzConfiguredMethodID := "0x" + hex.EncodeToString(stargateABI.Methods["isRouteConfigured"].ID)
+	lzDstEidMethodID := "0x" + hex.EncodeToString(stargateABI.Methods["dstEids"].ID)
+	lzPeerMethodID := "0x" + hex.EncodeToString(stargateABI.Methods["peers"].ID)
+	lzOptionsMethodID := "0x" + hex.EncodeToString(stargateABI.Methods["enforcedOptions"].ID)
 	hyperConfiguredMethodID := "0x" + hex.EncodeToString(hyperbridgeABI.Methods["isChainConfigured"].ID)
 	hyperStateMachineMethodID := "0x" + hex.EncodeToString(hyperbridgeABI.Methods["stateMachineIds"].ID)
 	hyperDestinationMethodID := "0x" + hex.EncodeToString(hyperbridgeABI.Methods["destinationContracts"].ID)
@@ -147,13 +147,13 @@ func buildStatusRPCServer(t *testing.T, cfg rpcStatusConfig) *httptest.Server {
 				bridgeType, _ := unpacked[1].(uint8)
 				res.Result = encodeOutPreflight(t, routerABI.Methods["getAdapter"], adapterFor(bridgeType))
 			case lzConfiguredMethodID:
-				res.Result = encodeOutPreflight(t, layerZeroABI.Methods["isRouteConfigured"], true)
+				res.Result = encodeOutPreflight(t, stargateABI.Methods["isRouteConfigured"], true)
 			case lzDstEidMethodID:
-				res.Result = encodeOutPreflight(t, layerZeroABI.Methods["dstEids"], uint32(40161))
+				res.Result = encodeOutPreflight(t, stargateABI.Methods["dstEids"], uint32(40161))
 			case lzPeerMethodID:
-				res.Result = encodeOutPreflight(t, layerZeroABI.Methods["peers"], [32]byte{1})
+				res.Result = encodeOutPreflight(t, stargateABI.Methods["peers"], [32]byte{1})
 			case lzOptionsMethodID:
-				res.Result = encodeOutPreflight(t, layerZeroABI.Methods["enforcedOptions"], []byte{0x01})
+				res.Result = encodeOutPreflight(t, stargateABI.Methods["enforcedOptions"], []byte{0x01})
 			case hyperConfiguredMethodID:
 				res.Result = encodeOutPreflight(t, hyperbridgeABI.Methods["isChainConfigured"], true)
 			case hyperStateMachineMethodID:
@@ -224,13 +224,13 @@ func TestCrosschainConfigUsecase_Preflight_NoAdapters(t *testing.T) {
 		codes = append(codes, issue.Code)
 	}
 	require.Contains(t, codes, "ADAPTER_NOT_REGISTERED")
-	require.Contains(t, codes, "LAYERZERO_NOT_CONFIGURED")
+	require.Contains(t, codes, "STARGATE_NOT_CONFIGURED")
 }
 
 func TestCrosschainConfigUsecase_AutoFix_NoActiveAdapterContract(t *testing.T) {
 	u, contractRepo, sourceID, _ := setupCrosschainConfigUsecaseNoAdapter(t)
 
-	contractRepo.On("GetActiveContract", mock.Anything, sourceID, entities.ContractTypeAdapterLayerZero).
+	contractRepo.On("GetActiveContract", mock.Anything, sourceID, entities.ContractTypeAdapterStargate).
 		Return((*entities.SmartContract)(nil), errors.New("not found"))
 
 	bridgeType := uint8(2)
@@ -248,7 +248,7 @@ func TestCrosschainConfigUsecase_AutoFix_NoActiveAdapterContract(t *testing.T) {
 	require.Contains(t, result.Steps[0].Message, "active adapter contract not found")
 }
 
-func TestCrosschainConfigUsecase_AutoFix_LayerZero_AllSkipped(t *testing.T) {
+func TestCrosschainConfigUsecase_AutoFix_Stargate_AllSkipped(t *testing.T) {
 	srv := buildStatusRPCServer(t, rpcStatusConfig{
 		DefaultBridgeType: 2,
 		AdaptersByType: map[uint8]string{
@@ -275,7 +275,7 @@ func TestCrosschainConfigUsecase_AutoFix_LayerZero_AllSkipped(t *testing.T) {
 	tokenRepo.On("GetTokensByChain", mock.Anything, mock.Anything, mock.Anything).Return([]*entities.Token{}, int64(0), nil)
 	contractRepo.On("GetActiveContract", mock.Anything, sourceID, entities.ContractTypeGateway).Return(gateway, nil)
 	contractRepo.On("GetActiveContract", mock.Anything, sourceID, entities.ContractTypeRouter).Return(router, nil)
-	contractRepo.On("GetActiveContract", mock.Anything, sourceID, entities.ContractTypeAdapterLayerZero).Return((*entities.SmartContract)(nil), errors.New("not found"))
+	contractRepo.On("GetActiveContract", mock.Anything, sourceID, entities.ContractTypeAdapterStargate).Return((*entities.SmartContract)(nil), errors.New("not found"))
 
 	factory := blockchain.NewClientFactory()
 	adapterUsecase := uc.NewOnchainAdapterUsecase(chainRepo, contractRepo, factory, "")
@@ -292,7 +292,7 @@ func TestCrosschainConfigUsecase_AutoFix_LayerZero_AllSkipped(t *testing.T) {
 	require.Equal(t, "SKIPPED", result.Steps[0].Status)
 	require.Equal(t, "SKIPPED", result.Steps[1].Status)
 	require.Equal(t, "SKIPPED", result.Steps[2].Status)
-	require.Equal(t, "setLayerZeroConfig", result.Steps[2].Step)
+	require.Equal(t, "setStargateConfig", result.Steps[2].Step)
 }
 
 func TestCrosschainConfigUsecase_AutoFix_Hyperbridge_DestinationMissing(t *testing.T) {

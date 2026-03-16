@@ -43,39 +43,39 @@ func (m *routePolicyRepoMemory) Update(_ context.Context, p *entities.RoutePolic
 }
 func (m *routePolicyRepoMemory) Delete(context.Context, uuid.UUID) error { return nil }
 
-type layerZeroRepoMemory struct {
-	item *entities.LayerZeroConfig
+type stargateRepoMemory struct {
+	item *entities.StargateConfig
 }
 
-func (m *layerZeroRepoMemory) GetByID(context.Context, uuid.UUID) (*entities.LayerZeroConfig, error) {
+func (m *stargateRepoMemory) GetByID(context.Context, uuid.UUID) (*entities.StargateConfig, error) {
 	if m.item == nil {
-		m.item = &entities.LayerZeroConfig{ID: utils.GenerateUUIDv7()}
+		m.item = &entities.StargateConfig{ID: utils.GenerateUUIDv7()}
 	}
 	return m.item, nil
 }
-func (m *layerZeroRepoMemory) GetByRoute(context.Context, uuid.UUID, uuid.UUID) (*entities.LayerZeroConfig, error) {
+func (m *stargateRepoMemory) GetByRoute(context.Context, uuid.UUID, uuid.UUID) (*entities.StargateConfig, error) {
 	return m.item, nil
 }
-func (m *layerZeroRepoMemory) List(context.Context, *uuid.UUID, *uuid.UUID, *bool, utils.PaginationParams) ([]*entities.LayerZeroConfig, int64, error) {
+func (m *stargateRepoMemory) List(context.Context, *uuid.UUID, *uuid.UUID, *bool, utils.PaginationParams) ([]*entities.StargateConfig, int64, error) {
 	if m.item == nil {
-		return []*entities.LayerZeroConfig{}, 0, nil
+		return []*entities.StargateConfig{}, 0, nil
 	}
-	return []*entities.LayerZeroConfig{m.item}, 1, nil
+	return []*entities.StargateConfig{m.item}, 1, nil
 }
-func (m *layerZeroRepoMemory) Create(_ context.Context, c *entities.LayerZeroConfig) error {
+func (m *stargateRepoMemory) Create(_ context.Context, c *entities.StargateConfig) error {
 	m.item = c
 	return nil
 }
-func (m *layerZeroRepoMemory) Update(_ context.Context, c *entities.LayerZeroConfig) error {
+func (m *stargateRepoMemory) Update(_ context.Context, c *entities.StargateConfig) error {
 	m.item = c
 	return nil
 }
-func (m *layerZeroRepoMemory) Delete(context.Context, uuid.UUID) error { return nil }
+func (m *stargateRepoMemory) Delete(context.Context, uuid.UUID) error { return nil }
 
 func TestCrosschainPolicyHandler_CRUDSuccessPaths(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	routeRepo := &routePolicyRepoMemory{}
-	lzRepo := &layerZeroRepoMemory{}
+	lzRepo := &stargateRepoMemory{}
 	h := NewCrosschainPolicyHandler(routeRepo, lzRepo, &crosschainChainRepoStub{})
 
 	sourceID := utils.GenerateUUIDv7()
@@ -87,8 +87,8 @@ func TestCrosschainPolicyHandler_CRUDSuccessPaths(t *testing.T) {
 	r := gin.New()
 	r.POST("/route", h.CreateRoutePolicy)
 	r.PUT("/route/:id", h.UpdateRoutePolicy)
-	r.POST("/lz", h.CreateLayerZeroConfig)
-	r.PUT("/lz/:id", h.UpdateLayerZeroConfig)
+	r.POST("/lz", h.CreateStargateConfig)
+	r.PUT("/lz/:id", h.UpdateStargateConfig)
 
 	createRouteBody := `{"sourceChainId":"` + sourceID.String() + `","destChainId":"` + destID.String() + `","defaultBridgeType":1,"fallbackMode":"auto_fallback","fallbackOrder":[1,0],"supportsTokenBridge":true,"supportsDestSwap":true,"supportsPrivacyForward":false,"bridgeToken":"0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913","status":"active","perByteRate":"300","overheadBytes":"256","minFee":"1000","maxFee":"999999"}`
 	req := httptest.NewRequest(http.MethodPost, "/route", strings.NewReader(createRouteBody))
@@ -167,7 +167,7 @@ func TestCrosschainPolicyHandler_CreateRoutePolicy_DefaultFallbackValues(t *test
 		},
 	}
 
-	h := NewCrosschainPolicyHandler(routeRepo, &layerZeroRepoMemory{}, chainRepo)
+	h := NewCrosschainPolicyHandler(routeRepo, &stargateRepoMemory{}, chainRepo)
 	r := gin.New()
 	r.POST("/route", h.CreateRoutePolicy)
 

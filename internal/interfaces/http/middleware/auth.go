@@ -24,6 +24,10 @@ const (
 	UserEmailKey = "userEmail"
 	// UserRoleKey is the context key for user role
 	UserRoleKey = "userRole"
+	// MerchantIDKey is the context key for merchant ID
+	MerchantIDKey = "merchantId"
+	// IsMerchantAuthenticatedKey is the context key for merchant auth status
+	IsMerchantAuthenticatedKey = "isMerchantAuthenticated"
 )
 
 var loadSessionFromStore = func(ctx context.Context, store *redis.SessionStore, sessionID string) (*redis.SessionData, error) {

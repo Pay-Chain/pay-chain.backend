@@ -17,9 +17,10 @@ import (
 )
 
 type paymentRequestServiceStub struct {
-	createFn func(ctx context.Context, input usecases.CreatePaymentRequestInput) (*usecases.CreatePaymentRequestOutput, error)
-	getFn    func(ctx context.Context, id uuid.UUID) (*entities.PaymentRequest, *entities.PaymentRequestTxData, error)
-	listFn   func(ctx context.Context, userID uuid.UUID, limit, offset int) ([]*entities.PaymentRequest, int, error)
+	createFn  func(ctx context.Context, input usecases.CreatePaymentRequestInput) (*usecases.CreatePaymentRequestOutput, error)
+	getFn     func(ctx context.Context, id uuid.UUID) (*entities.PaymentRequest, *entities.PaymentRequestTxData, error)
+	resolveFn func(ctx context.Context, id uuid.UUID) (*usecases.ResolvePaymentRequestOutput, error)
+	listFn    func(ctx context.Context, userID uuid.UUID, limit, offset int) ([]*entities.PaymentRequest, int, error)
 }
 
 func (s paymentRequestServiceStub) CreatePaymentRequest(ctx context.Context, input usecases.CreatePaymentRequestInput) (*usecases.CreatePaymentRequestOutput, error) {
@@ -27,6 +28,9 @@ func (s paymentRequestServiceStub) CreatePaymentRequest(ctx context.Context, inp
 }
 func (s paymentRequestServiceStub) GetPaymentRequest(ctx context.Context, id uuid.UUID) (*entities.PaymentRequest, *entities.PaymentRequestTxData, error) {
 	return s.getFn(ctx, id)
+}
+func (s paymentRequestServiceStub) ResolvePaymentRequest(ctx context.Context, id uuid.UUID) (*usecases.ResolvePaymentRequestOutput, error) {
+	return s.resolveFn(ctx, id)
 }
 func (s paymentRequestServiceStub) ListPaymentRequests(ctx context.Context, userID uuid.UUID, limit, offset int) ([]*entities.PaymentRequest, int, error) {
 	return s.listFn(ctx, userID, limit, offset)
@@ -80,6 +84,16 @@ func TestPaymentRequestHandler_SuccessAndErrorMappings(t *testing.T) {
 				return nil, 0, errors.New("list boom")
 			}
 			return []*entities.PaymentRequest{{ID: requestID, Amount: "1000", Status: entities.PaymentRequestStatusPending}}, 1, nil
+		},
+		resolveFn: func(_ context.Context, id uuid.UUID) (*usecases.ResolvePaymentRequestOutput, error) {
+			if id != requestID {
+				return nil, domainerrors.ErrNotFound
+			}
+			return &usecases.ResolvePaymentRequestOutput{
+				PaymentID:  requestID.String(),
+				MerchantID: uuid.NewString(),
+				Amount:     "1000",
+			}, nil
 		},
 	}
 

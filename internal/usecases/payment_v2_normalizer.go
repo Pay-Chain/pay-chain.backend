@@ -12,7 +12,7 @@ const (
 	BridgeOptionDefaultSentinel uint8 = 255
 	BridgeOptionHyperbridge     uint8 = 0
 	BridgeOptionCCIP            uint8 = 1
-	BridgeOptionLayerZero       uint8 = 2
+	BridgeOptionStargate       uint8 = 2
 	BridgeOptionHBTokenGateway  uint8 = 3
 )
 

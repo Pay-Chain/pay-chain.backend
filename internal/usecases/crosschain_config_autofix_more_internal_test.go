@@ -129,7 +129,7 @@ func TestCrosschainConfigUsecase_AutoFix_MoreBranches(t *testing.T) {
 			require.Equal(t, "FAILED", res.Steps[0].Status)
 		})
 
-		t.Run("layerzero missing adapter contract in db", func(t *testing.T) {
+		t.Run("stargate missing adapter contract in db", func(t *testing.T) {
 			bridgeType := uint8(2)
 			u := NewCrosschainConfigUsecase(baseChainRepo, &ccTokenRepoStub{}, &ccContractRepoStub{active: map[string]*entities.SmartContract{}}, nil, &crosschainAdapterStub{
 				statusFn: func(context.Context, string, string) (*OnchainAdapterStatus, error) {

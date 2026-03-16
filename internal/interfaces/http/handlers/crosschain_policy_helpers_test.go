@@ -61,27 +61,27 @@ func (routePolicyRepoNoop) Create(context.Context, *entities.RoutePolicy) error 
 func (routePolicyRepoNoop) Update(context.Context, *entities.RoutePolicy) error { return nil }
 func (routePolicyRepoNoop) Delete(context.Context, uuid.UUID) error             { return nil }
 
-type layerZeroRepoNoop struct{}
+type stargateRepoNoop struct{}
 
-func (layerZeroRepoNoop) GetByID(context.Context, uuid.UUID) (*entities.LayerZeroConfig, error) {
+func (stargateRepoNoop) GetByID(context.Context, uuid.UUID) (*entities.StargateConfig, error) {
 	return nil, nil
 }
-func (layerZeroRepoNoop) GetByRoute(context.Context, uuid.UUID, uuid.UUID) (*entities.LayerZeroConfig, error) {
+func (stargateRepoNoop) GetByRoute(context.Context, uuid.UUID, uuid.UUID) (*entities.StargateConfig, error) {
 	return nil, nil
 }
-func (layerZeroRepoNoop) List(context.Context, *uuid.UUID, *uuid.UUID, *bool, utils.PaginationParams) ([]*entities.LayerZeroConfig, int64, error) {
+func (stargateRepoNoop) List(context.Context, *uuid.UUID, *uuid.UUID, *bool, utils.PaginationParams) ([]*entities.StargateConfig, int64, error) {
 	return nil, 0, nil
 }
-func (layerZeroRepoNoop) Create(context.Context, *entities.LayerZeroConfig) error { return nil }
-func (layerZeroRepoNoop) Update(context.Context, *entities.LayerZeroConfig) error { return nil }
-func (layerZeroRepoNoop) Delete(context.Context, uuid.UUID) error                 { return nil }
+func (stargateRepoNoop) Create(context.Context, *entities.StargateConfig) error { return nil }
+func (stargateRepoNoop) Update(context.Context, *entities.StargateConfig) error { return nil }
+func (stargateRepoNoop) Delete(context.Context, uuid.UUID) error                 { return nil }
 
 func TestCrosschainPolicyHelpers(t *testing.T) {
 	chainByID := uuid.New()
 	chainByCAIP2 := uuid.New()
 	h := NewCrosschainPolicyHandler(
 		routePolicyRepoNoop{},
-		layerZeroRepoNoop{},
+		stargateRepoNoop{},
 		&crosschainChainRepoStub{
 			getByChainID: func(_ context.Context, chainID string) (*entities.Chain, error) {
 				if chainID == "8453" {
@@ -144,7 +144,7 @@ func TestCrosschainPolicyHandler_ListRoutePoliciesInvalidQuery(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	h := NewCrosschainPolicyHandler(
 		routePolicyRepoNoop{},
-		layerZeroRepoNoop{},
+		stargateRepoNoop{},
 		&crosschainChainRepoStub{
 			getByChainID: func(context.Context, string) (*entities.Chain, error) { return nil, domainerrors.ErrNotFound },
 			getByCAIP2:   func(context.Context, string) (*entities.Chain, error) { return nil, domainerrors.ErrNotFound },

@@ -15,16 +15,16 @@ import (
 	"payment-kita.backend/pkg/utils"
 )
 
-type layerZeroConfigRepo struct {
+type stargateConfigRepo struct {
 	db *gorm.DB
 }
 
-func NewLayerZeroConfigRepository(db *gorm.DB) domainrepos.LayerZeroConfigRepository {
-	return &layerZeroConfigRepo{db: db}
+func NewStargateConfigRepository(db *gorm.DB) domainrepos.StargateConfigRepository {
+	return &stargateConfigRepo{db: db}
 }
 
-func (r *layerZeroConfigRepo) GetByID(ctx context.Context, id uuid.UUID) (*entities.LayerZeroConfig, error) {
-	var row models.LayerZeroConfig
+func (r *stargateConfigRepo) GetByID(ctx context.Context, id uuid.UUID) (*entities.StargateConfig, error) {
+	var row models.StargateConfig
 	err := r.db.WithContext(ctx).Where("id = ?", id).First(&row).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -32,11 +32,11 @@ func (r *layerZeroConfigRepo) GetByID(ctx context.Context, id uuid.UUID) (*entit
 		}
 		return nil, err
 	}
-	return toLayerZeroConfigEntity(&row), nil
+	return toStargateConfigEntity(&row), nil
 }
 
-func (r *layerZeroConfigRepo) GetByRoute(ctx context.Context, sourceChainID, destChainID uuid.UUID) (*entities.LayerZeroConfig, error) {
-	var row models.LayerZeroConfig
+func (r *stargateConfigRepo) GetByRoute(ctx context.Context, sourceChainID, destChainID uuid.UUID) (*entities.StargateConfig, error) {
+	var row models.StargateConfig
 	err := r.db.WithContext(ctx).
 		Where("source_chain_id = ? AND dest_chain_id = ?", sourceChainID, destChainID).
 		Order("updated_at DESC").
@@ -47,14 +47,14 @@ func (r *layerZeroConfigRepo) GetByRoute(ctx context.Context, sourceChainID, des
 		}
 		return nil, err
 	}
-	return toLayerZeroConfigEntity(&row), nil
+	return toStargateConfigEntity(&row), nil
 }
 
-func (r *layerZeroConfigRepo) List(ctx context.Context, sourceChainID, destChainID *uuid.UUID, activeOnly *bool, pagination utils.PaginationParams) ([]*entities.LayerZeroConfig, int64, error) {
-	var rows []models.LayerZeroConfig
+func (r *stargateConfigRepo) List(ctx context.Context, sourceChainID, destChainID *uuid.UUID, activeOnly *bool, pagination utils.PaginationParams) ([]*entities.StargateConfig, int64, error) {
+	var rows []models.StargateConfig
 	var total int64
 
-	query := r.db.WithContext(ctx).Model(&models.LayerZeroConfig{})
+	query := r.db.WithContext(ctx).Model(&models.StargateConfig{})
 	if sourceChainID != nil {
 		query = query.Where("source_chain_id = ?", *sourceChainID)
 	}
@@ -75,14 +75,14 @@ func (r *layerZeroConfigRepo) List(ctx context.Context, sourceChainID, destChain
 		return nil, 0, err
 	}
 
-	items := make([]*entities.LayerZeroConfig, 0, len(rows))
+	items := make([]*entities.StargateConfig, 0, len(rows))
 	for i := range rows {
-		items = append(items, toLayerZeroConfigEntity(&rows[i]))
+		items = append(items, toStargateConfigEntity(&rows[i]))
 	}
 	return items, total, nil
 }
 
-func (r *layerZeroConfigRepo) Create(ctx context.Context, config *entities.LayerZeroConfig) error {
+func (r *stargateConfigRepo) Create(ctx context.Context, config *entities.StargateConfig) error {
 	if config.ID == uuid.Nil {
 		config.ID = utils.GenerateUUIDv7()
 	}
@@ -92,7 +92,7 @@ func (r *layerZeroConfigRepo) Create(ctx context.Context, config *entities.Layer
 		optionsHex = "0x"
 	}
 
-	row := &models.LayerZeroConfig{
+	row := &models.StargateConfig{
 		ID:            config.ID,
 		SourceChainID: config.SourceChainID,
 		DestChainID:   config.DestChainID,
@@ -106,13 +106,13 @@ func (r *layerZeroConfigRepo) Create(ctx context.Context, config *entities.Layer
 	return r.db.WithContext(ctx).Create(row).Error
 }
 
-func (r *layerZeroConfigRepo) Update(ctx context.Context, config *entities.LayerZeroConfig) error {
+func (r *stargateConfigRepo) Update(ctx context.Context, config *entities.StargateConfig) error {
 	optionsHex := strings.TrimSpace(config.OptionsHex)
 	if optionsHex == "" {
 		optionsHex = "0x"
 	}
 
-	result := r.db.WithContext(ctx).Model(&models.LayerZeroConfig{}).
+	result := r.db.WithContext(ctx).Model(&models.StargateConfig{}).
 		Where("id = ?", config.ID).
 		Updates(map[string]interface{}{
 			"source_chain_id": config.SourceChainID,
@@ -132,8 +132,8 @@ func (r *layerZeroConfigRepo) Update(ctx context.Context, config *entities.Layer
 	return nil
 }
 
-func (r *layerZeroConfigRepo) Delete(ctx context.Context, id uuid.UUID) error {
-	result := r.db.WithContext(ctx).Delete(&models.LayerZeroConfig{}, "id = ?", id)
+func (r *stargateConfigRepo) Delete(ctx context.Context, id uuid.UUID) error {
+	result := r.db.WithContext(ctx).Delete(&models.StargateConfig{}, "id = ?", id)
 	if result.Error != nil {
 		return result.Error
 	}
@@ -143,8 +143,8 @@ func (r *layerZeroConfigRepo) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-func toLayerZeroConfigEntity(m *models.LayerZeroConfig) *entities.LayerZeroConfig {
-	return &entities.LayerZeroConfig{
+func toStargateConfigEntity(m *models.StargateConfig) *entities.StargateConfig {
+	return &entities.StargateConfig{
 		ID:            m.ID,
 		SourceChainID: m.SourceChainID,
 		DestChainID:   m.DestChainID,

@@ -51,6 +51,22 @@ func (internalUserRepoStub) UpdatePassword(context.Context, uuid.UUID, string) e
 func (internalUserRepoStub) SoftDelete(context.Context, uuid.UUID) error             { return nil }
 func (internalUserRepoStub) List(context.Context, string) ([]*entities.User, error)  { return nil, nil }
 
+type internalMerchantRepoStub struct{}
+
+func (internalMerchantRepoStub) GetByID(context.Context, uuid.UUID) (*entities.Merchant, error) {
+	return nil, errors.New("not found")
+}
+func (internalMerchantRepoStub) GetByUserID(context.Context, uuid.UUID) (*entities.Merchant, error) {
+	return nil, errors.New("not found")
+}
+func (internalMerchantRepoStub) Create(context.Context, *entities.Merchant) error { return nil }
+func (internalMerchantRepoStub) Update(context.Context, *entities.Merchant) error { return nil }
+func (internalMerchantRepoStub) UpdateStatus(context.Context, uuid.UUID, entities.MerchantStatus) error {
+	return nil
+}
+func (internalMerchantRepoStub) List(context.Context) ([]*entities.Merchant, error) { return nil, nil }
+func (internalMerchantRepoStub) SoftDelete(context.Context, uuid.UUID) error        { return nil }
+
 func TestAuthAndDualMiddleware_InternalCoveragePaths(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -125,7 +141,7 @@ func TestAuthAndDualMiddleware_InternalCoveragePaths(t *testing.T) {
 		)
 
 		r := gin.New()
-		r.Use(DualAuthMiddleware(j, apiKeyUsecase, sessionStore))
+		r.Use(DualAuthMiddleware(j, apiKeyUsecase, internalMerchantRepoStub{}, sessionStore))
 		r.POST("/dual", func(c *gin.Context) { c.Status(http.StatusNoContent) })
 
 		req := httptest.NewRequest(http.MethodPost, "/dual", strings.NewReader(`{"a":1}`))
@@ -216,7 +232,7 @@ func TestAuthAndDualMiddleware_InternalCoveragePaths_StrictBranchAssertions(t *t
 		)
 
 		r := gin.New()
-		r.Use(DualAuthMiddleware(j, apiKeyUsecase, sessionStore))
+		r.Use(DualAuthMiddleware(j, apiKeyUsecase, internalMerchantRepoStub{}, sessionStore))
 		r.POST("/dual", func(c *gin.Context) { c.Status(http.StatusNoContent) })
 
 		// Cover trusted-session path without optional verification.

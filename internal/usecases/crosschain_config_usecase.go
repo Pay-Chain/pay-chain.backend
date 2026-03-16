@@ -28,7 +28,7 @@ type CrosschainRouteStatus struct {
 	AdapterAddress        string                    `json:"adapterAddress"`
 	HyperbridgeConfigured bool                      `json:"hyperbridgeConfigured"`
 	CcipConfigured        bool                      `json:"ccipConfigured"`
-	LayerZeroConfigured   bool                      `json:"layerZeroConfigured"`
+	StargateConfigured   bool                      `json:"stargateConfigured"`
 	FeeQuoteHealthy       bool                      `json:"feeQuoteHealthy"`
 	QuoteSchemaMismatch   bool                      `json:"quoteSchemaMismatch"`
 	QuotePathUsed         string                    `json:"quotePathUsed,omitempty"`
@@ -248,7 +248,7 @@ func (u *CrosschainConfigUsecase) RecheckRoute(ctx context.Context, sourceChainI
 
 	ccipConfigured := status.CCIPChainSelector != 0 && status.CCIPDestinationAdapter != "" && status.CCIPDestinationAdapter != "0x"
 	hyperConfigured := status.HyperbridgeConfigured
-	layerZeroConfigured := status.LayerZeroConfigured
+	stargateConfigured := status.StargateConfigured
 	if status.DefaultBridgeType == 0 && !hyperConfigured {
 		issues = append(issues, ContractConfigCheckItem{
 			Code:    "HYPERBRIDGE_NOT_CONFIGURED",
@@ -263,11 +263,11 @@ func (u *CrosschainConfigUsecase) RecheckRoute(ctx context.Context, sourceChainI
 			Message: "ccip adapter destination is not configured (chain selector/destination adapter)",
 		})
 	}
-	if status.DefaultBridgeType == 2 && !layerZeroConfigured {
+	if status.DefaultBridgeType == 2 && !stargateConfigured {
 		issues = append(issues, ContractConfigCheckItem{
-			Code:    "LAYERZERO_NOT_CONFIGURED",
+			Code:    "STARGATE_NOT_CONFIGURED",
 			Status:  "ERROR",
-			Message: "layerzero adapter destination is not configured (dstEid/peer)",
+			Message: "stargate adapter destination is not configured (dstEid/peer)",
 		})
 	}
 
@@ -307,7 +307,7 @@ func (u *CrosschainConfigUsecase) RecheckRoute(ctx context.Context, sourceChainI
 		AdapterAddress:        status.AdapterDefaultType,
 		HyperbridgeConfigured: hyperConfigured,
 		CcipConfigured:        ccipConfigured,
-		LayerZeroConfigured:   layerZeroConfigured,
+		StargateConfigured:   stargateConfigured,
 		FeeQuoteHealthy:       feeQuoteHealthy,
 		QuoteSchemaMismatch:   quoteSchemaMismatch,
 		QuotePathUsed:         quotePathUsed,
@@ -394,7 +394,7 @@ func (u *CrosschainConfigUsecase) buildPreflightRow(
 		row.Checks["routeConfigured"] = status.CCIPChainSelector != 0 && status.CCIPDestinationAdapter != "" && status.CCIPDestinationAdapter != "0x"
 	case 2:
 		hasAdapter = status.HasAdapterType2 && status.AdapterType2 != "" && status.AdapterType2 != "0x0000000000000000000000000000000000000000"
-		row.Checks["routeConfigured"] = status.LayerZeroConfigured
+		row.Checks["routeConfigured"] = status.StargateConfigured
 	}
 	row.Checks["adapterRegistered"] = hasAdapter
 	feeQuoteReason := ""
@@ -423,7 +423,7 @@ func (u *CrosschainConfigUsecase) buildPreflightRow(
 			row.ErrorCode = "CCIP_NOT_CONFIGURED"
 			row.ErrorMessage = "missing chain selector or destination adapter"
 		case 2:
-			row.ErrorCode = "LAYERZERO_NOT_CONFIGURED"
+			row.ErrorCode = "STARGATE_NOT_CONFIGURED"
 			row.ErrorMessage = "missing dstEid or peer"
 		}
 		return row
@@ -473,7 +473,7 @@ func (u *CrosschainConfigUsecase) AutoFix(ctx context.Context, req *AutoFixReque
 		if bridgeType == 1 {
 			contractType = entities.ContractTypeAdapterCCIP
 		} else if bridgeType == 2 {
-			contractType = entities.ContractTypeAdapterLayerZero
+			contractType = entities.ContractTypeAdapterStargate
 		}
 		adapterContract, getErr := u.contractRepo.GetActiveContract(ctx, sourceUUID, contractType)
 		if getErr != nil || adapterContract == nil {
@@ -562,9 +562,9 @@ func (u *CrosschainConfigUsecase) AutoFix(ctx context.Context, req *AutoFixReque
 	}
 	if bridgeType == 2 {
 		result.Steps = append(result.Steps, AutoFixStep{
-			Step:    "setLayerZeroConfig",
+			Step:    "setStargateConfig",
 			Status:  "SKIPPED",
-			Message: "manual layerzero route config required (dstEid/peer/options)",
+			Message: "manual stargate route config required (dstEid/peer/options)",
 		})
 	}
 
@@ -578,7 +578,7 @@ func bridgeName(bridgeType uint8) string {
 	case 1:
 		return "CCIP"
 	case 2:
-		return "LAYERZERO"
+		return "STARGATE"
 	case 3:
 		return "HYPERBRIDGE_TOKEN_GATEWAY"
 	default:
@@ -1143,7 +1143,7 @@ func (u *CrosschainConfigUsecase) checkAdapterRuntimeReadiness(
 	routerAddress string,
 	bridgeType uint8,
 ) (bool, string) {
-	// LayerZero sender does not pull tokens from Vault.
+	// Stargate sender does not pull tokens from Vault.
 	if bridgeType == 2 {
 		return true, ""
 	}

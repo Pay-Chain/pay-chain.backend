@@ -63,7 +63,7 @@ func TestIdempotencyMiddleware_ProcessingConflict(t *testing.T) {
 
 	r := gin.New()
 	r.Use(func(c *gin.Context) {
-		c.Set("user_id", "user-1")
+		c.Set("userId", "user-1")
 		c.Next()
 	})
 	r.Use(IdempotencyMiddleware())
@@ -88,11 +88,11 @@ func TestIdempotencyMiddleware_CachedHitReturnsBody(t *testing.T) {
 	t.Cleanup(func() { _ = cli.Close() })
 
 	storageKey := "idempotency:user-1:key-2"
-	srv.Set(storageKey, `{"ok":true}`)
+	srv.Set(storageKey, `{"status":201,"body":"{\"ok\":true}"}`)
 
 	r := gin.New()
 	r.Use(func(c *gin.Context) {
-		c.Set("user_id", "user-1")
+		c.Set("userId", "user-1")
 		c.Next()
 	})
 	r.Use(IdempotencyMiddleware())
@@ -103,7 +103,7 @@ func TestIdempotencyMiddleware_CachedHitReturnsBody(t *testing.T) {
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
-	require.Equal(t, http.StatusOK, w.Code)
+	require.Equal(t, http.StatusCreated, w.Code)
 	require.Equal(t, "true", w.Header().Get("X-Idempotency-Hit"))
 	require.Equal(t, `{"ok":true}`, w.Body.String())
 }
@@ -119,7 +119,7 @@ func TestIdempotencyMiddleware_StoresAndReplaysSuccess(t *testing.T) {
 
 	r := gin.New()
 	r.Use(func(c *gin.Context) {
-		c.Set("user_id", "user-1")
+		c.Set("userId", "user-1")
 		c.Next()
 	})
 	r.Use(IdempotencyMiddleware())
@@ -137,7 +137,7 @@ func TestIdempotencyMiddleware_StoresAndReplaysSuccess(t *testing.T) {
 	req2.Header.Set(IdempotencyHeader, "key-3")
 	w2 := httptest.NewRecorder()
 	r.ServeHTTP(w2, req2)
-	require.Equal(t, http.StatusOK, w2.Code)
+	require.Equal(t, http.StatusCreated, w2.Code)
 	require.Equal(t, "true", w2.Header().Get("X-Idempotency-Hit"))
 	require.Equal(t, `{"id":1}`, w2.Body.String())
 }
@@ -153,7 +153,7 @@ func TestIdempotencyMiddleware_DeletesKeyOnFailure(t *testing.T) {
 
 	r := gin.New()
 	r.Use(func(c *gin.Context) {
-		c.Set("user_id", "user-1")
+		c.Set("userId", "user-1")
 		c.Next()
 	})
 	r.Use(IdempotencyMiddleware())

@@ -75,7 +75,7 @@ var (
 		{"inputs":[{"internalType":"uint64","name":"chainSelector","type":"uint64"},{"internalType":"bytes","name":"sender","type":"bytes"}],"name":"setTrustedSender","outputs":[],"stateMutability":"nonpayable","type":"function"},
 		{"inputs":[{"internalType":"uint64","name":"chainSelector","type":"uint64"},{"internalType":"bool","name":"allowed","type":"bool"}],"name":"setSourceChainAllowed","outputs":[],"stateMutability":"nonpayable","type":"function"}
 	]`)
-	FallbackLayerZeroSenderAdminABI = mustParseABI(`[
+	FallbackStargateSenderAdminABI = mustParseABI(`[
 		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"},{"internalType":"uint32","name":"dstEid","type":"uint32"},{"internalType":"bytes32","name":"peer","type":"bytes32"}],"name":"setRoute","outputs":[],"stateMutability":"nonpayable","type":"function"},
 		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"},{"internalType":"bytes","name":"options","type":"bytes"}],"name":"setEnforcedOptions","outputs":[],"stateMutability":"nonpayable","type":"function"},
 		{"inputs":[],"name":"registerDelegate","outputs":[],"stateMutability":"nonpayable","type":"function"},
@@ -84,7 +84,7 @@ var (
 		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"}],"name":"enforcedOptions","outputs":[{"internalType":"bytes","name":"","type":"bytes"}],"stateMutability":"view","type":"function"},
 		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"}],"name":"isRouteConfigured","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"}
 	]`)
-	FallbackLayerZeroReceiverAdminABI = mustParseABI(`[
+	FallbackStargateReceiverAdminABI = mustParseABI(`[
 		{"inputs":[{"internalType":"uint32","name":"eid","type":"uint32"},{"internalType":"bytes32","name":"peer","type":"bytes32"}],"name":"setPeer","outputs":[],"stateMutability":"nonpayable","type":"function"},
 		{"inputs":[{"internalType":"uint32","name":"_srcEid","type":"uint32"},{"internalType":"bytes32","name":"_sender","type":"bytes32"}],"name":"getPathState","outputs":[{"internalType":"bool","name":"peerConfigured","type":"bool"},{"internalType":"bool","name":"trusted","type":"bool"},{"internalType":"bytes32","name":"configuredPeer","type":"bytes32"},{"internalType":"uint64","name":"expectedNonce","type":"uint64"}],"stateMutability":"view","type":"function"},
 		{"inputs":[{"internalType":"uint32","name":"","type":"uint32"}],"name":"peers","outputs":[{"internalType":"bytes32","name":"","type":"bytes32"}],"stateMutability":"view","type":"function"}
@@ -156,10 +156,10 @@ type OnchainAdapterStatus struct {
 	CCIPDestinationGasLimit        string `json:"ccipDestinationGasLimit"`
 	CCIPDestinationExtraArgsHex    string `json:"ccipDestinationExtraArgsHex"`
 	CCIPDestinationFeeTokenAddress string `json:"ccipDestinationFeeTokenAddress"`
-	LayerZeroConfigured            bool   `json:"layerZeroConfigured"`
-	LayerZeroDstEID                uint32 `json:"layerZeroDstEid"`
-	LayerZeroPeer                  string `json:"layerZeroPeer"`
-	LayerZeroOptionsHex            string `json:"layerZeroOptionsHex"`
+	StargateConfigured            bool   `json:"stargateConfigured"`
+	StargateDstEID                uint32 `json:"stargateDstEid"`
+	StargatePeer                  string `json:"stargatePeer"`
+	StargateOptionsHex            string `json:"stargateOptionsHex"`
 }
 
 type OnchainAdapterUsecase struct {
@@ -304,10 +304,10 @@ func (u *OnchainAdapterUsecase) GetStatus(ctx context.Context, sourceChainInput,
 	ccipGasLimit := ""
 	ccipExtraArgsHex := ""
 	ccipFeeToken := ""
-	lzConfigured := false
-	lzDstEid := uint32(0)
-	lzPeer := ""
-	lzOptionsHex := ""
+	stargateConfigured := false
+	stargateDstEid := uint32(0)
+	stargatePeer := ""
+	stargateOptionsHex := ""
 
 	if has0 && adapter0 != "" && adapter0 != "0x0000000000000000000000000000000000000000" {
 		hyperABI, _ := u.ResolveABIWithFallback(ctx, sourceChainID, entities.ContractTypeAdapterHyperbridge)
@@ -340,18 +340,18 @@ func (u *OnchainAdapterUsecase) GetStatus(ctx context.Context, sourceChainInput,
 		}
 	}
 	if has2 && adapter2 != "" && adapter2 != "0x0000000000000000000000000000000000000000" {
-		lzABI, _ := u.ResolveABIWithFallback(ctx, sourceChainID, entities.ContractTypeAdapterLayerZero)
-		if configured, cfgErr := u.callLayerZeroConfigured(ctx, evmClient, adapter2, lzABI, destCAIP2); cfgErr == nil {
-			lzConfigured = configured
+		lzABI, _ := u.ResolveABIWithFallback(ctx, sourceChainID, entities.ContractTypeAdapterStargate)
+		if configured, cfgErr := u.callStargateConfigured(ctx, evmClient, adapter2, lzABI, destCAIP2); cfgErr == nil {
+			stargateConfigured = configured
 		}
-		if dstEid, dErr := u.callLayerZeroDstEid(ctx, evmClient, adapter2, lzABI, destCAIP2); dErr == nil {
-			lzDstEid = dstEid
+		if dstEid, dErr := u.callStargateDstEid(ctx, evmClient, adapter2, lzABI, destCAIP2); dErr == nil {
+			stargateDstEid = dstEid
 		}
-		if peer, pErr := u.callLayerZeroPeer(ctx, evmClient, adapter2, lzABI, destCAIP2); pErr == nil {
-			lzPeer = peer.Hex()
+		if peer, pErr := u.callStargatePeer(ctx, evmClient, adapter2, lzABI, destCAIP2); pErr == nil {
+			stargatePeer = peer.Hex()
 		}
-		if opts, oErr := u.callLayerZeroOptions(ctx, evmClient, adapter2, lzABI, destCAIP2); oErr == nil && len(opts) > 0 {
-			lzOptionsHex = "0x" + common.Bytes2Hex(opts)
+		if opts, oErr := u.callStargateOptions(ctx, evmClient, adapter2, lzABI, destCAIP2); oErr == nil && len(opts) > 0 {
+			stargateOptionsHex = "0x" + common.Bytes2Hex(opts)
 		}
 	}
 	if has3 && adapter3 != "" && adapter3 != "0x0000000000000000000000000000000000000000" {
@@ -402,10 +402,10 @@ func (u *OnchainAdapterUsecase) GetStatus(ctx context.Context, sourceChainInput,
 		CCIPDestinationGasLimit:        ccipGasLimit,
 		CCIPDestinationExtraArgsHex:    ccipExtraArgsHex,
 		CCIPDestinationFeeTokenAddress: ccipFeeToken,
-		LayerZeroConfigured:            lzConfigured,
-		LayerZeroDstEID:                lzDstEid,
-		LayerZeroPeer:                  lzPeer,
-		LayerZeroOptionsHex:            lzOptionsHex,
+		StargateConfigured:            stargateConfigured,
+		StargateDstEID:                stargateDstEid,
+		StargatePeer:                  stargatePeer,
+		StargateOptionsHex:            stargateOptionsHex,
 	}, nil
 }
 
@@ -439,18 +439,18 @@ func (u *OnchainAdapterUsecase) SetCCIPConfig(
 	return u.adminOps.SetCCIPConfig(ctx, input)
 }
 
-func (u *OnchainAdapterUsecase) SetLayerZeroConfig(
+func (u *OnchainAdapterUsecase) SetStargateConfig(
 	ctx context.Context,
 	sourceChainInput, destChainInput string,
 	dstEid *uint32, peerHex, optionsHex string,
 ) (string, []string, error) {
-	return u.adminOps.SetLayerZeroConfig(ctx, sourceChainInput, destChainInput, dstEid, peerHex, optionsHex)
+	return u.adminOps.SetStargateConfig(ctx, sourceChainInput, destChainInput, dstEid, peerHex, optionsHex)
 }
 
-func (u *OnchainAdapterUsecase) ConfigureLayerZeroE2E(
+func (u *OnchainAdapterUsecase) ConfigureStargateE2E(
 	ctx context.Context,
-	input LayerZeroE2EConfigureInput,
-) (*LayerZeroE2EConfigureResult, error) {
+	input StargateE2EConfigureInput,
+) (*StargateE2EConfigureResult, error) {
 	if strings.TrimSpace(input.SourceChainInput) == "" || strings.TrimSpace(input.DestChainInput) == "" {
 		return nil, domainerrors.BadRequest("sourceChainId and destChainId are required")
 	}
@@ -467,13 +467,13 @@ func (u *OnchainAdapterUsecase) ConfigureLayerZeroE2E(
 	if strings.TrimSpace(input.Source.SenderAddress) == "" {
 		sourceChainID, _, srcErr := u.chainResolver.ResolveFromAny(ctx, input.SourceChainInput)
 		if srcErr == nil {
-			if sender, senderErr := u.contractRepo.GetActiveContract(ctx, sourceChainID, entities.ContractTypeAdapterLayerZero); senderErr == nil && sender != nil {
+			if sender, senderErr := u.contractRepo.GetActiveContract(ctx, sourceChainID, entities.ContractTypeAdapterStargate); senderErr == nil && sender != nil {
 				input.Source.SenderAddress = sender.ContractAddress
 			}
 		}
 	}
 	if strings.TrimSpace(input.Destination.ReceiverAddress) == "" {
-		if receiver, receiverErr := u.contractRepo.GetActiveContract(ctx, input.Destination.ChainID, entities.ContractTypeReceiverLayerZero); receiverErr == nil && receiver != nil {
+		if receiver, receiverErr := u.contractRepo.GetActiveContract(ctx, input.Destination.ChainID, entities.ContractTypeReceiverStargate); receiverErr == nil && receiver != nil {
 			input.Destination.ReceiverAddress = receiver.ContractAddress
 		}
 	}
@@ -488,13 +488,13 @@ func (u *OnchainAdapterUsecase) ConfigureLayerZeroE2E(
 		}
 	}
 
-	return u.adminOps.ConfigureLayerZeroE2E(ctx, input)
+	return u.adminOps.ConfigureStargateE2E(ctx, input)
 }
 
-func (u *OnchainAdapterUsecase) GetLayerZeroE2EStatus(
+func (u *OnchainAdapterUsecase) GetStargateE2EStatus(
 	ctx context.Context,
-	input LayerZeroE2EStatusInput,
-) (*LayerZeroE2EStatusResult, error) {
+	input StargateE2EStatusInput,
+) (*StargateE2EStatusResult, error) {
 	if strings.TrimSpace(input.SourceChainInput) == "" || strings.TrimSpace(input.DestChainInput) == "" {
 		return nil, domainerrors.BadRequest("sourceChainId and destChainId are required")
 	}
@@ -505,7 +505,7 @@ func (u *OnchainAdapterUsecase) GetLayerZeroE2EStatus(
 	input.DestinationChainID = destChainID
 
 	if strings.TrimSpace(input.DestinationReceiverAddress) == "" {
-		if receiver, receiverErr := u.contractRepo.GetActiveContract(ctx, destChainID, entities.ContractTypeReceiverLayerZero); receiverErr == nil && receiver != nil {
+		if receiver, receiverErr := u.contractRepo.GetActiveContract(ctx, destChainID, entities.ContractTypeReceiverStargate); receiverErr == nil && receiver != nil {
 			input.DestinationReceiverAddress = receiver.ContractAddress
 		}
 	}
@@ -520,7 +520,7 @@ func (u *OnchainAdapterUsecase) GetLayerZeroE2EStatus(
 		}
 	}
 
-	return u.adminOps.GetLayerZeroE2EStatus(ctx, input)
+	return u.adminOps.GetStargateE2EStatus(ctx, input)
 }
 
 func (u *OnchainAdapterUsecase) GenericInteract(
@@ -864,7 +864,7 @@ func (u *OnchainAdapterUsecase) callCCIPDestinationFeeToken(ctx context.Context,
 	return callTypedView[common.Address](ctx, client, adapterAddress, parsedABI, "destinationFeeTokens", destCAIP2)
 }
 
-func (u *OnchainAdapterUsecase) callLayerZeroConfigured(ctx context.Context, client *blockchain.EVMClient, adapterAddress string, parsedABI abi.ABI, destCAIP2 string) (bool, error) {
+func (u *OnchainAdapterUsecase) callStargateConfigured(ctx context.Context, client *blockchain.EVMClient, adapterAddress string, parsedABI abi.ABI, destCAIP2 string) (bool, error) {
 	return callTypedView[bool](ctx, client, adapterAddress, parsedABI, "isRouteConfigured", destCAIP2)
 }
 
@@ -884,11 +884,11 @@ func (u *OnchainAdapterUsecase) callTokenGatewayRelayerFee(ctx context.Context, 
 	return callTypedView[*big.Int](ctx, client, adapterAddress, parsedABI, "relayerFees", destCAIP2)
 }
 
-func (u *OnchainAdapterUsecase) callLayerZeroDstEid(ctx context.Context, client *blockchain.EVMClient, adapterAddress string, parsedABI abi.ABI, destCAIP2 string) (uint32, error) {
+func (u *OnchainAdapterUsecase) callStargateDstEid(ctx context.Context, client *blockchain.EVMClient, adapterAddress string, parsedABI abi.ABI, destCAIP2 string) (uint32, error) {
 	return callTypedView[uint32](ctx, client, adapterAddress, parsedABI, "dstEids", destCAIP2)
 }
 
-func (u *OnchainAdapterUsecase) callLayerZeroPeer(ctx context.Context, client *blockchain.EVMClient, adapterAddress string, parsedABI abi.ABI, destCAIP2 string) (common.Hash, error) {
+func (u *OnchainAdapterUsecase) callStargatePeer(ctx context.Context, client *blockchain.EVMClient, adapterAddress string, parsedABI abi.ABI, destCAIP2 string) (common.Hash, error) {
 	value, err := callTypedView[[32]byte](ctx, client, adapterAddress, parsedABI, "peers", destCAIP2)
 	if err != nil {
 		return common.Hash{}, err
@@ -896,7 +896,7 @@ func (u *OnchainAdapterUsecase) callLayerZeroPeer(ctx context.Context, client *b
 	return common.BytesToHash(value[:]), nil
 }
 
-func (u *OnchainAdapterUsecase) callLayerZeroOptions(ctx context.Context, client *blockchain.EVMClient, adapterAddress string, parsedABI abi.ABI, destCAIP2 string) ([]byte, error) {
+func (u *OnchainAdapterUsecase) callStargateOptions(ctx context.Context, client *blockchain.EVMClient, adapterAddress string, parsedABI abi.ABI, destCAIP2 string) ([]byte, error) {
 	return callTypedView[[]byte](ctx, client, adapterAddress, parsedABI, "enforcedOptions", destCAIP2)
 }
 

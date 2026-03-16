@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	domainerrors "payment-kita.backend/internal/domain/errors"
 )
 
@@ -18,6 +19,10 @@ type webhookServiceStub struct {
 
 func (s webhookServiceStub) ProcessIndexerWebhook(ctx context.Context, eventType string, data json.RawMessage) error {
 	return s.processFn(ctx, eventType, data)
+}
+
+func (s webhookServiceStub) ManualRetry(ctx context.Context, webhookLogID uuid.UUID) error {
+	return nil
 }
 
 func TestWebhookHandler_HandleIndexerWebhook(t *testing.T) {

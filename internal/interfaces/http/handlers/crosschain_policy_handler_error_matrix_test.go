@@ -59,48 +59,48 @@ func (s *routePolicyRepoErrMatrixStub) Delete(ctx context.Context, id uuid.UUID)
 	return nil
 }
 
-type layerZeroRepoErrMatrixStub struct {
-	item      *entities.LayerZeroConfig
-	getByIDFn func(context.Context, uuid.UUID) (*entities.LayerZeroConfig, error)
-	listFn    func(context.Context, *uuid.UUID, *uuid.UUID, *bool, utils.PaginationParams) ([]*entities.LayerZeroConfig, int64, error)
-	createFn  func(context.Context, *entities.LayerZeroConfig) error
-	updateFn  func(context.Context, *entities.LayerZeroConfig) error
+type stargateRepoErrMatrixStub struct {
+	item      *entities.StargateConfig
+	getByIDFn func(context.Context, uuid.UUID) (*entities.StargateConfig, error)
+	listFn    func(context.Context, *uuid.UUID, *uuid.UUID, *bool, utils.PaginationParams) ([]*entities.StargateConfig, int64, error)
+	createFn  func(context.Context, *entities.StargateConfig) error
+	updateFn  func(context.Context, *entities.StargateConfig) error
 	deleteFn  func(context.Context, uuid.UUID) error
 }
 
-func (s *layerZeroRepoErrMatrixStub) GetByID(ctx context.Context, id uuid.UUID) (*entities.LayerZeroConfig, error) {
+func (s *stargateRepoErrMatrixStub) GetByID(ctx context.Context, id uuid.UUID) (*entities.StargateConfig, error) {
 	if s.getByIDFn != nil {
 		return s.getByIDFn(ctx, id)
 	}
 	if s.item == nil {
-		s.item = &entities.LayerZeroConfig{ID: id}
+		s.item = &entities.StargateConfig{ID: id}
 	}
 	return s.item, nil
 }
-func (s *layerZeroRepoErrMatrixStub) GetByRoute(context.Context, uuid.UUID, uuid.UUID) (*entities.LayerZeroConfig, error) {
+func (s *stargateRepoErrMatrixStub) GetByRoute(context.Context, uuid.UUID, uuid.UUID) (*entities.StargateConfig, error) {
 	return nil, domainerrors.ErrNotFound
 }
-func (s *layerZeroRepoErrMatrixStub) List(ctx context.Context, sourceChainID, destChainID *uuid.UUID, activeOnly *bool, p utils.PaginationParams) ([]*entities.LayerZeroConfig, int64, error) {
+func (s *stargateRepoErrMatrixStub) List(ctx context.Context, sourceChainID, destChainID *uuid.UUID, activeOnly *bool, p utils.PaginationParams) ([]*entities.StargateConfig, int64, error) {
 	if s.listFn != nil {
 		return s.listFn(ctx, sourceChainID, destChainID, activeOnly, p)
 	}
-	return []*entities.LayerZeroConfig{}, 0, nil
+	return []*entities.StargateConfig{}, 0, nil
 }
-func (s *layerZeroRepoErrMatrixStub) Create(ctx context.Context, config *entities.LayerZeroConfig) error {
+func (s *stargateRepoErrMatrixStub) Create(ctx context.Context, config *entities.StargateConfig) error {
 	if s.createFn != nil {
 		return s.createFn(ctx, config)
 	}
 	s.item = config
 	return nil
 }
-func (s *layerZeroRepoErrMatrixStub) Update(ctx context.Context, config *entities.LayerZeroConfig) error {
+func (s *stargateRepoErrMatrixStub) Update(ctx context.Context, config *entities.StargateConfig) error {
 	if s.updateFn != nil {
 		return s.updateFn(ctx, config)
 	}
 	s.item = config
 	return nil
 }
-func (s *layerZeroRepoErrMatrixStub) Delete(ctx context.Context, id uuid.UUID) error {
+func (s *stargateRepoErrMatrixStub) Delete(ctx context.Context, id uuid.UUID) error {
 	if s.deleteFn != nil {
 		return s.deleteFn(ctx, id)
 	}
@@ -139,17 +139,17 @@ func TestCrosschainPolicyHandler_ErrorMatrix(t *testing.T) {
 	}
 
 	routeRepo := &routePolicyRepoErrMatrixStub{item: &entities.RoutePolicy{ID: routeID}}
-	lzRepo := &layerZeroRepoErrMatrixStub{item: &entities.LayerZeroConfig{ID: lzID}}
+	lzRepo := &stargateRepoErrMatrixStub{item: &entities.StargateConfig{ID: lzID}}
 	h := NewCrosschainPolicyHandler(routeRepo, lzRepo, chainRepo)
 
 	r := gin.New()
 	r.GET("/route", h.ListRoutePolicies)
 	r.PUT("/route/:id", h.UpdateRoutePolicy)
 	r.DELETE("/route/:id", h.DeleteRoutePolicy)
-	r.GET("/lz", h.ListLayerZeroConfigs)
-	r.POST("/lz", h.CreateLayerZeroConfig)
-	r.PUT("/lz/:id", h.UpdateLayerZeroConfig)
-	r.DELETE("/lz/:id", h.DeleteLayerZeroConfig)
+	r.GET("/lz", h.ListStargateConfigs)
+	r.POST("/lz", h.CreateStargateConfig)
+	r.PUT("/lz/:id", h.UpdateStargateConfig)
+	r.DELETE("/lz/:id", h.DeleteStargateConfig)
 
 	routeRepo.listFn = func(context.Context, *uuid.UUID, *uuid.UUID, utils.PaginationParams) ([]*entities.RoutePolicy, int64, error) {
 		return nil, 0, errors.New("list failed")
@@ -212,7 +212,7 @@ func TestCrosschainPolicyHandler_ErrorMatrix(t *testing.T) {
 	require.Equal(t, http.StatusInternalServerError, w.Code)
 	routeRepo.deleteFn = nil
 
-	lzRepo.listFn = func(context.Context, *uuid.UUID, *uuid.UUID, *bool, utils.PaginationParams) ([]*entities.LayerZeroConfig, int64, error) {
+	lzRepo.listFn = func(context.Context, *uuid.UUID, *uuid.UUID, *bool, utils.PaginationParams) ([]*entities.StargateConfig, int64, error) {
 		return nil, 0, errors.New("lz list failed")
 	}
 	req = httptest.NewRequest(http.MethodGet, "/lz?sourceChainId=8453&destChainId=eip155:42161&activeOnly=no", nil)
@@ -235,7 +235,7 @@ func TestCrosschainPolicyHandler_ErrorMatrix(t *testing.T) {
 	r.ServeHTTP(w, req)
 	require.Equal(t, http.StatusBadRequest, w.Code)
 
-	lzRepo.createFn = func(context.Context, *entities.LayerZeroConfig) error { return errors.New("create failed") }
+	lzRepo.createFn = func(context.Context, *entities.StargateConfig) error { return errors.New("create failed") }
 	createLZBody = `{"sourceChainId":"` + sourceID.String() + `","destChainId":"` + destID.String() + `","dstEid":1,"peerHex":"` + peerHex + `","optionsHex":"01"}`
 	req = httptest.NewRequest(http.MethodPost, "/lz", strings.NewReader(createLZBody))
 	req.Header.Set("Content-Type", "application/json")
@@ -244,7 +244,7 @@ func TestCrosschainPolicyHandler_ErrorMatrix(t *testing.T) {
 	require.Equal(t, http.StatusInternalServerError, w.Code)
 	lzRepo.createFn = nil
 
-	lzRepo.getByIDFn = func(context.Context, uuid.UUID) (*entities.LayerZeroConfig, error) {
+	lzRepo.getByIDFn = func(context.Context, uuid.UUID) (*entities.StargateConfig, error) {
 		return nil, errors.New("get failed")
 	}
 	updateLZBody := `{"sourceChainId":"` + sourceID.String() + `","destChainId":"` + destID.String() + `","dstEid":1,"peerHex":"` + peerHex + `"}`
@@ -262,7 +262,7 @@ func TestCrosschainPolicyHandler_ErrorMatrix(t *testing.T) {
 	r.ServeHTTP(w, req)
 	require.Equal(t, http.StatusBadRequest, w.Code)
 
-	lzRepo.updateFn = func(context.Context, *entities.LayerZeroConfig) error { return errors.New("update failed") }
+	lzRepo.updateFn = func(context.Context, *entities.StargateConfig) error { return errors.New("update failed") }
 	updateLZBody = `{"sourceChainId":"` + sourceID.String() + `","destChainId":"` + destID.String() + `","dstEid":1,"peerHex":"` + peerHex + `"}`
 	req = httptest.NewRequest(http.MethodPut, "/lz/"+lzID.String(), strings.NewReader(updateLZBody))
 	req.Header.Set("Content-Type", "application/json")

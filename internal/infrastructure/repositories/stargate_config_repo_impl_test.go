@@ -11,15 +11,15 @@ import (
 	"payment-kita.backend/pkg/utils"
 )
 
-func TestLayerZeroConfigRepo_CRUDAndList(t *testing.T) {
+func TestStargateConfigRepo_CRUDAndList(t *testing.T) {
 	db := newTestDB(t)
 	createRoutePolicyTables(t, db)
-	repo := NewLayerZeroConfigRepository(db)
+	repo := NewStargateConfigRepository(db)
 	ctx := context.Background()
 
 	sourceID := uuid.New()
 	destID := uuid.New()
-	item := &entities.LayerZeroConfig{
+	item := &entities.StargateConfig{
 		ID:            uuid.New(),
 		SourceChainID: sourceID,
 		DestChainID:   destID,
@@ -60,7 +60,7 @@ func TestLayerZeroConfigRepo_CRUDAndList(t *testing.T) {
 	require.ErrorIs(t, err, domainerrors.ErrNotFound)
 
 	// Create path with zero ID + whitespace options should auto-normalize.
-	autoIDItem := &entities.LayerZeroConfig{
+	autoIDItem := &entities.StargateConfig{
 		SourceChainID: sourceID,
 		DestChainID:   destID,
 		DstEID:        30111,
@@ -72,10 +72,10 @@ func TestLayerZeroConfigRepo_CRUDAndList(t *testing.T) {
 	require.NotEqual(t, uuid.Nil, autoIDItem.ID)
 }
 
-func TestLayerZeroConfigRepo_NotFoundBranches(t *testing.T) {
+func TestStargateConfigRepo_NotFoundBranches(t *testing.T) {
 	db := newTestDB(t)
 	createRoutePolicyTables(t, db)
-	repo := NewLayerZeroConfigRepository(db)
+	repo := NewStargateConfigRepository(db)
 	ctx := context.Background()
 
 	_, err := repo.GetByID(ctx, uuid.New())
@@ -84,7 +84,7 @@ func TestLayerZeroConfigRepo_NotFoundBranches(t *testing.T) {
 	_, err = repo.GetByRoute(ctx, uuid.New(), uuid.New())
 	require.ErrorIs(t, err, domainerrors.ErrNotFound)
 
-	err = repo.Update(ctx, &entities.LayerZeroConfig{
+	err = repo.Update(ctx, &entities.StargateConfig{
 		ID:            uuid.New(),
 		SourceChainID: uuid.New(),
 		DestChainID:   uuid.New(),
@@ -99,13 +99,13 @@ func TestLayerZeroConfigRepo_NotFoundBranches(t *testing.T) {
 	require.ErrorIs(t, err, domainerrors.ErrNotFound)
 }
 
-func TestLayerZeroConfigRepo_DBErrorBranches(t *testing.T) {
+func TestStargateConfigRepo_DBErrorBranches(t *testing.T) {
 	db := newTestDB(t)
 	// Intentionally skip table creation.
-	repo := NewLayerZeroConfigRepository(db)
+	repo := NewStargateConfigRepository(db)
 	ctx := context.Background()
 
-	err := repo.Create(ctx, &entities.LayerZeroConfig{
+	err := repo.Create(ctx, &entities.StargateConfig{
 		ID:            uuid.New(),
 		SourceChainID: uuid.New(),
 		DestChainID:   uuid.New(),
@@ -125,7 +125,7 @@ func TestLayerZeroConfigRepo_DBErrorBranches(t *testing.T) {
 	_, _, err = repo.List(ctx, nil, nil, nil, utils.PaginationParams{Page: 1, Limit: 10})
 	require.Error(t, err)
 
-	err = repo.Update(ctx, &entities.LayerZeroConfig{
+	err = repo.Update(ctx, &entities.StargateConfig{
 		ID:            uuid.New(),
 		SourceChainID: uuid.New(),
 		DestChainID:   uuid.New(),

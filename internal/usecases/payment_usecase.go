@@ -22,6 +22,7 @@ import (
 	domainerrors "payment-kita.backend/internal/domain/errors"
 	"payment-kita.backend/internal/domain/repositories"
 	"payment-kita.backend/internal/infrastructure/blockchain"
+	"payment-kita.backend/internal/infrastructure/metrics"
 	"payment-kita.backend/pkg/utils"
 )
 
@@ -345,11 +346,21 @@ func (u *PaymentUsecase) CreatePayment(ctx context.Context, userID uuid.UUID, in
 		minDestAmountStr = null.StringFrom(input.MinAmountOut)
 	}
 
+	// Merchant Attribution
+	var merchantID *uuid.UUID
+	if mID, ok := ctx.Value("MerchantID").(uuid.UUID); ok {
+		merchantID = &mID
+	} else if input.ReceiverMerchantID != "" {
+		if mID, err := uuid.Parse(input.ReceiverMerchantID); err == nil {
+			merchantID = &mID
+		}
+	}
+
 	// Create payment entity
 	payment := &entities.Payment{
 		ID:                 utils.GenerateUUIDv7(), // Generate ID
 		SenderID:           &userID,
-		MerchantID:         nil, // userID is User, not Merchant in this context? Or need to check if User is Merchant?
+		MerchantID:         merchantID,
 		BridgeID:           bridgeID,
 		SourceChainID:      sourceChainUUID,
 		DestChainID:        destChainUUID,
@@ -447,6 +458,13 @@ func (u *PaymentUsecase) CreatePayment(ctx context.Context, userID uuid.UUID, in
 			fmt.Printf("Warning: failed to create quote snapshot event for payment %s: %v\n", payment.ID, err)
 		}
 	}
+
+	// Record metrics
+	merchantIDStr := "anonymous"
+	if merchantID != nil {
+		merchantIDStr = merchantID.String()
+	}
+	metrics.RecordSessionCreated(merchantIDStr, nil)
 
 	return &entities.CreatePaymentResponse{
 		PaymentID:      payment.ID,
@@ -2767,7 +2785,7 @@ func bridgeTypeToName(bridgeType uint8) string {
 	case 1:
 		return "CCIP"
 	case 2:
-		return "LayerZero"
+		return "Stargate"
 	case 3:
 		return "HyperbridgeTokenGateway"
 	default:
@@ -2779,7 +2797,7 @@ func bridgeNameToType(bridgeName string) uint8 {
 	switch strings.ToUpper(strings.TrimSpace(bridgeName)) {
 	case "CCIP":
 		return 1
-	case "LAYERZERO":
+	case "STARGATE":
 		return 2
 	case "HYPERBRIDGE_TOKEN_GATEWAY", "HYPERBRIDGETOKENGATEWAY", "HBTOKENGATEWAY":
 		return 3

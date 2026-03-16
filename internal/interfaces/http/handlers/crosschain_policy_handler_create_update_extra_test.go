@@ -62,11 +62,11 @@ func TestCrosschainPolicyHandler_CreateUpdate_ExtraBranches(t *testing.T) {
 		getByCAIP2: func(context.Context, string) (*entities.Chain, error) { return nil, domainerrors.ErrNotFound },
 	}
 	routeRepo := &routePolicyRepoCreateErrStub{createErr: errors.New("create failed")}
-	h := NewCrosschainPolicyHandler(routeRepo, layerZeroRepoNoop{}, chainRepo)
+	h := NewCrosschainPolicyHandler(routeRepo, stargateRepoNoop{}, chainRepo)
 
 	r := gin.New()
 	r.POST("/route", h.CreateRoutePolicy)
-	r.PUT("/lz/:id", h.UpdateLayerZeroConfig)
+	r.PUT("/lz/:id", h.UpdateStargateConfig)
 
 	req := httptest.NewRequest(http.MethodPost, "/route", strings.NewReader(`{"sourceChainId":"bad","destChainId":"42161","defaultBridgeType":0}`))
 	req.Header.Set("Content-Type", "application/json")

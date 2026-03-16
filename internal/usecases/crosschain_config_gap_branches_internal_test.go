@@ -137,14 +137,14 @@ func TestCrosschainConfigUsecase_GapBranches(t *testing.T) {
 					// HyperbridgeConfigured false to hit routeConfigured false branch.
 					HasAdapterType2: true,
 					AdapterType2:    "0x2222222222222222222222222222222222222222",
-					// LayerZeroConfigured false to hit routeConfigured false branch.
+					// StargateConfigured false to hit routeConfigured false branch.
 				}, nil
 			},
 		})
 		preflight, err := u.Preflight(context.Background(), "eip155:8453", "eip155:42161")
 		require.NoError(t, err)
 		require.Equal(t, "HYPERBRIDGE_NOT_CONFIGURED", preflight.Bridges[0].ErrorCode)
-		require.Equal(t, "LAYERZERO_NOT_CONFIGURED", preflight.Bridges[2].ErrorCode)
+		require.Equal(t, "STARGATE_NOT_CONFIGURED", preflight.Bridges[2].ErrorCode)
 	})
 
 	t.Run("preflight ready row and policy executable", func(t *testing.T) {

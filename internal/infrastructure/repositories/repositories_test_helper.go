@@ -45,6 +45,13 @@ func createMerchantTable(t *testing.T, db *gorm.DB) {
 		business_address TEXT,
 		documents TEXT,
 		fee_discount_percent TEXT,
+		callback_url TEXT,
+		webhook_secret TEXT,
+		webhook_is_active BOOLEAN,
+		support_email TEXT,
+		logo_url TEXT,
+		webhook_metadata TEXT,
+		metadata TEXT,
 		verified_at DATETIME,
 		created_at DATETIME,
 		updated_at DATETIME,
@@ -100,7 +107,7 @@ func createChainTables(t *testing.T, db *gorm.DB) {
 		is_active BOOLEAN,
 		state_machine_id TEXT,
 		ccip_chain_selector TEXT,
-		layerzero_eid INTEGER,
+		stargate_eid INTEGER,
 		created_at DATETIME,
 		updated_at DATETIME,
 		deleted_at DATETIME
@@ -115,7 +122,8 @@ func createChainTables(t *testing.T, db *gorm.DB) {
 		error_count INTEGER,
 		created_at DATETIME,
 		updated_at DATETIME,
-		deleted_at DATETIME
+		deleted_at DATETIME,
+		CONSTRAINT fk_chains_rpcs FOREIGN KEY (chain_id) REFERENCES chains(id)
 	);`)
 }
 
@@ -203,7 +211,7 @@ func createRoutePolicyTables(t *testing.T, db *gorm.DB) {
 		updated_at DATETIME,
 		deleted_at DATETIME
 	);`)
-	mustExec(t, db, `CREATE TABLE layerzero_configs (
+	mustExec(t, db, `CREATE TABLE stargate_configs (
 		id TEXT PRIMARY KEY,
 		source_chain_id TEXT NOT NULL,
 		dest_chain_id TEXT NOT NULL,
@@ -299,6 +307,7 @@ func createPaymentRequestTables(t *testing.T, db *gorm.DB) {
 		expires_at DATETIME NOT NULL,
 		tx_hash TEXT,
 		payer_address TEXT,
+		payment_code TEXT,
 		completed_at DATETIME,
 		created_at DATETIME,
 		updated_at DATETIME,
@@ -317,5 +326,18 @@ func createPaymentRequestTables(t *testing.T, db *gorm.DB) {
 		error_message TEXT,
 		created_at DATETIME,
 		updated_at DATETIME
+	);`)
+}
+
+func createResolveAuditTable(t *testing.T, db *gorm.DB) {
+	mustExec(t, db, `CREATE TABLE pk_resolve_audit (
+		id TEXT PRIMARY KEY,
+		merchant_id TEXT,
+		user_id TEXT,
+		action TEXT NOT NULL,
+		details TEXT,
+		ip_address TEXT,
+		user_agent TEXT,
+		created_at DATETIME
 	);`)
 }
