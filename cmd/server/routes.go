@@ -31,6 +31,7 @@ type routeDeps struct {
 	routeErrorHandler          *handlers.RouteErrorHandler
 	rpcHandler                 *handlers.RpcHandler
 	paymentResolveHandler      *handlers.PaymentResolveHandler
+	gasProfilerHandler         *handlers.GasProfilerHandler
 	auditLogRepo               domain.AuditLogRepository
 	dualAuthMiddleware         gin.HandlerFunc
 }
@@ -251,6 +252,13 @@ func registerAPIV1Routes(r *gin.Engine, d routeDeps) {
 			admin.DELETE("/stargate-configs/:id", d.crosschainPolicyHandler.DeleteStargateConfig)
 
 			admin.GET("/diagnostics/route-error/:paymentId", d.routeErrorHandler.GetRouteError)
+		}
+
+		// Gas Profiler routes (public)
+		gas := v1.Group("/gas")
+		{
+			gas.GET("/estimate/:chainId", d.gasProfilerHandler.GetGasEstimate)
+			gas.GET("/estimates", d.gasProfilerHandler.GetGasEstimates)
 		}
 	}
 }

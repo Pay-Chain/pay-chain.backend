@@ -66,6 +66,11 @@ func SetNX(ctx context.Context, key string, value interface{}, expiration time.D
 	return client.SetNX(ctx, key, value, expiration).Result()
 }
 
+// SetEX sets a key with value and expiration (alias for Set)
+func SetEX(ctx context.Context, key string, value string, expiration time.Duration) error {
+	return client.Set(ctx, key, value, expiration).Err()
+}
+
 // Incr increments a key
 func Incr(ctx context.Context, key string) (int64, error) {
 	return client.Incr(ctx, key).Result()

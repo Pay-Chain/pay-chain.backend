@@ -275,7 +275,7 @@ func (s *evmAdminOpsService) SetHyperbridgeTokenGatewayConfig(
 		return "", nil, domainerrors.BadRequest("hyperbridge token gateway adapter (type 3) is not registered")
 	}
 
-	parsedABI, err := s.resolveABI(ctx, resolved.sourceChainID, entities.ContractTypeAdapterHBTokenSender)
+	parsedABI, err := s.resolveABI(ctx, resolved.sourceChainID, entities.ContractTypeAdapterHyperbridge)
 	if err != nil {
 		return "", nil, err
 	}

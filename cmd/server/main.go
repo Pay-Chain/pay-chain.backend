@@ -190,9 +190,13 @@ func runMainProcess() error {
 	crosschainPolicyHandler := handlers.NewCrosschainPolicyHandler(routePolicyRepo, stargateConfigRepo, chainRepo)
 	routeErrorHandler := handlers.NewRouteErrorHandler(routeErrorUsecase)
 	rpcHandler := handlers.NewRpcHandler(chainRepo)
+	gasProfilerHandler := handlers.NewGasProfilerHandler(clientFactory) // Added gas profiler
 
 	// Create dual auth middleware
 	dualAuthMiddleware := middleware.DualAuthMiddleware(jwtService, apiKeyUsecase, merchantRepo, sessionStore)
+
+	// Create idempotency middleware
+	idempotencyMiddleware := middleware.IdempotencyMiddleware()
 
 	// Start background jobs
 	ctx, cancel := context.WithCancel(context.Background())
@@ -208,6 +212,7 @@ func runMainProcess() error {
 	r.Use(gin.Recovery())
 	r.Use(middleware.RequestIDMiddleware())
 	r.Use(middleware.LoggerMiddleware())
+	r.Use(idempotencyMiddleware) // Add idempotency middleware
 
 	applyCORSMiddleware(r)
 	registerHealthRoute(r)
@@ -233,6 +238,7 @@ func runMainProcess() error {
 		routeErrorHandler:          routeErrorHandler,
 		rpcHandler:                 rpcHandler,
 		paymentResolveHandler:      paymentResolveHandler,
+		gasProfilerHandler:         gasProfilerHandler, // Added
 		auditLogRepo:               auditLogRepo,
 		dualAuthMiddleware:         dualAuthMiddleware,
 	})

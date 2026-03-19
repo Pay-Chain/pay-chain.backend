@@ -13,10 +13,12 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 	"payment-kita.backend/internal/domain/entities"
 	domainerrors "payment-kita.backend/internal/domain/errors"
 	"payment-kita.backend/internal/domain/repositories"
 	"payment-kita.backend/internal/infrastructure/blockchain"
+	"payment-kita.backend/pkg/logger"
 )
 
 var (
@@ -38,26 +40,25 @@ var (
 		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"},{"internalType":"uint8","name":"bridgeType","type":"uint8"}],"name":"getAdapter","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},
 		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"},{"internalType":"uint8","name":"bridgeType","type":"uint8"},{"internalType":"address","name":"adapter","type":"address"}],"name":"registerAdapter","outputs":[],"stateMutability":"nonpayable","type":"function"}
 	]`)
-	FallbackHyperbridgeSenderAdminABI = mustParseABI(`[
+	FallbackHyperbridgeAdapterABI = mustParseABI(`[
 		{"inputs":[{"internalType":"string","name":"chainId","type":"string"},{"internalType":"bytes","name":"stateMachineId","type":"bytes"}],"name":"setStateMachineId","outputs":[],"stateMutability":"nonpayable","type":"function"},
 		{"inputs":[{"internalType":"string","name":"chainId","type":"string"},{"internalType":"bytes","name":"destination","type":"bytes"}],"name":"setDestinationContract","outputs":[],"stateMutability":"nonpayable","type":"function"},
 		{"inputs":[{"internalType":"address","name":"_router","type":"address"}],"name":"setSwapRouter","outputs":[],"stateMutability":"nonpayable","type":"function"},
 		{"inputs":[{"internalType":"string","name":"chainId","type":"string"}],"name":"stateMachineIds","outputs":[{"internalType":"bytes","name":"","type":"bytes"}],"stateMutability":"view","type":"function"},
 		{"inputs":[{"internalType":"string","name":"chainId","type":"string"}],"name":"destinationContracts","outputs":[{"internalType":"bytes","name":"","type":"bytes"}],"stateMutability":"view","type":"function"},
 		{"inputs":[{"internalType":"string","name":"chainId","type":"string"}],"name":"isChainConfigured","outputs":[{"internalType":"bool","name":"configured","type":"bool"}],"stateMutability":"view","type":"function"},
-		{"inputs":[],"name":"swapRouter","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"}
-	]`)
-	FallbackHyperbridgeTokenGatewaySenderAdminABI = mustParseABI(`[
-		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"},{"internalType":"bytes","name":"stateMachineId","type":"bytes"}],"name":"setStateMachineId","outputs":[],"stateMutability":"nonpayable","type":"function"},
+		{"inputs":[],"name":"swapRouter","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},
 		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"},{"internalType":"address","name":"settlementExecutor","type":"address"}],"name":"setRouteSettlementExecutor","outputs":[],"stateMutability":"nonpayable","type":"function"},
 		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"},{"internalType":"uint256","name":"nativeCost","type":"uint256"}],"name":"setNativeCost","outputs":[],"stateMutability":"nonpayable","type":"function"},
 		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"},{"internalType":"uint256","name":"relayerFee","type":"uint256"}],"name":"setRelayerFee","outputs":[],"stateMutability":"nonpayable","type":"function"},
-		{"inputs":[{"internalType":"string","name":"","type":"string"}],"name":"stateMachineIds","outputs":[{"internalType":"bytes","name":"","type":"bytes"}],"stateMutability":"view","type":"function"},
 		{"inputs":[{"internalType":"string","name":"","type":"string"}],"name":"settlementExecutors","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},
 		{"inputs":[{"internalType":"string","name":"","type":"string"}],"name":"nativeCosts","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
 		{"inputs":[{"internalType":"string","name":"","type":"string"}],"name":"relayerFees","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
 		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"}],"name":"isRouteConfigured","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"}
 	]`)
+	// Deprecated: use FallbackHyperbridgeAdapterABI
+	FallbackHyperbridgeSenderAdminABI             = FallbackHyperbridgeAdapterABI
+	FallbackHyperbridgeTokenGatewaySenderAdminABI = FallbackHyperbridgeAdapterABI
 	FallbackCCIPSenderAdminABI = mustParseABI(`[
 		{"inputs":[{"internalType":"string","name":"chainId","type":"string"},{"internalType":"uint64","name":"selector","type":"uint64"}],"name":"setChainSelector","outputs":[],"stateMutability":"nonpayable","type":"function"},
 		{"inputs":[{"internalType":"string","name":"chainId","type":"string"},{"internalType":"uint64","name":"selector","type":"uint64"},{"internalType":"address","name":"destAdapter","type":"address"}],"name":"setChainConfig","outputs":[],"stateMutability":"nonpayable","type":"function"},
@@ -100,30 +101,37 @@ var (
 	executeOnchainTx = func(ctx context.Context, rpcURL string, ownerPrivateKey string, contractAddress string, parsedABI abi.ABI, method string, args ...interface{}) (string, error) {
 		client, err := ethclient.DialContext(ctx, rpcURL)
 		if err != nil {
-			return "", err
+			logger.Error(ctx, "failed to connect to RPC", zap.String("rpc_url", rpcURL), zap.Error(err))
+			return "", domainerrors.NewError("failed to connect to blockchain RPC: "+err.Error(), err)
 		}
 		defer client.Close()
 
 		privateKeyHex := strings.TrimPrefix(ownerPrivateKey, "0x")
 		privateKey, err := crypto.HexToECDSA(privateKeyHex)
 		if err != nil {
-			return "", domainerrors.BadRequest("invalid owner private key")
+			return "", domainerrors.BadRequest("invalid owner private key format")
 		}
 
 		chainID, err := client.ChainID(ctx)
 		if err != nil {
-			return "", err
+			logger.Error(ctx, "failed to get chain ID", zap.Error(err))
+			return "", domainerrors.NewError("failed to get chainID from RPC: "+err.Error(), err)
 		}
 		if chainID == nil {
-			return "", fmt.Errorf("chain id is nil")
+			return "", domainerrors.NewError("chain id is nil from RPC", nil)
 		}
 		auth, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
 		if err != nil {
-			return "", err
+			return "", domainerrors.NewError("failed to create transactor: "+err.Error(), err)
 		}
 		auth.Context = ctx
 
-		return performContractTransact(client, contractAddress, parsedABI, auth, method, args...)
+		txHash, err := performContractTransact(client, contractAddress, parsedABI, auth, method, args...)
+		if err != nil {
+			logger.Error(ctx, "on-chain transaction failed", zap.String("method", method), zap.Error(err))
+			return "", domainerrors.NewError("on-chain transaction failed: "+err.Error(), err)
+		}
+		return txHash, nil
 	}
 )
 
@@ -355,7 +363,7 @@ func (u *OnchainAdapterUsecase) GetStatus(ctx context.Context, sourceChainInput,
 		}
 	}
 	if has3 && adapter3 != "" && adapter3 != "0x0000000000000000000000000000000000000000" {
-		hyperTokenABI, _ := u.ResolveABIWithFallback(ctx, sourceChainID, entities.ContractTypeAdapterHBTokenSender)
+		hyperTokenABI, _ := u.ResolveABIWithFallback(ctx, sourceChainID, entities.ContractTypeAdapterHyperbridge)
 		if configured, cfgErr := u.callTokenGatewayConfigured(ctx, evmClient, adapter3, hyperTokenABI, destCAIP2); cfgErr == nil {
 			hyperTokenConfigured = configured
 		}

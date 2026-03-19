@@ -89,9 +89,12 @@ func (u *ABIResolverMixin) ResolveABIWithFallback(ctx context.Context, chainID u
 		isValid := false
 		switch contractType {
 		case entities.ContractTypeAdapterHyperbridge:
-			_, isValid = parsed.Methods["setStateMachineId"]
+			_, hasSetStateMachine := parsed.Methods["setStateMachineId"]
+			_, hasSetSettlementExecutor := parsed.Methods["setRouteSettlementExecutor"]
+			// Unified adapter can be either a basic sender or a token gateway sender
+			isValid = hasSetStateMachine || hasSetSettlementExecutor
 			if !isValid {
-				fmt.Printf("[ResolveABI] ABI for %s has %d methods but missing 'setStateMachineId'. Using fallback.\n", contractType, len(parsed.Methods))
+				fmt.Printf("[ResolveABI] ABI for %s has %d methods but missing Hyperbridge methods. Using fallback.\n", contractType, len(parsed.Methods))
 			}
 		case entities.ContractTypeAdapterCCIP:
 			_, hasSetChainSelector := parsed.Methods["setChainSelector"]
@@ -104,13 +107,6 @@ func (u *ABIResolverMixin) ResolveABIWithFallback(ctx context.Context, chainID u
 			_, isValid = parsed.Methods["setRoute"]
 			if !isValid {
 				fmt.Printf("[ResolveABI] ABI for %s has %d methods but missing 'setRoute'. Using fallback.\n", contractType, len(parsed.Methods))
-			}
-		case entities.ContractTypeAdapterHBTokenSender:
-			_, hasSetStateMachine := parsed.Methods["setStateMachineId"]
-			_, hasSetSettlementExecutor := parsed.Methods["setRouteSettlementExecutor"]
-			isValid = hasSetStateMachine && hasSetSettlementExecutor
-			if !isValid {
-				fmt.Printf("[ResolveABI] ABI for %s has %d methods but missing token-gateway admin methods. Using fallback.\n", contractType, len(parsed.Methods))
 			}
 		default:
 			// For others (or if we don't need strict validation), checks length
@@ -134,13 +130,11 @@ func (u *ABIResolverMixin) ResolveABIWithFallback(ctx context.Context, chainID u
 	case entities.ContractTypeRouter:
 		return FallbackPaymentKitaRouterAdminABI, nil
 	case entities.ContractTypeAdapterHyperbridge:
-		return FallbackHyperbridgeSenderAdminABI, nil
+		return FallbackHyperbridgeAdapterABI, nil
 	case entities.ContractTypeAdapterCCIP:
 		return FallbackCCIPSenderAdminABI, nil
 	case entities.ContractTypeAdapterStargate:
 		return FallbackStargateSenderAdminABI, nil
-	case entities.ContractTypeAdapterHBTokenSender:
-		return FallbackHyperbridgeTokenGatewaySenderAdminABI, nil
 	case entities.ContractTypeReceiverStargate:
 		return FallbackStargateReceiverAdminABI, nil
 	}
