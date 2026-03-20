@@ -52,8 +52,8 @@ jobs:
           set -euo pipefail
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no "$LOGIN_VPS" "
             set -euo pipefail
-            cd '$REMOTE_APP_DIR'
-            git pull origin production
+            cd ~/app/payment-kita.backend
+            git pull origin main
             docker stop '$CONTAINER_NAME' || true
             docker rm '$CONTAINER_NAME' || true
             docker build -t '$CONTAINER_NAME:latest' .
