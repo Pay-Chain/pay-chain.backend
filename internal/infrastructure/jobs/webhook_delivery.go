@@ -63,18 +63,16 @@ func (j *WebhookDeliveryJob) processPendingDeliveries(ctx context.Context) {
 			return
 		}
 
-		// Check retry limit (e.g., 5 attempts)
-		if delivery.RetryCount >= 5 {
+		if delivery.RetryCount >= usecases.WebhookMaxRetries() {
 			delivery.DeliveryStatus = entities.WebhookDeliveryStatusFailed
 			delivery.ResponseBody = "Max retry attempts reached"
+			delivery.NextRetryAt = nil
 			_ = j.webhookLogRepo.Update(ctx, delivery)
 			continue
 		}
 
-		// Exponential Backoff check (simple version)
 		if delivery.DeliveryStatus == entities.WebhookDeliveryStatusRetrying {
-			backoff := time.Duration(1<<uint(delivery.RetryCount)) * time.Minute
-			if time.Since(*delivery.LastAttemptAt) < backoff {
+			if delivery.NextRetryAt != nil && time.Now().Before(*delivery.NextRetryAt) {
 				continue
 			}
 		}

@@ -122,6 +122,8 @@ func runMainProcess() error {
 	stargateConfigRepo := repositories.NewStargateConfigRepository(db)
 	smartContractRepo := repositories.NewSmartContractRepository(db, chainRepo)
 	paymentRequestRepo := repositories.NewPaymentRequestRepository(db)
+	paymentQuoteRepo := repositories.NewPaymentQuoteRepository(db)
+	settlementProfileRepo := repositories.NewMerchantSettlementProfileRepository(db)
 	teamRepo := repositories.NewTeamRepository(db)
 	apiKeyRepo := repositories.NewApiKeyRepository(db)
 	webhookLogRepo := repositories.NewGormWebhookLogRepository(db)
@@ -158,11 +160,34 @@ func runMainProcess() error {
 	walletUsecase := usecases.NewWalletUsecase(walletRepo, userRepo, chainRepo)
 
 	paymentRequestUsecase := usecases.NewPaymentRequestUsecase(paymentRequestRepo, merchantRepo, walletRepo, chainRepo, smartContractRepo, tokenRepo, jweService)
+	partnerQuoteUsecase := usecases.NewPartnerQuoteUsecase(paymentQuoteRepo, tokenRepo, chainRepo, paymentUsecase)
+	partnerPaymentSessionUsecase := usecases.NewPartnerPaymentSessionUsecase(
+		paymentQuoteRepo,
+		repositories.NewPartnerPaymentSessionRepository(db),
+		paymentRequestRepo,
+		smartContractRepo,
+		tokenRepo,
+		chainRepo,
+		uow,
+		jweService,
+		paymentRequestUsecase,
+		os.Getenv("PARTNER_CHECKOUT_BASE_URL"),
+	)
+	createPaymentUsecase := usecases.NewCreatePaymentUsecase(
+		merchantRepo,
+		settlementProfileRepo,
+		walletRepo,
+		tokenRepo,
+		chainRepo,
+		paymentQuoteRepo,
+		partnerQuoteUsecase,
+		partnerPaymentSessionUsecase,
+	)
 	// Step 3: Webhook Delivery Engine
 	webhookDispatcher := usecases.NewWebhookDispatcher(webhookLogRepo, merchantRepo, hmacService)
 	webhookJob := jobs.NewWebhookDeliveryJob(webhookLogRepo, webhookDispatcher)
 
-	webhookUsecase := usecases.NewWebhookUsecase(paymentRepo, paymentEventRepo, paymentRequestRepo, merchantRepo, webhookLogRepo, webhookDispatcher, uow)
+	webhookUsecase := usecases.NewWebhookUsecase(paymentRepo, paymentEventRepo, paymentRequestRepo, repositories.NewPartnerPaymentSessionRepository(db), merchantRepo, webhookLogRepo, webhookDispatcher, uow)
 	onchainAdapterUsecase := usecases.NewOnchainAdapterUsecase(chainRepo, smartContractRepo, clientFactory, cfg.Blockchain.OwnerPrivateKey)
 	contractConfigAuditUsecase := usecases.NewContractConfigAuditUsecase(chainRepo, smartContractRepo, clientFactory)
 	crosschainConfigUsecase := usecases.NewCrosschainConfigUsecase(chainRepo, tokenRepo, smartContractRepo, clientFactory, onchainAdapterUsecase)
@@ -178,11 +203,16 @@ func runMainProcess() error {
 	smartContractHandler := handlers.NewSmartContractHandler(smartContractRepo, chainRepo)
 	paymentRequestHandler := handlers.NewPaymentRequestHandler(paymentRequestUsecase)
 	webhookHandler := handlers.NewWebhookHandler(webhookUsecase)
-	adminHandler := handlers.NewAdminHandler(userRepo, merchantRepo, paymentRepo)
+	adminHandler := handlers.NewAdminHandler(userRepo, merchantRepo, paymentRepo, settlementProfileRepo)
+	adminMerchantSettlementHandler := handlers.NewAdminMerchantSettlementHandler(merchantRepo, settlementProfileRepo, chainRepo, tokenRepo)
+	merchantSettlementHandler := handlers.NewMerchantSettlementHandler(merchantRepo, settlementProfileRepo, chainRepo, tokenRepo)
 	teamHandler := handlers.NewTeamHandler(teamRepo)
 	apiKeyHandler := handlers.NewApiKeyHandler(apiKeyUsecase)             // Added
 	paymentAppHandler := handlers.NewPaymentAppHandler(paymentAppUsecase) // Added
 	paymentResolveHandler := handlers.NewPaymentResolveHandler(jweService, complianceService, resolveAuditRepo, paymentRequestUsecase)
+	createPaymentHandler := handlers.NewCreatePaymentHandler(createPaymentUsecase)
+	partnerQuoteHandler := handlers.NewPartnerQuoteHandler(partnerQuoteUsecase)
+	partnerPaymentSessionHandler := handlers.NewPartnerPaymentSessionHandler(partnerPaymentSessionUsecase, complianceService, resolveAuditRepo)
 	paymentConfigHandler := handlers.NewPaymentConfigHandler(paymentBridgeRepo, bridgeConfigRepo, feeConfigRepo, chainRepo, tokenRepo)
 	onchainAdapterHandler := handlers.NewOnchainAdapterHandler(onchainAdapterUsecase)
 	contractConfigAuditHandler := handlers.NewContractConfigAuditHandler(contractConfigAuditUsecase)
@@ -194,6 +224,7 @@ func runMainProcess() error {
 
 	// Create dual auth middleware
 	dualAuthMiddleware := middleware.DualAuthMiddleware(jwtService, apiKeyUsecase, merchantRepo, sessionStore)
+	partnerAuthMiddleware := middleware.ApiKeyPartnerMiddleware(apiKeyUsecase, merchantRepo)
 
 	// Create idempotency middleware
 	idempotencyMiddleware := middleware.IdempotencyMiddleware()
@@ -217,30 +248,36 @@ func runMainProcess() error {
 	applyCORSMiddleware(r)
 	registerHealthRoute(r)
 	registerAPIV1Routes(r, routeDeps{
-		authHandler:                authHandler,
-		paymentHandler:             paymentHandler,
-		merchantHandler:            merchantHandler,
-		walletHandler:              walletHandler,
-		chainHandler:               chainHandler,
-		tokenHandler:               tokenHandler,
-		smartContractHandler:       smartContractHandler,
-		paymentRequestHandler:      paymentRequestHandler,
-		webhookHandler:             webhookHandler,
-		adminHandler:               adminHandler,
-		teamHandler:                teamHandler,
-		apiKeyHandler:              apiKeyHandler,
-		paymentAppHandler:          paymentAppHandler,
-		paymentConfigHandler:       paymentConfigHandler,
-		onchainAdapterHandler:      onchainAdapterHandler,
-		contractConfigAuditHandler: contractConfigAuditHandler,
-		crosschainConfigHandler:    crosschainConfigHandler,
-		crosschainPolicyHandler:    crosschainPolicyHandler,
-		routeErrorHandler:          routeErrorHandler,
-		rpcHandler:                 rpcHandler,
-		paymentResolveHandler:      paymentResolveHandler,
-		gasProfilerHandler:         gasProfilerHandler, // Added
-		auditLogRepo:               auditLogRepo,
-		dualAuthMiddleware:         dualAuthMiddleware,
+		authHandler:                    authHandler,
+		paymentHandler:                 paymentHandler,
+		merchantHandler:                merchantHandler,
+		walletHandler:                  walletHandler,
+		chainHandler:                   chainHandler,
+		tokenHandler:                   tokenHandler,
+		smartContractHandler:           smartContractHandler,
+		paymentRequestHandler:          paymentRequestHandler,
+		webhookHandler:                 webhookHandler,
+		adminHandler:                   adminHandler,
+		adminMerchantSettlementHandler: adminMerchantSettlementHandler,
+		merchantSettlementHandler:      merchantSettlementHandler,
+		teamHandler:                    teamHandler,
+		apiKeyHandler:                  apiKeyHandler,
+		paymentAppHandler:              paymentAppHandler,
+		paymentConfigHandler:           paymentConfigHandler,
+		onchainAdapterHandler:          onchainAdapterHandler,
+		contractConfigAuditHandler:     contractConfigAuditHandler,
+		crosschainConfigHandler:        crosschainConfigHandler,
+		crosschainPolicyHandler:        crosschainPolicyHandler,
+		routeErrorHandler:              routeErrorHandler,
+		rpcHandler:                     rpcHandler,
+		paymentResolveHandler:          paymentResolveHandler,
+		createPaymentHandler:           createPaymentHandler,
+		gasProfilerHandler:             gasProfilerHandler, // Added
+		partnerQuoteHandler:            partnerQuoteHandler,
+		partnerPaymentSessionHandler:   partnerPaymentSessionHandler,
+		auditLogRepo:                   auditLogRepo,
+		dualAuthMiddleware:             dualAuthMiddleware,
+		partnerAuthMiddleware:          partnerAuthMiddleware,
 	})
 
 	// Print all registered routes for debugging

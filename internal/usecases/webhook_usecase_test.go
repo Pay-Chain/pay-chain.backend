@@ -17,6 +17,7 @@ func TestWebhookUsecase_ProcessIndexerWebhook_InvalidJSON(t *testing.T) {
 		new(MockPaymentRepository),
 		new(MockPaymentEventRepository),
 		new(MockPaymentRequestRepository),
+		new(MockPartnerPaymentSessionRepository),
 		new(MockMerchantRepository),
 		new(MockWebhookLogRepository),
 		nil, // WebhookDispatcher
@@ -31,6 +32,7 @@ func TestWebhookUsecase_ProcessIndexerWebhook_PaymentCompletedSuccess(t *testing
 	mockPaymentRepo := new(MockPaymentRepository)
 	mockEventRepo := new(MockPaymentEventRepository)
 	mockRequestRepo := new(MockPaymentRequestRepository)
+	mockSessionRepo := new(MockPartnerPaymentSessionRepository)
 	mockMerchantRepo := new(MockMerchantRepository)
 	mockWebhookRepo := new(MockWebhookLogRepository)
 	mockUOW := new(MockUnitOfWork)
@@ -39,6 +41,7 @@ func TestWebhookUsecase_ProcessIndexerWebhook_PaymentCompletedSuccess(t *testing
 		mockPaymentRepo,
 		mockEventRepo,
 		mockRequestRepo,
+		mockSessionRepo,
 		mockMerchantRepo,
 		mockWebhookRepo,
 		nil, // WebhookDispatcher
@@ -58,7 +61,7 @@ func TestWebhookUsecase_ProcessIndexerWebhook_PaymentCompletedSuccess(t *testing
 
 	mockUOW.On("Do", ctx, mock.Anything).Return(nil).Once()
 	mockUOW.On("WithLock", ctx).Return(ctx).Once()
-	
+
 	mockPaymentRepo.On("GetByID", mock.Anything, paymentID).Return(&entities.Payment{ID: paymentID, MerchantID: &merchantID}, nil)
 	mockPaymentRepo.On("UpdateStatus", mock.Anything, paymentID, entities.PaymentStatusCompleted).Return(nil)
 	mockEventRepo.On("Create", mock.Anything, mock.Anything).Return(nil)
@@ -72,6 +75,7 @@ func TestWebhookUsecase_ProcessIndexerWebhook_PaymentFailed(t *testing.T) {
 	mockPaymentRepo := new(MockPaymentRepository)
 	mockEventRepo := new(MockPaymentEventRepository)
 	mockRequestRepo := new(MockPaymentRequestRepository)
+	mockSessionRepo := new(MockPartnerPaymentSessionRepository)
 	mockMerchantRepo := new(MockMerchantRepository)
 	mockWebhookRepo := new(MockWebhookLogRepository)
 	mockUOW := new(MockUnitOfWork)
@@ -80,6 +84,7 @@ func TestWebhookUsecase_ProcessIndexerWebhook_PaymentFailed(t *testing.T) {
 		mockPaymentRepo,
 		mockEventRepo,
 		mockRequestRepo,
+		mockSessionRepo,
 		mockMerchantRepo,
 		mockWebhookRepo,
 		nil, // WebhookDispatcher
@@ -114,6 +119,7 @@ func TestWebhookUsecase_ProcessIndexerWebhook_RequestPaymentReceived(t *testing.
 	mockPaymentRepo := new(MockPaymentRepository)
 	mockEventRepo := new(MockPaymentEventRepository)
 	mockRequestRepo := new(MockPaymentRequestRepository)
+	mockSessionRepo := new(MockPartnerPaymentSessionRepository)
 	mockMerchantRepo := new(MockMerchantRepository)
 	mockWebhookRepo := new(MockWebhookLogRepository)
 	mockUOW := new(MockUnitOfWork)
@@ -122,6 +128,7 @@ func TestWebhookUsecase_ProcessIndexerWebhook_RequestPaymentReceived(t *testing.
 		mockPaymentRepo,
 		mockEventRepo,
 		mockRequestRepo,
+		mockSessionRepo,
 		mockMerchantRepo,
 		mockWebhookRepo,
 		nil, // WebhookDispatcher
@@ -129,6 +136,7 @@ func TestWebhookUsecase_ProcessIndexerWebhook_RequestPaymentReceived(t *testing.
 	)
 
 	requestID := uuid.New()
+	sessionID := uuid.New()
 	payload := map[string]any{
 		"id":     requestID.String(),
 		"payer":  "0xPayer",
@@ -137,6 +145,8 @@ func TestWebhookUsecase_ProcessIndexerWebhook_RequestPaymentReceived(t *testing.
 	raw, _ := json.Marshal(payload)
 
 	mockRequestRepo.On("MarkCompleted", mock.Anything, requestID, "0xTx").Return(nil)
+	mockSessionRepo.On("GetByPaymentRequestID", mock.Anything, requestID).Return(&entities.PartnerPaymentSession{ID: sessionID}, nil)
+	mockSessionRepo.On("MarkCompleted", mock.Anything, sessionID, "0xTx").Return(nil)
 
 	err := uc.ProcessIndexerWebhook(context.Background(), "REQUEST_PAYMENT_RECEIVED", raw)
 	assert.NoError(t, err)

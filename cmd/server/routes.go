@@ -10,35 +10,60 @@ import (
 )
 
 type routeDeps struct {
-	authHandler                *handlers.AuthHandler
-	paymentHandler             *handlers.PaymentHandler
-	merchantHandler            *handlers.MerchantHandler
-	walletHandler              *handlers.WalletHandler
-	chainHandler               *handlers.ChainHandler
-	tokenHandler               *handlers.TokenHandler
-	smartContractHandler       *handlers.SmartContractHandler
-	paymentRequestHandler      *handlers.PaymentRequestHandler
-	webhookHandler             *handlers.WebhookHandler
-	adminHandler               *handlers.AdminHandler
-	teamHandler                *handlers.TeamHandler
-	apiKeyHandler              *handlers.ApiKeyHandler
-	paymentAppHandler          *handlers.PaymentAppHandler
-	paymentConfigHandler       *handlers.PaymentConfigHandler
-	onchainAdapterHandler      *handlers.OnchainAdapterHandler
-	contractConfigAuditHandler *handlers.ContractConfigAuditHandler
-	crosschainConfigHandler    *handlers.CrosschainConfigHandler
-	crosschainPolicyHandler    *handlers.CrosschainPolicyHandler
-	routeErrorHandler          *handlers.RouteErrorHandler
-	rpcHandler                 *handlers.RpcHandler
-	paymentResolveHandler      *handlers.PaymentResolveHandler
-	gasProfilerHandler         *handlers.GasProfilerHandler
-	auditLogRepo               domain.AuditLogRepository
-	dualAuthMiddleware         gin.HandlerFunc
+	authHandler                    *handlers.AuthHandler
+	paymentHandler                 *handlers.PaymentHandler
+	merchantHandler                *handlers.MerchantHandler
+	walletHandler                  *handlers.WalletHandler
+	chainHandler                   *handlers.ChainHandler
+	tokenHandler                   *handlers.TokenHandler
+	smartContractHandler           *handlers.SmartContractHandler
+	paymentRequestHandler          *handlers.PaymentRequestHandler
+	webhookHandler                 *handlers.WebhookHandler
+	adminHandler                   *handlers.AdminHandler
+	adminMerchantSettlementHandler *handlers.AdminMerchantSettlementHandler
+	merchantSettlementHandler      *handlers.MerchantSettlementHandler
+	teamHandler                    *handlers.TeamHandler
+	apiKeyHandler                  *handlers.ApiKeyHandler
+	paymentAppHandler              *handlers.PaymentAppHandler
+	paymentConfigHandler           *handlers.PaymentConfigHandler
+	onchainAdapterHandler          *handlers.OnchainAdapterHandler
+	contractConfigAuditHandler     *handlers.ContractConfigAuditHandler
+	crosschainConfigHandler        *handlers.CrosschainConfigHandler
+	crosschainPolicyHandler        *handlers.CrosschainPolicyHandler
+	routeErrorHandler              *handlers.RouteErrorHandler
+	rpcHandler                     *handlers.RpcHandler
+	paymentResolveHandler          *handlers.PaymentResolveHandler
+	gasProfilerHandler             *handlers.GasProfilerHandler
+	createPaymentHandler           *handlers.CreatePaymentHandler
+	partnerQuoteHandler            *handlers.PartnerQuoteHandler
+	partnerPaymentSessionHandler   *handlers.PartnerPaymentSessionHandler
+	auditLogRepo                   domain.AuditLogRepository
+	dualAuthMiddleware             gin.HandlerFunc
+	partnerAuthMiddleware          gin.HandlerFunc
 }
 
 func registerAPIV1Routes(r *gin.Engine, d routeDeps) {
 	v1 := r.Group("/api/v1")
 	{
+		legacyPaymentRequestsDeprecation := middleware.DeprecationMiddleware(middleware.DeprecationOptions{
+			Replacement:    "/api/v1/create-payment",
+			Sunset:         time.Date(2026, time.June, 30, 23, 59, 59, 0, time.UTC),
+			EndpointFamily: "legacy_payment_requests",
+			Mode:           middleware.LegacyModeFromEnv("LEGACY_PAYMENT_REQUESTS_MODE"),
+		})
+		legacyPayReadDeprecation := middleware.DeprecationMiddleware(middleware.DeprecationOptions{
+			Replacement:    "/api/v1/partner/payment-sessions/:id",
+			Sunset:         time.Date(2026, time.June, 30, 23, 59, 59, 0, time.UTC),
+			EndpointFamily: "legacy_pay_read",
+			Mode:           middleware.LegacyModeFromEnv("LEGACY_PAY_READ_MODE"),
+		})
+		legacyResolveDeprecation := middleware.DeprecationMiddleware(middleware.DeprecationOptions{
+			Replacement:    "/api/v1/partner/payment-sessions/resolve-code",
+			Sunset:         time.Date(2026, time.June, 30, 23, 59, 59, 0, time.UTC),
+			EndpointFamily: "legacy_resolve_code",
+			Mode:           middleware.LegacyModeFromEnv("LEGACY_RESOLVE_PAYMENT_CODE_MODE"),
+		})
+
 		// Auth routes (public)
 		auth := v1.Group("/auth")
 		{
@@ -67,26 +92,59 @@ func registerAPIV1Routes(r *gin.Engine, d routeDeps) {
 
 		// Payment Request routes (protected for merchants)
 		paymentRequests := v1.Group("/payment-requests")
-		paymentRequests.Use(d.dualAuthMiddleware)
+		paymentRequests.Use(d.dualAuthMiddleware, legacyPaymentRequestsDeprecation)
 		{
 			paymentRequests.POST("", middleware.IdempotencyMiddleware(), d.paymentRequestHandler.CreatePaymentRequest)
 			paymentRequests.GET("", d.paymentRequestHandler.ListPaymentRequests)
 			paymentRequests.GET("/:id", d.paymentRequestHandler.GetPaymentRequest)
 		}
 
-	// Public payment request route (for payers)
-	v1.GET("/pay/:id", d.paymentRequestHandler.GetPublicPaymentRequest)
-	v1.GET("/resolve-payment-code", d.paymentResolveHandler.Resolve)
+		// Public payment request route (for payers)
+		v1.GET("/pay/:id", legacyPayReadDeprecation, d.paymentRequestHandler.GetPublicPaymentRequest)
+		v1.GET("/resolve-payment-code", legacyResolveDeprecation, d.paymentResolveHandler.Resolve)
 
-	// Partner Flow (Protected & Audited)
-	partnerGroup := v1.Group("")
-	partnerGroup.Use(middleware.AuditMiddleware(d.auditLogRepo))
-	{
-		// Local Resolve API route (for payers) with Rate Limiting
-		partnerGroup.GET("/payment/:id", middleware.RateLimitMiddleware(middleware.IPIdentifier, 60, time.Minute), d.paymentRequestHandler.ResolvePaymentRequest)
-	}
+		// Partner Flow (Protected & Audited)
+		partnerGroup := v1.Group("")
+		partnerGroup.Use(middleware.AuditMiddleware(d.auditLogRepo))
+		{
+			// Local Resolve API route (for payers) with Rate Limiting
+			partnerGroup.GET("/payment/:id", middleware.RateLimitMiddleware(middleware.IPIdentifier, 60, time.Minute), d.paymentRequestHandler.ResolvePaymentRequest)
+		}
 
-	// Wallet routes (protected)
+		// Public partner read/resolve endpoints for payer-facing checkout.
+		partnerPublic := v1.Group("/partner")
+		{
+			if d.partnerPaymentSessionHandler != nil {
+				partnerPublic.GET("/payment-sessions/:id", middleware.RateLimitMiddleware(middleware.IPIdentifier, 120, time.Minute), d.partnerPaymentSessionHandler.GetSession)
+				partnerPublic.POST("/payment-sessions/resolve-code", middleware.RateLimitMiddleware(middleware.IPIdentifier, 60, time.Minute), d.partnerPaymentSessionHandler.ResolvePaymentCode)
+			}
+		}
+
+		// Protected partner write endpoints for merchant/partner backends.
+		partnerV2 := v1.Group("/partner")
+		if d.partnerAuthMiddleware != nil {
+			partnerV2.Use(d.partnerAuthMiddleware)
+		}
+		{
+			if d.partnerQuoteHandler != nil {
+				partnerV2.POST("/quotes", d.partnerQuoteHandler.CreateQuote)
+			}
+			if d.partnerPaymentSessionHandler != nil {
+				partnerV2.POST("/payment-sessions", d.partnerPaymentSessionHandler.CreateSession)
+			}
+		}
+
+		createPayment := v1.Group("")
+		if d.partnerAuthMiddleware != nil {
+			createPayment.Use(d.partnerAuthMiddleware)
+		}
+		{
+			if d.createPaymentHandler != nil {
+				createPayment.POST("/create-payment", d.createPaymentHandler.CreatePayment)
+			}
+		}
+
+		// Wallet routes (protected)
 		wallets := v1.Group("/wallets")
 		wallets.Use(d.dualAuthMiddleware)
 		{
@@ -102,6 +160,10 @@ func registerAPIV1Routes(r *gin.Engine, d routeDeps) {
 		{
 			merchants.POST("/apply", d.merchantHandler.ApplyMerchant)
 			merchants.GET("/status", d.merchantHandler.GetMerchantStatus)
+			if d.merchantSettlementHandler != nil {
+				merchants.GET("/settlement-profile", d.merchantSettlementHandler.GetMySettlementProfile)
+				merchants.PUT("/settlement-profile", d.merchantSettlementHandler.UpsertMySettlementProfile)
+			}
 		}
 
 		// Chain routes (public)
@@ -185,7 +247,11 @@ func registerAPIV1Routes(r *gin.Engine, d routeDeps) {
 			admin.GET("/users", d.adminHandler.ListUsers)
 			admin.GET("/merchants", d.adminHandler.ListMerchants)
 			admin.PUT("/merchants/:id/status", d.adminHandler.UpdateMerchantStatus)
+			admin.GET("/merchants/:id/settlement-profile", d.adminMerchantSettlementHandler.GetSettlementProfile)
+			admin.PUT("/merchants/:id/settlement-profile", d.adminMerchantSettlementHandler.UpsertSettlementProfile)
 			admin.GET("/stats", d.adminHandler.GetStats)
+			admin.GET("/diagnostics/legacy-endpoints", d.adminHandler.GetLegacyEndpointObservability)
+			admin.GET("/diagnostics/settlement-profile-gaps", d.adminHandler.GetSettlementProfileGaps)
 
 			admin.POST("/chains", d.chainHandler.CreateChain)
 			admin.PUT("/chains/:id", d.chainHandler.UpdateChain)

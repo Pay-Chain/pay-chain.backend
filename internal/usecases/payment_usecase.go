@@ -1,6 +1,7 @@
 package usecases
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"encoding/json"
@@ -34,6 +35,10 @@ var (
 	bridgeFeeSafetyBps = big.NewInt(12000) // +20% margin on top of quoted bridge fee
 	bpsDenominator     = big.NewInt(10000)
 )
+
+var knownUniswapV3QuotersByCAIP2 = map[string]string{
+	"eip155:8453": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
+}
 
 // PaymentUsecase handles payment business logic
 type PaymentUsecase struct {
@@ -2878,6 +2883,75 @@ func (u *PaymentUsecase) getSwapQuote(
 	return nil, fmt.Errorf("invalid quote result")
 }
 
+type AccurateSwapQuoteResult struct {
+	AmountOut    *big.Int
+	PriceSource  string
+	RouteSummary string
+}
+
+func (u *PaymentUsecase) getAccuratePartnerQuote(
+	ctx context.Context,
+	chainID uuid.UUID,
+	tokenIn, tokenOut string,
+	amountIn *big.Int,
+) (*AccurateSwapQuoteResult, error) {
+	if amountIn == nil || amountIn.Sign() <= 0 {
+		return nil, fmt.Errorf("amountIn must be positive")
+	}
+	if strings.EqualFold(tokenIn, tokenOut) {
+		return &AccurateSwapQuoteResult{
+			AmountOut:   new(big.Int).Set(amountIn),
+			PriceSource: "identity",
+		}, nil
+	}
+
+	chain, err := u.chainRepo.GetByID(ctx, chainID)
+	if err != nil {
+		return nil, err
+	}
+	swapper, err := u.contractRepo.GetActiveContract(ctx, chain.ID, entities.ContractTypeTokenSwapper)
+	if err != nil || swapper == nil {
+		return nil, fmt.Errorf("active swapper not found")
+	}
+	client, err := u.clientFactory.GetEVMClient(chain.RPCURL)
+	if err != nil {
+		return nil, err
+	}
+
+	active, feeTier, err := readV3PoolConfig(ctx, client, swapper.ContractAddress, tokenIn, tokenOut)
+	if err != nil {
+		return nil, err
+	}
+	if !active {
+		return nil, fmt.Errorf("accurate quote unavailable for non-v3-direct route")
+	}
+
+	quoterV3, err := callAddressBySignature(ctx, client, swapper.ContractAddress, "quoterV3()")
+	if err != nil {
+		return nil, err
+	}
+	if quoterV3 == (common.Address{}) {
+		if fallback := fallbackKnownUniswapV3Quoter(chain); fallback != "" {
+			quoterV3 = common.HexToAddress(fallback)
+		} else {
+			return nil, fmt.Errorf("accurate quote unavailable because quoterV3 is not configured")
+		}
+	}
+
+	amountOut, err := callQuoterV3ExactInputSingle(ctx, client, quoterV3.Hex(), tokenIn, tokenOut, amountIn, feeTier)
+	if err != nil {
+		return nil, err
+	}
+	if amountOut == nil || amountOut.Sign() <= 0 {
+		return nil, fmt.Errorf("invalid quoter v3 amount")
+	}
+
+	return &AccurateSwapQuoteResult{
+		AmountOut:   amountOut,
+		PriceSource: fmt.Sprintf("uniswap-v3-%s", strings.ToLower(chain.Name)),
+	}, nil
+}
+
 type TokenRouteSupportStatus struct {
 	Exists       bool     `json:"exists"`
 	IsDirect     bool     `json:"isDirect"`
@@ -3019,6 +3093,133 @@ func callAddressBySignature(ctx context.Context, client *blockchain.EVMClient, c
 		return common.Address{}, fmt.Errorf("invalid %s response", signature)
 	}
 	return common.BytesToAddress(out[len(out)-20:]), nil
+}
+
+func readV3PoolConfig(ctx context.Context, client *blockchain.EVMClient, contractAddress, tokenIn, tokenOut string) (bool, uint32, error) {
+	bytes32Type, _ := abi.NewType("bytes32", "", nil)
+	args := abi.Arguments{{Type: bytes32Type}}
+	callData, err := args.Pack(computePairKey(tokenIn, tokenOut))
+	if err != nil {
+		return false, 0, err
+	}
+	selector := crypto.Keccak256([]byte("v3Pools(bytes32)"))[:4]
+	out, err := client.CallView(ctx, contractAddress, append(selector, callData...))
+	if err != nil {
+		return false, 0, err
+	}
+
+	uint24Type, _ := abi.NewType("uint24", "", nil)
+	boolType, _ := abi.NewType("bool", "", nil)
+	results, err := abi.Arguments{{Type: uint24Type}, {Type: boolType}}.Unpack(out)
+	if err != nil {
+		return false, 0, err
+	}
+
+	feeTier, ok := results[0].(uint32)
+	if !ok {
+		switch v := results[0].(type) {
+		case *big.Int:
+			if v == nil || v.Sign() < 0 || !v.IsUint64() {
+				return false, 0, fmt.Errorf("invalid v3 pool feeTier value")
+			}
+			feeTier = uint32(v.Uint64())
+		case uint64:
+			feeTier = uint32(v)
+		case int64:
+			if v < 0 {
+				return false, 0, fmt.Errorf("invalid v3 pool feeTier value")
+			}
+			feeTier = uint32(v)
+		case uint32:
+			feeTier = v
+		case int:
+			if v < 0 {
+				return false, 0, fmt.Errorf("invalid v3 pool feeTier value")
+			}
+			feeTier = uint32(v)
+		default:
+			return false, 0, fmt.Errorf("invalid v3 pool feeTier type")
+		}
+	}
+	active, ok := results[1].(bool)
+	if !ok {
+		return false, 0, fmt.Errorf("invalid v3 pool active flag type")
+	}
+	return active, feeTier, nil
+}
+
+func callQuoterV3ExactInputSingle(ctx context.Context, client *blockchain.EVMClient, quoterAddress, tokenIn, tokenOut string, amountIn *big.Int, feeTier uint32) (*big.Int, error) {
+	uint256Type, _ := abi.NewType("uint256", "", nil)
+	uint160Type, _ := abi.NewType("uint160", "", nil)
+	tupleType, err := abi.NewType("tuple", "", []abi.ArgumentMarshaling{
+		{Name: "tokenIn", Type: "address"},
+		{Name: "tokenOut", Type: "address"},
+		{Name: "amountIn", Type: "uint256"},
+		{Name: "fee", Type: "uint24"},
+		{Name: "sqrtPriceLimitX96", Type: "uint160"},
+	})
+	if err != nil {
+		return nil, err
+	}
+	args := abi.Arguments{{Type: tupleType}}
+	type quoteExactInputSingleParams struct {
+		TokenIn           common.Address
+		TokenOut          common.Address
+		AmountIn          *big.Int
+		Fee               *big.Int
+		SqrtPriceLimitX96 *big.Int
+	}
+	callData, err := args.Pack(quoteExactInputSingleParams{
+		TokenIn:           common.HexToAddress(normalizeEvmAddress(tokenIn)),
+		TokenOut:          common.HexToAddress(normalizeEvmAddress(tokenOut)),
+		AmountIn:          amountIn,
+		Fee:               big.NewInt(int64(feeTier)),
+		SqrtPriceLimitX96: big.NewInt(0),
+	})
+	if err != nil {
+		return nil, err
+	}
+	selector := crypto.Keccak256([]byte("quoteExactInputSingle((address,address,uint256,uint24,uint160))"))[:4]
+	out, err := client.CallView(ctx, quoterAddress, append(selector, callData...))
+	if err != nil {
+		return nil, err
+	}
+
+	uint32Type, _ := abi.NewType("uint32", "", nil)
+	outputs := abi.Arguments{
+		{Type: uint256Type},
+		{Type: uint160Type},
+		{Type: uint32Type},
+		{Type: uint256Type},
+	}
+	results, err := outputs.Unpack(out)
+	if err != nil {
+		return nil, err
+	}
+	amountOut, ok := results[0].(*big.Int)
+	if !ok {
+		return nil, fmt.Errorf("invalid quoter v3 amountOut type")
+	}
+	return amountOut, nil
+}
+
+func computePairKey(tokenA, tokenB string) [32]byte {
+	a := common.HexToAddress(normalizeEvmAddress(tokenA))
+	b := common.HexToAddress(normalizeEvmAddress(tokenB))
+	if bytes.Compare(a.Bytes(), b.Bytes()) > 0 {
+		a, b = b, a
+	}
+	return crypto.Keccak256Hash(a.Bytes(), b.Bytes())
+}
+
+func fallbackKnownUniswapV3Quoter(chain *entities.Chain) string {
+	if chain == nil {
+		return ""
+	}
+	if addr := knownUniswapV3QuotersByCAIP2[strings.TrimSpace(chain.GetCAIP2ID())]; addr != "" {
+		return addr
+	}
+	return ""
 }
 
 // decodeSafeQuoteResult decodes (bool, uint256, string) from a SAFE quote call.

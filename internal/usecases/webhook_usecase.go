@@ -21,6 +21,7 @@ type WebhookUsecase struct {
 	paymentRepo        repositories.PaymentRepository
 	paymentEventRepo   repositories.PaymentEventRepository
 	paymentRequestRepo repositories.PaymentRequestRepository
+	sessionRepo        repositories.PartnerPaymentSessionRepository
 	merchantRepo       repositories.MerchantRepository
 	webhookLogRepo     repositories.WebhookLogRepository
 	dispatcher         *WebhookDispatcher
@@ -32,6 +33,7 @@ func NewWebhookUsecase(
 	paymentRepo repositories.PaymentRepository,
 	paymentEventRepo repositories.PaymentEventRepository,
 	paymentRequestRepo repositories.PaymentRequestRepository,
+	sessionRepo repositories.PartnerPaymentSessionRepository,
 	merchantRepo repositories.MerchantRepository,
 	webhookLogRepo repositories.WebhookLogRepository,
 	dispatcher *WebhookDispatcher,
@@ -41,6 +43,7 @@ func NewWebhookUsecase(
 		paymentRepo:        paymentRepo,
 		paymentEventRepo:   paymentEventRepo,
 		paymentRequestRepo: paymentRequestRepo,
+		sessionRepo:        sessionRepo,
 		merchantRepo:       merchantRepo,
 		webhookLogRepo:     webhookLogRepo,
 		dispatcher:         dispatcher,
@@ -208,6 +211,13 @@ func (u *WebhookUsecase) ProcessIndexerWebhook(ctx context.Context, eventType st
 		err := u.paymentRequestRepo.MarkCompleted(ctx, requestUUID, requestData.TxHash)
 		if err != nil {
 			log.Printf("Error marking payment request as completed: %v", err)
+		}
+		if u.sessionRepo != nil {
+			if session, sessionErr := u.sessionRepo.GetByPaymentRequestID(ctx, requestUUID); sessionErr == nil && session != nil {
+				if markErr := u.sessionRepo.MarkCompleted(ctx, session.ID, requestData.TxHash); markErr != nil {
+					log.Printf("Error marking partner payment session as completed: %v", markErr)
+				}
+			}
 		}
 
 	default:

@@ -13,19 +13,19 @@ type PaymentRequest struct {
 	ChainID       uuid.UUID `gorm:"type:uuid;not null;index"`
 	TokenID       uuid.UUID `gorm:"type:uuid;not null;index"`
 	WalletAddress string    `gorm:"column:wallet_address;type:varchar(255);not null"`
-	TokenAddress  string    `gorm:"type:varchar(255);not null"`
 	Amount        string    `gorm:"type:decimal(36,18);not null"`
 	Decimals      int       `gorm:"not null"`
 	Description   string    `gorm:"type:text"`
 	Status        string    `gorm:"type:varchar(50);not null;index"`
 	ExpiresAt     time.Time `gorm:"not null"`
 	TxHash        string    `gorm:"type:varchar(255)"`
-	PayerAddress  string    `gorm:"type:varchar(255)"`
-	PaymentCode   string    `gorm:"column:payment_code;type:text"`
 	CompletedAt   *time.Time
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
 	DeletedAt     gorm.DeletedAt `gorm:"index"`
+
+	Chain Chain `gorm:"foreignKey:ChainID;references:ID"`
+	Token Token `gorm:"foreignKey:TokenID;references:ID"`
 }
 
 type BackgroundJob struct {

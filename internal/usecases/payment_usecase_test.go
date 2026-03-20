@@ -137,6 +137,7 @@ func TestProcessIndexerWebhook_Locking(t *testing.T) {
 		mockPaymentRepo,
 		mockEventRepo,
 		mockRequestRepo,
+		new(MockPartnerPaymentSessionRepository),
 		new(MockMerchantRepository),
 		mockWebhookLogRepo,
 		nil, // WebhookDispatcher

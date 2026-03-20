@@ -27,14 +27,11 @@ func (r *PaymentRequestRepositoryImpl) Create(ctx context.Context, req *entities
 		ChainID:       req.ChainID,
 		TokenID:       req.TokenID,
 		WalletAddress: req.WalletAddress,
-		TokenAddress:  req.TokenAddress,
 		Amount:        req.Amount,
 		Decimals:      req.Decimals,
 		Description:   req.Description,
 		Status:        string(req.Status),
 		ExpiresAt:     req.ExpiresAt,
-		PayerAddress:  req.PayerAddress,
-		PaymentCode:   req.PaymentCode,
 		CreatedAt:     time.Now(),
 		UpdatedAt:     time.Now(),
 	}
@@ -43,7 +40,11 @@ func (r *PaymentRequestRepositoryImpl) Create(ctx context.Context, req *entities
 
 func (r *PaymentRequestRepositoryImpl) GetByID(ctx context.Context, id uuid.UUID) (*entities.PaymentRequest, error) {
 	var m models.PaymentRequest
-	if err := r.db.WithContext(ctx).Where("id = ?", id).First(&m).Error; err != nil {
+	if err := r.db.WithContext(ctx).
+		Preload("Chain").
+		Preload("Token").
+		Where("id = ?", id).
+		First(&m).Error; err != nil {
 		return nil, err
 	}
 	return r.toEntity(&m), nil
@@ -59,6 +60,8 @@ func (r *PaymentRequestRepositoryImpl) GetByMerchantID(ctx context.Context, merc
 
 	var ms []models.PaymentRequest
 	if err := r.db.WithContext(ctx).
+		Preload("Chain").
+		Preload("Token").
 		Where("merchant_id = ?", merchantID).
 		Order("created_at DESC").
 		Limit(limit).Offset(offset).
@@ -84,12 +87,12 @@ func (r *PaymentRequestRepositoryImpl) UpdateStatus(ctx context.Context, id uuid
 }
 
 func (r *PaymentRequestRepositoryImpl) UpdateTxHash(ctx context.Context, id uuid.UUID, txHash, payerAddress string) error {
+	_ = payerAddress
 	return r.db.WithContext(ctx).Model(&models.PaymentRequest{}).
 		Where("id = ?", id).
 		Updates(map[string]interface{}{
-			"tx_hash":       txHash,
-			"payer_address": payerAddress,
-			"updated_at":    time.Now(),
+			"tx_hash":    txHash,
+			"updated_at": time.Now(),
 		}).Error
 }
 
@@ -109,6 +112,8 @@ func (r *PaymentRequestRepositoryImpl) MarkCompleted(ctx context.Context, id uui
 func (r *PaymentRequestRepositoryImpl) GetExpiredPending(ctx context.Context, limit int) ([]*entities.PaymentRequest, error) {
 	var ms []models.PaymentRequest
 	if err := r.db.WithContext(ctx).
+		Preload("Chain").
+		Preload("Token").
 		Where("status = ? AND expires_at < ?", entities.PaymentRequestStatusPending, time.Now()).
 		Limit(limit).
 		Find(&ms).Error; err != nil {
@@ -136,30 +141,36 @@ func (r *PaymentRequestRepositoryImpl) ExpireRequests(ctx context.Context, ids [
 }
 
 func (r *PaymentRequestRepositoryImpl) UpdatePaymentCode(ctx context.Context, id uuid.UUID, code string) error {
-	return r.db.WithContext(ctx).Model(&models.PaymentRequest{}).
-		Where("id = ?", id).
-		Updates(map[string]interface{}{
-			"payment_code": code,
-			"updated_at":   time.Now(),
-		}).Error
+	_ = ctx
+	_ = id
+	_ = code
+	return nil
 }
 
 func (r *PaymentRequestRepositoryImpl) toEntity(m *models.PaymentRequest) *entities.PaymentRequest {
+	tokenAddress := ""
+	if m.Token.ContractAddress != "" {
+		tokenAddress = m.Token.ContractAddress
+	}
+	networkID := ""
+	if m.Chain.NetworkID != "" {
+		networkID = m.Chain.NetworkID
+	}
+
 	return &entities.PaymentRequest{
 		ID:            m.ID,
 		MerchantID:    m.MerchantID,
 		ChainID:       m.ChainID,
+		NetworkID:     networkID,
 		TokenID:       m.TokenID,
 		WalletAddress: m.WalletAddress,
-		TokenAddress:  m.TokenAddress,
+		TokenAddress:  tokenAddress,
 		Amount:        m.Amount,
 		Decimals:      m.Decimals,
 		Description:   m.Description,
 		Status:        entities.PaymentRequestStatus(m.Status),
 		ExpiresAt:     m.ExpiresAt,
 		TxHash:        m.TxHash,
-		PayerAddress:  m.PayerAddress,
-		PaymentCode:   m.PaymentCode,
 		CompletedAt:   m.CompletedAt,
 		CreatedAt:     m.CreatedAt,
 		UpdatedAt:     m.UpdatedAt,

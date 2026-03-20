@@ -12,4 +12,13 @@ func TestTableNames(t *testing.T) {
 	if got := (StargateConfig{}).TableName(); got != "stargate_configs" {
 		t.Fatalf("unexpected StargateConfig table name: %s", got)
 	}
+	if got := (PaymentQuote{}).TableName(); got != "payment_quotes" {
+		t.Fatalf("unexpected PaymentQuote table name: %s", got)
+	}
+	if got := (PartnerPaymentSession{}).TableName(); got != "partner_payment_sessions" {
+		t.Fatalf("unexpected PartnerPaymentSession table name: %s", got)
+	}
+	if got := (MerchantSettlementProfile{}).TableName(); got != "merchant_settlement_profiles" {
+		t.Fatalf("unexpected MerchantSettlementProfile table name: %s", got)
+	}
 }

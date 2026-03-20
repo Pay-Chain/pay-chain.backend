@@ -101,6 +101,54 @@ func TestApiKeyUsecase_ValidateApiKey(t *testing.T) {
 	mockApiKeyRepo.AssertExpectations(t)
 }
 
+func TestApiKeyUsecase_ValidatePartnerApiKey(t *testing.T) {
+	mockApiKeyRepo := new(MockApiKeyRepository)
+	mockUserRepo := new(MockUserRepository)
+	encryptionKey := "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+
+	uc := usecases.NewApiKeyUsecase(mockApiKeyRepo, mockUserRepo, encryptionKey)
+
+	ctx := context.Background()
+	userID := uuid.New()
+	apiKey := "pk_live_partner"
+	secretKey := "sk_live_partner"
+
+	keyHash := sha256Hex([]byte(apiKey))
+	encryptedSecret, _ := encryptSecret(secretKey, encryptionKey)
+
+	keyEntity := &entities.ApiKey{
+		ID:              uuid.New(),
+		UserID:          userID,
+		KeyHash:         keyHash,
+		SecretEncrypted: encryptedSecret,
+		IsActive:        true,
+		User: &entities.User{
+			ID:    userID,
+			Email: "partner@example.com",
+			Role:  entities.UserRoleUser,
+		},
+	}
+
+	timestamp := fmt.Sprintf("%d", time.Now().Unix())
+	method := "POST"
+	path := "/api/v1/partner/quotes"
+	body := `{"amount":"100","invoice_currency":"IDR"}`
+	bodyHash := sha256Hex([]byte(body))
+	stringToSign := fmt.Sprintf("%s.%s.%s.%s", timestamp, method, path, bodyHash)
+	signature := hmacSha256Hex(secretKey, stringToSign)
+
+	mockApiKeyRepo.On("FindByKeyHash", ctx, keyHash).Return(keyEntity, nil)
+	mockApiKeyRepo.On("Update", ctx, mock.AnythingOfType("*entities.ApiKey")).Return(nil)
+
+	user, err := uc.ValidatePartnerApiKey(ctx, apiKey, signature, timestamp, method, path, bodyHash)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, user)
+	assert.Equal(t, userID, user.ID)
+
+	mockApiKeyRepo.AssertExpectations(t)
+}
+
 func TestApiKeyUsecase_ValidateSignatureForJWT(t *testing.T) {
 	mockApiKeyRepo := new(MockApiKeyRepository)
 	mockUserRepo := new(MockUserRepository)

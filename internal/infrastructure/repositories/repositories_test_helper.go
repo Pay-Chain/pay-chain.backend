@@ -59,6 +59,21 @@ func createMerchantTable(t *testing.T, db *gorm.DB) {
 	);`)
 }
 
+func createMerchantSettlementProfileTable(t *testing.T, db *gorm.DB) {
+	mustExec(t, db, `CREATE TABLE merchant_settlement_profiles (
+		id TEXT PRIMARY KEY,
+		merchant_id TEXT NOT NULL UNIQUE,
+		invoice_currency TEXT NOT NULL,
+		dest_chain TEXT NOT NULL,
+		dest_token TEXT NOT NULL,
+		dest_wallet TEXT NOT NULL,
+		bridge_token_symbol TEXT NOT NULL,
+		created_at DATETIME,
+		updated_at DATETIME,
+		deleted_at DATETIME
+	);`)
+}
+
 func createUserTable(t *testing.T, db *gorm.DB) {
 	mustExec(t, db, `CREATE TABLE users (
 		id TEXT PRIMARY KEY,
@@ -268,6 +283,70 @@ func createPaymentTables(t *testing.T, db *gorm.DB) {
 	);`)
 }
 
+func createPartnerFlowTables(t *testing.T, db *gorm.DB) {
+	mustExec(t, db, `CREATE TABLE payment_quotes (
+		id TEXT PRIMARY KEY,
+		merchant_id TEXT NOT NULL,
+		invoice_currency TEXT NOT NULL,
+		invoice_amount TEXT NOT NULL,
+		selected_chain_id TEXT NOT NULL,
+		selected_token_address TEXT NOT NULL,
+		selected_token_symbol TEXT NOT NULL,
+		selected_token_decimals INTEGER NOT NULL,
+		quoted_amount TEXT NOT NULL,
+		quote_rate TEXT NOT NULL,
+		price_source TEXT NOT NULL,
+		route TEXT NOT NULL,
+		slippage_bps INTEGER NOT NULL,
+		rate_timestamp DATETIME NOT NULL,
+		expires_at DATETIME NOT NULL,
+		status TEXT NOT NULL,
+		used_at DATETIME,
+		created_at DATETIME,
+		updated_at DATETIME
+	);`)
+	mustExec(t, db, `CREATE TABLE partner_payment_sessions (
+		id TEXT PRIMARY KEY,
+		merchant_id TEXT NOT NULL,
+		quote_id TEXT,
+		payment_request_id TEXT,
+		invoice_currency TEXT NOT NULL,
+		invoice_amount TEXT NOT NULL,
+		selected_chain_id TEXT NOT NULL,
+		selected_token_address TEXT NOT NULL,
+		selected_token_symbol TEXT NOT NULL,
+		selected_token_decimals INTEGER NOT NULL,
+		dest_chain TEXT NOT NULL,
+		dest_token TEXT NOT NULL,
+		dest_wallet TEXT NOT NULL,
+		payment_amount TEXT NOT NULL,
+		payment_amount_decimals INTEGER NOT NULL,
+		status TEXT NOT NULL,
+		channel_used TEXT,
+		payment_code TEXT NOT NULL,
+		payment_url TEXT NOT NULL,
+		instruction_to TEXT,
+		instruction_value TEXT,
+		instruction_data_hex TEXT,
+		instruction_data_base58 TEXT,
+		instruction_data_base64 TEXT,
+		quote_rate TEXT,
+		quote_source TEXT,
+		quote_route TEXT,
+		quote_expires_at DATETIME,
+		quote_snapshot_json TEXT,
+		expires_at DATETIME NOT NULL,
+		paid_tx_hash TEXT,
+		paid_chain_id TEXT,
+		paid_token_address TEXT,
+		paid_amount TEXT,
+		paid_sender_address TEXT,
+		completed_at DATETIME,
+		created_at DATETIME,
+		updated_at DATETIME
+	);`)
+}
+
 func createSmartContractTable(t *testing.T, db *gorm.DB) {
 	mustExec(t, db, `CREATE TABLE smart_contracts (
 		id TEXT PRIMARY KEY,
@@ -293,13 +372,47 @@ func createSmartContractTable(t *testing.T, db *gorm.DB) {
 }
 
 func createPaymentRequestTables(t *testing.T, db *gorm.DB) {
+	mustExec(t, db, `CREATE TABLE chains (
+		id TEXT PRIMARY KEY,
+		chain_id TEXT NOT NULL,
+		name TEXT,
+		type TEXT,
+		rpc_url TEXT,
+		explorer_url TEXT,
+		currency_symbol TEXT,
+		image_url TEXT,
+		is_active BOOLEAN,
+		state_machine_id TEXT,
+		ccip_chain_selector TEXT,
+		stargate_eid INTEGER,
+		created_at DATETIME,
+		updated_at DATETIME,
+		deleted_at DATETIME
+	);`)
+	mustExec(t, db, `CREATE TABLE tokens (
+		id TEXT PRIMARY KEY,
+		chain_id TEXT NOT NULL,
+		symbol TEXT,
+		name TEXT,
+		decimals INTEGER,
+		address TEXT,
+		type TEXT,
+		logo_url TEXT,
+		is_active BOOLEAN,
+		is_native BOOLEAN,
+		is_stablecoin BOOLEAN,
+		min_amount TEXT,
+		max_amount TEXT,
+		created_at DATETIME,
+		updated_at DATETIME,
+		deleted_at DATETIME
+	);`)
 	mustExec(t, db, `CREATE TABLE payment_requests (
 		id TEXT PRIMARY KEY,
 		merchant_id TEXT NOT NULL,
 		chain_id TEXT NOT NULL,
 		token_id TEXT NOT NULL,
 		wallet_address TEXT NOT NULL,
-		token_address TEXT NOT NULL,
 		amount TEXT NOT NULL,
 		decimals INTEGER NOT NULL,
 		description TEXT,

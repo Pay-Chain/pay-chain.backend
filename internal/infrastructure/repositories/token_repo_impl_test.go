@@ -42,6 +42,10 @@ func TestTokenRepository_CRUDAndQueries(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, tokenID, byAddr.ID)
 
+	byAddrUpper, err := repo.GetByAddress(ctx, "0X8335", chainID)
+	require.NoError(t, err)
+	require.Equal(t, tokenID, byAddrUpper.ID)
+
 	all, err := repo.GetAll(ctx)
 	require.NoError(t, err)
 	require.Len(t, all, 2)

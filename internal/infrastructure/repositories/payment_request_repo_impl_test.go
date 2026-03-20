@@ -29,7 +29,6 @@ func TestPaymentRequestRepository_FullFlow(t *testing.T) {
 		ChainID:       chainID,
 		TokenID:       tokenID,
 		WalletAddress: "0xwallet",
-		TokenAddress:  "0xtoken",
 		Amount:        "10",
 		Decimals:      6,
 		Description:   "test",
@@ -60,9 +59,9 @@ func TestPaymentRequestRepository_ExpiredAndBulkExpire(t *testing.T) {
 
 	id := uuid.New()
 	mustExec(t, db, `INSERT INTO payment_requests(
-		id,merchant_id,chain_id,token_id,wallet_address,token_address,amount,decimals,description,status,expires_at,created_at,updated_at
-	) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-		id.String(), uuid.NewString(), uuid.NewString(), uuid.NewString(), "0xw", "0xt", "1", 6, "",
+		id,merchant_id,chain_id,token_id,wallet_address,amount,decimals,description,status,expires_at,created_at,updated_at
+	) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+		id.String(), uuid.NewString(), uuid.NewString(), uuid.NewString(), "0xw", "1", 6, "",
 		string(entities.PaymentRequestStatusPending), time.Now().Add(-time.Hour), time.Now(), time.Now())
 
 	expired, err := repo.GetExpiredPending(ctx, 10)
@@ -120,7 +119,6 @@ func TestPaymentRequestRepository_Create_DBError(t *testing.T) {
 		ChainID:       uuid.New(),
 		TokenID:       uuid.New(),
 		WalletAddress: "0xwallet",
-		TokenAddress:  "0xtoken",
 		Amount:        "10",
 		Decimals:      6,
 		Description:   "test",

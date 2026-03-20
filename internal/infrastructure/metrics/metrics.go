@@ -42,6 +42,11 @@ var (
 		Name: "pk_indexer_lag_seconds",
 		Help: "The total lag of the indexer in seconds",
 	}, []string{"chain_id"})
+
+	LegacyEndpointUsageTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "pk_legacy_endpoint_usage_total",
+		Help: "Total number of legacy endpoint hits",
+	}, []string{"endpoint_family", "merchant_id"})
 )
 
 func RecordSessionCreated(merchID string, err error) {
@@ -71,4 +76,11 @@ func RecordWebhookDelivery(merchantID string, eventType string, status string, d
 
 func RecordWebhookRetry(merchantID string, eventType string) {
 	WebhookRetryTotal.WithLabelValues(merchantID, eventType).Inc()
+}
+
+func RecordLegacyEndpointUsage(endpointFamily string, merchantID string) {
+	if merchantID == "" {
+		merchantID = "unknown"
+	}
+	LegacyEndpointUsageTotal.WithLabelValues(endpointFamily, merchantID).Inc()
 }

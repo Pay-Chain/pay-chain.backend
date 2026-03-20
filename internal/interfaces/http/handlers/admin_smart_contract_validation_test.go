@@ -12,7 +12,7 @@ import (
 
 func TestAdminHandler_BasicValidationBranches(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	h := NewAdminHandler(nil, nil, nil)
+	h := NewAdminHandler(nil, nil, nil, nil)
 
 	r := gin.New()
 	r.GET("/stats", h.GetStats)

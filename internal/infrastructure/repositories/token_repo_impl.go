@@ -57,7 +57,11 @@ func (r *TokenRepository) GetBySymbol(ctx context.Context, symbol string, chainI
 // GetByAddress gets a token by contract address and chain ID
 func (r *TokenRepository) GetByAddress(ctx context.Context, address string, chainID uuid.UUID) (*entities.Token, error) {
 	var m models.Token
-	if err := r.db.WithContext(ctx).Preload("Chain").Where("address = ? AND chain_id = ?", address, chainID).First(&m).Error; err != nil {
+	normalizedAddress := strings.TrimSpace(strings.ToLower(address))
+	if err := r.db.WithContext(ctx).
+		Preload("Chain").
+		Where("LOWER(address) = ? AND chain_id = ?", normalizedAddress, chainID).
+		First(&m).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, domainerrors.ErrNotFound
 		}

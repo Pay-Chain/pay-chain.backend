@@ -129,7 +129,7 @@ func setupTestDB(t *testing.T) *gorm.DB {
 
 func TestPaymentAttribution(t *testing.T) {
 	db := setupTestDB(t)
-	
+
 	// Initialize all required repositories
 	chainRepo := repositories.NewChainRepository(db)
 	tokenRepo := repositories.NewTokenRepository(db, chainRepo)
@@ -161,11 +161,11 @@ func TestPaymentAttribution(t *testing.T) {
 
 	userID := uuid.New()
 	merchantID := uuid.New()
-	
+
 	// Create required data for attribution
 	db.Exec("INSERT INTO users (id, email, name, password_hash, role) VALUES (?, ?, ?, ?, ?)", userID, "test@user.com", "Test", "hash", "user")
 	db.Exec("INSERT INTO merchants (id, user_id, business_name, business_email, status, merchant_type) VALUES (?, ?, ?, ?, ?, ?)", merchantID, userID, "Test Merchant", "test@merchant.com", "active", "individual")
-	
+
 	chainUUID := uuid.New()
 	db.Exec("INSERT INTO chains (id, chain_id, name, type, is_active) VALUES (?, ?, ?, ?, ?)", chainUUID, "eip155:1", "Ethereum", "evm", true)
 	db.Exec("INSERT INTO tokens (id, chain_id, symbol, name, address, decimals, is_active) VALUES (?, ?, ?, ?, ?, ?, ?)", uuid.New(), chainUUID, "USDC", "USD Coin", "0xUSDC", 6, true)
@@ -198,10 +198,10 @@ func TestWebhookSignature(t *testing.T) {
 	merchantRepo := repositories.NewMerchantRepository(db)
 	webhookRepo := repositories.NewGormWebhookLogRepository(db)
 	hmacService := servicesimpl.NewHMACService()
-	
+
 	secret := "test-secret-123"
 	merchantID := uuid.New()
-	db.Exec("INSERT INTO merchants (id, user_id, business_name, business_email, webhook_secret, webhook_is_active, merchant_type) VALUES (?, ?, ?, ?, ?, ?, ?)", 
+	db.Exec("INSERT INTO merchants (id, user_id, business_name, business_email, webhook_secret, webhook_is_active, merchant_type) VALUES (?, ?, ?, ?, ?, ?, ?)",
 		merchantID, uuid.New(), "Test Merchant", "test@merchant.com", secret, true, "individual")
 
 	// Setup mock server
@@ -221,7 +221,7 @@ func TestWebhookSignature(t *testing.T) {
 	db.Exec("UPDATE merchants SET callback_url = ? WHERE id = ?", server.URL, merchantID)
 
 	dispatcher := usecases.NewWebhookDispatcher(webhookRepo, merchantRepo, hmacService)
-	
+
 	payload := map[string]interface{}{"status": "success"}
 	payloadBytes, _ := json.Marshal(payload)
 	delivery := &entities.WebhookDelivery{
@@ -239,13 +239,21 @@ func TestWebhookSignature(t *testing.T) {
 
 	// Verify headers
 	signature := receivedHeaders.Get("X-Webhook-Signature")
+	legacySignature := receivedHeaders.Get("X-Webhook-Signature-Legacy")
 	timestamp := receivedHeaders.Get("X-Webhook-Timestamp")
+	deliveryID := receivedHeaders.Get("X-Webhook-Delivery-Id")
+	eventType := receivedHeaders.Get("X-Webhook-Event")
 	assert.NotEmpty(t, signature)
+	assert.NotEmpty(t, legacySignature)
 	assert.NotEmpty(t, timestamp)
+	assert.Equal(t, delivery.ID.String(), deliveryID)
+	assert.Equal(t, "payment.completed", eventType)
 
 	// Verify signature manually
 	expected := generateHmac(secret, timestamp, receivedBody)
+	expectedLegacy := generateLegacyHmac(secret, timestamp, receivedBody)
 	assert.Equal(t, expected, signature)
+	assert.Equal(t, expectedLegacy, legacySignature)
 
 	// Verify delivery status updated to delivered
 	var dbLog models.WebhookLog
@@ -259,9 +267,9 @@ func TestWebhookRetryOnFailure(t *testing.T) {
 	merchantRepo := repositories.NewMerchantRepository(db)
 	webhookRepo := repositories.NewGormWebhookLogRepository(db)
 	hmacService := servicesimpl.NewHMACService()
-	
+
 	merchantID := uuid.New()
-	db.Exec("INSERT INTO merchants (id, user_id, business_name, business_email, webhook_is_active, merchant_type) VALUES (?, ?, ?, ?, ?, ?)", 
+	db.Exec("INSERT INTO merchants (id, user_id, business_name, business_email, webhook_is_active, merchant_type) VALUES (?, ?, ?, ?, ?, ?)",
 		merchantID, uuid.New(), "Fail Merchant", "fail@merchant.com", true, "individual")
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -272,7 +280,7 @@ func TestWebhookRetryOnFailure(t *testing.T) {
 	db.Exec("UPDATE merchants SET callback_url = ? WHERE id = ?", server.URL, merchantID)
 
 	dispatcher := usecases.NewWebhookDispatcher(webhookRepo, merchantRepo, hmacService)
-	
+
 	payload := map[string]interface{}{"status": "fail"}
 	payloadBytes, _ := json.Marshal(payload)
 	delivery := &entities.WebhookDelivery{
@@ -297,6 +305,11 @@ func TestWebhookRetryOnFailure(t *testing.T) {
 }
 
 func generateHmac(secret, timestamp string, payload []byte) string {
+	hmacService := servicesimpl.NewHMACService()
+	return hmacService.Generate(timestamp+"."+string(payload), secret)
+}
+
+func generateLegacyHmac(secret, timestamp string, payload []byte) string {
 	hmacService := servicesimpl.NewHMACService()
 	return hmacService.Generate(timestamp+string(payload), secret)
 }

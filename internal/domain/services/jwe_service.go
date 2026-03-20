@@ -9,10 +9,16 @@ import (
 
 // JWEPayload represents the structure encoded into the payment_code
 type JWEPayload struct {
+	Version    string `json:"v,omitempty"`
 	SessionID  string `json:"sid"`
+	PaymentID  string `json:"pid,omitempty"`
 	Amount     string `json:"amt"`
 	MerchantID string `json:"mid"`
 	Currency   string `json:"cur"`
+	DestChain  string `json:"dch,omitempty"`
+	DestToken  string `json:"dtk,omitempty"`
+	DestWallet string `json:"dwa,omitempty"`
+	Nonce      string `json:"n,omitempty"`
 	ExpiresAt  int64  `json:"exp"`
 }
 

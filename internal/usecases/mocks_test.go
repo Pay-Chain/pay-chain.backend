@@ -107,6 +107,50 @@ func (m *MockPaymentEventRepository) GetLatestByPaymentID(ctx context.Context, p
 	return args.Get(0).(*entities.PaymentEvent), args.Error(1)
 }
 
+type MockPartnerPaymentSessionRepository struct {
+	mock.Mock
+}
+
+func (m *MockPartnerPaymentSessionRepository) Create(ctx context.Context, session *entities.PartnerPaymentSession) error {
+	return m.Called(ctx, session).Error(0)
+}
+
+func (m *MockPartnerPaymentSessionRepository) GetByID(ctx context.Context, id uuid.UUID) (*entities.PartnerPaymentSession, error) {
+	args := m.Called(ctx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*entities.PartnerPaymentSession), args.Error(1)
+}
+
+func (m *MockPartnerPaymentSessionRepository) GetByPaymentRequestID(ctx context.Context, paymentRequestID uuid.UUID) (*entities.PartnerPaymentSession, error) {
+	args := m.Called(ctx, paymentRequestID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*entities.PartnerPaymentSession), args.Error(1)
+}
+
+func (m *MockPartnerPaymentSessionRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status entities.PartnerPaymentSessionStatus) error {
+	return m.Called(ctx, id, status).Error(0)
+}
+
+func (m *MockPartnerPaymentSessionRepository) MarkCompleted(ctx context.Context, id uuid.UUID, paidTxHash string) error {
+	return m.Called(ctx, id, paidTxHash).Error(0)
+}
+
+func (m *MockPartnerPaymentSessionRepository) GetExpiredPending(ctx context.Context, limit int) ([]*entities.PartnerPaymentSession, error) {
+	args := m.Called(ctx, limit)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*entities.PartnerPaymentSession), args.Error(1)
+}
+
+func (m *MockPartnerPaymentSessionRepository) ExpireSessions(ctx context.Context, ids []uuid.UUID) error {
+	return m.Called(ctx, ids).Error(0)
+}
+
 // Mock ChainRepository
 type MockChainRepository struct {
 	mock.Mock

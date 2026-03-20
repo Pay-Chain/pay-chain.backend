@@ -22,10 +22,10 @@ import (
 )
 
 var (
-	apiKeyRandRead  = rand.Read
+	apiKeyRandRead             = rand.Read
 	apiKeyRandReader io.Reader = rand.Reader
-	newAESCipher    = aes.NewCipher
-	newGCMCipher    = cipher.NewGCM
+	newAESCipher               = aes.NewCipher
+	newGCMCipher               = cipher.NewGCM
 )
 
 type ApiKeyUsecase struct {
@@ -119,6 +119,31 @@ func (u *ApiKeyUsecase) ValidateApiKey(
 	path string,
 	bodyHash string,
 ) (*entities.User, error) {
+	return u.validateAPIKeyWithCanonicalString(ctx, apiKey, signature, timestamp, method, path, bodyHash, buildLegacyAPIKeyStringToSign)
+}
+
+func (u *ApiKeyUsecase) ValidatePartnerApiKey(
+	ctx context.Context,
+	apiKey string,
+	signature string,
+	timestamp string,
+	method string,
+	path string,
+	bodyHash string,
+) (*entities.User, error) {
+	return u.validateAPIKeyWithCanonicalString(ctx, apiKey, signature, timestamp, method, path, bodyHash, buildPartnerAPIKeyStringToSign)
+}
+
+func (u *ApiKeyUsecase) validateAPIKeyWithCanonicalString(
+	ctx context.Context,
+	apiKey string,
+	signature string,
+	timestamp string,
+	method string,
+	path string,
+	bodyHash string,
+	stringToSignBuilder func(string, string, string, string) string,
+) (*entities.User, error) {
 	// 1. Verify timestamp Freshness (+/- 5 min)
 	ts, err := strconv.ParseInt(timestamp, 10, 64)
 	if err != nil {
@@ -146,9 +171,9 @@ func (u *ApiKeyUsecase) ValidateApiKey(
 	}
 
 	// 4. Verify Signature
-	// StringToSign = timestamp + method + path + bodyHash
+	// StringToSign varies by transport contract.
 	// path should be the full request URI (e.g. /v1/payments)
-	stringToSign := fmt.Sprintf("%s%s%s%s", timestamp, method, path, bodyHash)
+	stringToSign := stringToSignBuilder(timestamp, method, path, bodyHash)
 	expectedSignature := hmacSha256Hex(secretKey, stringToSign)
 
 	if !hmac.Equal([]byte(expectedSignature), []byte(signature)) { // Constant time compare? Hex strings vs hex strings is usually fine if length constant, but hmac.Equal expects []byte
@@ -203,8 +228,8 @@ func (u *ApiKeyUsecase) ValidateSignatureForJWT(
 	}
 
 	// 3. Try validating against each active key's secret
-	// This allows key rotation/multiple keys
-	stringToSign := fmt.Sprintf("%s%s%s%s", timestamp, method, path, bodyHash)
+	// This allows key rotation/multiple keys.
+	stringToSign := buildLegacyAPIKeyStringToSign(timestamp, method, path, bodyHash)
 
 	for _, k := range keys {
 		if !k.IsActive {
@@ -226,6 +251,14 @@ func (u *ApiKeyUsecase) ValidateSignatureForJWT(
 	}
 
 	return domainerrors.Unauthorized("invalid signature")
+}
+
+func buildLegacyAPIKeyStringToSign(timestamp string, method string, path string, bodyHash string) string {
+	return fmt.Sprintf("%s%s%s%s", timestamp, method, path, bodyHash)
+}
+
+func buildPartnerAPIKeyStringToSign(timestamp string, method string, path string, bodyHash string) string {
+	return fmt.Sprintf("%s.%s.%s.%s", timestamp, method, path, bodyHash)
 }
 
 func (u *ApiKeyUsecase) ListApiKeys(ctx context.Context, userID uuid.UUID) ([]*entities.ApiKey, error) {

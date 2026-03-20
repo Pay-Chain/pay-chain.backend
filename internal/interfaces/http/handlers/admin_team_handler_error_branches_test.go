@@ -7,15 +7,18 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"payment-kita.backend/internal/domain/entities"
 	domainerrors "payment-kita.backend/internal/domain/errors"
+	"payment-kita.backend/internal/interfaces/http/middleware"
 )
 
 func TestAdminHandler_ErrorBranchesAndStats(t *testing.T) {
+	middleware.ResetLegacyEndpointObservabilityForTests()
 	gin.SetMode(gin.TestMode)
 	merchantID := uuid.New()
 
@@ -37,6 +40,7 @@ func TestAdminHandler_ErrorBranchesAndStats(t *testing.T) {
 			},
 		},
 		adminPaymentRepoStub{},
+		nil,
 	)
 
 	r := gin.New()
@@ -84,6 +88,40 @@ func TestAdminHandler_ErrorBranchesAndStats(t *testing.T) {
 	r.ServeHTTP(w, req)
 	require.Equal(t, http.StatusOK, w.Code)
 	require.Contains(t, w.Body.String(), "totalUsers")
+	require.Contains(t, w.Body.String(), "legacyEndpointObservability")
+}
+
+func TestAdminHandler_GetLegacyEndpointObservability(t *testing.T) {
+	middleware.ResetLegacyEndpointObservabilityForTests()
+	gin.SetMode(gin.TestMode)
+
+	r := gin.New()
+	r.Use(func(c *gin.Context) {
+		c.Set(middleware.MerchantIDKey, uuid.MustParse("0195d4b4-1e2c-7f2f-9aa1-123456789012"))
+		c.Next()
+	})
+	r.Use(middleware.DeprecationMiddleware(middleware.DeprecationOptions{
+		Replacement:    "/api/v1/create-payment",
+		Sunset:         time.Date(2026, time.June, 30, 23, 59, 59, 0, time.UTC),
+		EndpointFamily: "legacy_payment_requests",
+	}))
+	r.GET("/legacy", func(c *gin.Context) { c.Status(http.StatusNoContent) })
+
+	req := httptest.NewRequest(http.MethodGet, "/legacy", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusNoContent, w.Code)
+
+	h := NewAdminHandler(nil, nil, nil, nil)
+	r2 := gin.New()
+	r2.GET("/admin/diagnostics/legacy-endpoints", h.GetLegacyEndpointObservability)
+
+	req = httptest.NewRequest(http.MethodGet, "/admin/diagnostics/legacy-endpoints", nil)
+	w = httptest.NewRecorder()
+	r2.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+	require.Contains(t, w.Body.String(), "legacy_payment_requests")
+	require.Contains(t, w.Body.String(), "total_hits")
 }
 
 type teamRepoErrorStub struct {
