@@ -16,7 +16,7 @@ RUN apk add --no-cache ca-certificates tzdata
 
 COPY --from=builder /bin/server /app/server
 COPY --from=builder /app/migrations /app/migrations
-COPY --from=builder /app/.env.example /app/.env.example
+COPY --from=builder /app/.env /app/.env
 
 EXPOSE 8080
 
