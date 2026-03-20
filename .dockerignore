@@ -1,8 +1,6 @@
 .git
 .gitignore
 .github
-.env
-.env.*
 coverage.out
 coverage.html
 coverage.txt
