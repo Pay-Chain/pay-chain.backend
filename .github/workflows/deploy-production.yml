@@ -1,0 +1,62 @@
+name: Deploy Production
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: payment-kita-backend-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy backend to VPS
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    env:
+      REMOTE_APP_DIR: ${{ secrets.REMOTE_APP_DIR != '' && secrets.REMOTE_APP_DIR || '~/app/payment-kita.backend' }}
+      CONTAINER_NAME: ${{ secrets.CONTAINER_NAME != '' && secrets.CONTAINER_NAME || 'payment-kita.backend.container' }}
+      HOST_PORT: ${{ secrets.HOST_PORT != '' && secrets.HOST_PORT || '8082' }}
+      CONTAINER_PORT: ${{ secrets.CONTAINER_PORT != '' && secrets.CONTAINER_PORT || '8080' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate required secrets
+        env:
+          LOGIN_VPS: ${{ secrets.LOGIN_VPS }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$LOGIN_VPS" || { echo "Missing secret: LOGIN_VPS"; exit 1; }
+          test -n "$SSH_PRIVATE_KEY" || { echo "Missing secret: SSH_PRIVATE_KEY"; exit 1; }
+
+      - name: Prepare SSH key
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+      - name: Deploy on remote server
+        env:
+          LOGIN_VPS: ${{ secrets.LOGIN_VPS }}
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no "$LOGIN_VPS" "
+            set -euo pipefail
+            cd '$REMOTE_APP_DIR'
+            git pull origin production
+            docker stop '$CONTAINER_NAME' || true
+            docker rm '$CONTAINER_NAME' || true
+            docker build -t '$CONTAINER_NAME:latest' .
+            docker run -d --name '$CONTAINER_NAME' -p '$HOST_PORT:$CONTAINER_PORT' '$CONTAINER_NAME:latest'
+            docker image prune -f
+          "
