@@ -34,8 +34,23 @@ func TestEVMAdminOpsService_RegisterAndDefault(t *testing.T) {
 		return "0xtxhash", nil
 	}
 
-	mockResolveABI := func(_ context.Context, _ uuid.UUID, _ entities.SmartContractType) (abi.ABI, error) {
-		return abi.ABI{}, nil
+	mockResolveABI := func(_ context.Context, _ uuid.UUID, contractType entities.SmartContractType) (abi.ABI, error) {
+		switch contractType {
+		case entities.ContractTypeAdapterCCIP:
+			return FallbackCCIPSenderAdminABI, nil
+		case entities.ContractTypeAdapterStargate:
+			return FallbackStargateSenderAdminABI, nil
+		case entities.ContractTypeRouter:
+			return FallbackPaymentKitaRouterAdminABI, nil
+		case entities.ContractTypeGateway:
+			return FallbackPaymentKitaGatewayABI, nil
+		case entities.ContractTypeVault:
+			return FallbackPaymentKitaVaultAdminABI, nil
+		case entities.ContractTypeReceiverStargate:
+			return FallbackStargateReceiverAdminABI, nil
+		default:
+			return abi.ABI{}, nil
+		}
 	}
 
 	svc := newEVMAdminOpsService(
@@ -105,8 +120,23 @@ func TestEVMAdminOpsService_SetHyperbridgeConfig(t *testing.T) {
 		routerAddress: "0x1111111111111111111111111111111111111111",
 	}
 
-	mockResolveABI := func(_ context.Context, _ uuid.UUID, _ entities.SmartContractType) (abi.ABI, error) {
-		return abi.ABI{}, nil
+	mockResolveABI := func(_ context.Context, _ uuid.UUID, contractType entities.SmartContractType) (abi.ABI, error) {
+		switch contractType {
+		case entities.ContractTypeAdapterCCIP:
+			return FallbackCCIPSenderAdminABI, nil
+		case entities.ContractTypeAdapterStargate:
+			return FallbackStargateSenderAdminABI, nil
+		case entities.ContractTypeRouter:
+			return FallbackPaymentKitaRouterAdminABI, nil
+		case entities.ContractTypeGateway:
+			return FallbackPaymentKitaGatewayABI, nil
+		case entities.ContractTypeVault:
+			return FallbackPaymentKitaVaultAdminABI, nil
+		case entities.ContractTypeReceiverStargate:
+			return FallbackStargateReceiverAdminABI, nil
+		default:
+			return abi.ABI{}, nil
+		}
 	}
 
 	t.Run("adapter not registered", func(t *testing.T) {
@@ -176,8 +206,23 @@ func TestEVMAdminOpsService_SetCCIPAndStargateConfig(t *testing.T) {
 	ccipSelector := uint64(123)
 	lzEid := uint32(101)
 
-	mockResolveABI := func(_ context.Context, _ uuid.UUID, _ entities.SmartContractType) (abi.ABI, error) {
-		return abi.ABI{}, nil
+	mockResolveABI := func(_ context.Context, _ uuid.UUID, contractType entities.SmartContractType) (abi.ABI, error) {
+		switch contractType {
+		case entities.ContractTypeAdapterCCIP:
+			return FallbackCCIPSenderAdminABI, nil
+		case entities.ContractTypeAdapterStargate:
+			return FallbackStargateSenderAdminABI, nil
+		case entities.ContractTypeRouter:
+			return FallbackPaymentKitaRouterAdminABI, nil
+		case entities.ContractTypeGateway:
+			return FallbackPaymentKitaGatewayABI, nil
+		case entities.ContractTypeVault:
+			return FallbackPaymentKitaVaultAdminABI, nil
+		case entities.ContractTypeReceiverStargate:
+			return FallbackStargateReceiverAdminABI, nil
+		default:
+			return abi.ABI{}, nil
+		}
 	}
 
 	t.Run("ccip success", func(t *testing.T) {
@@ -303,7 +348,7 @@ func TestEVMAdminOpsService_SetCCIPAndStargateConfig(t *testing.T) {
 				return "0x5555555555555555555555555555555555555555", nil
 			},
 			func(_ context.Context, _ uuid.UUID, _ string, _ abi.ABI, method string, _ ...interface{}) (string, error) {
-				require.Equal(t, "setEnforcedOptions", method)
+				require.Equal(t, "setDestinationExtraOptions", method)
 				return "0xtx-options", nil
 			},
 			mockResolveABI,
@@ -410,7 +455,7 @@ func TestEVMAdminOpsService_SetCCIPAndStargateConfig(t *testing.T) {
 				return "0x5555555555555555555555555555555555555555", nil
 			},
 			func(_ context.Context, _ uuid.UUID, _ string, _ abi.ABI, method string, _ ...interface{}) (string, error) {
-				if method == "setEnforcedOptions" {
+				if method == "setDestinationExtraOptions" {
 					return "", errors.New("set options failed")
 				}
 				return "0xok", nil
@@ -421,7 +466,7 @@ func TestEVMAdminOpsService_SetCCIPAndStargateConfig(t *testing.T) {
 		require.Error(t, err)
 		var appErr *derrs.AppError
 		require.ErrorAs(t, err, &appErr)
-		require.Contains(t, appErr.Message, "setEnforcedOptions failed")
+		require.Contains(t, appErr.Message, "setDestinationExtraOptions failed")
 		require.Contains(t, appErr.Message, "set options failed")
 	})
 

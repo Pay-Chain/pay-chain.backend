@@ -141,7 +141,7 @@ func buildCrosschainRPCTestServer(t *testing.T, adapter0, adapter1, adapter2 com
 	lzConfiguredMethodID := "0x" + hex.EncodeToString(FallbackStargateSenderAdminABI.Methods["isRouteConfigured"].ID)
 	lzDstMethodID := "0x" + hex.EncodeToString(FallbackStargateSenderAdminABI.Methods["dstEids"].ID)
 	lzPeerMethodID := "0x" + hex.EncodeToString(FallbackStargateSenderAdminABI.Methods["peers"].ID)
-	lzOptionsMethodID := "0x" + hex.EncodeToString(FallbackStargateSenderAdminABI.Methods["enforcedOptions"].ID)
+	lzOptionsMethodID := "0x" + hex.EncodeToString(FallbackStargateSenderAdminABI.Methods["destinationExtraOptions"].ID)
 
 	return newSafeHTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer r.Body.Close()
@@ -216,7 +216,7 @@ func buildCrosschainRPCTestServer(t *testing.T, adapter0, adapter1, adapter2 com
 				out, _ := FallbackStargateSenderAdminABI.Methods["peers"].Outputs.Pack([32]byte{1})
 				resp["result"] = "0x" + hex.EncodeToString(out)
 			case lzOptionsMethodID:
-				out, _ := FallbackStargateSenderAdminABI.Methods["enforcedOptions"].Outputs.Pack([]byte{0x01, 0x02})
+				out, _ := FallbackStargateSenderAdminABI.Methods["destinationExtraOptions"].Outputs.Pack([]byte{0x01, 0x02})
 				resp["result"] = "0x" + hex.EncodeToString(out)
 			default:
 				// quotePaymentFee and unknown views: return non-empty 32-byte to mark ready.

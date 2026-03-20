@@ -76,6 +76,7 @@ type StargateConfigureSourceInput struct {
 	DstEID                   uint32 `json:"dstEid"`
 	DstPeerHex               string `json:"dstPeerHex"`
 	OptionsHex               string `json:"optionsHex"`
+	ComposeGasLimit          uint64 `json:"composeGasLimit"`
 	RegisterDelegate         bool   `json:"registerDelegate"`
 	AuthorizeVaultSpender    bool   `json:"authorizeVaultSpender"`
 }
@@ -552,9 +553,10 @@ func (s *evmAdminOpsService) SetStargateConfig(
 		if !strings.HasPrefix(trimmedOptions, "0x") {
 			trimmedOptions = "0x" + trimmedOptions
 		}
-		txHash, txErr := s.sendTx(ctx, resolved.sourceChainID, adapter, parsedABI, "setEnforcedOptions", resolved.destCAIP2, common.FromHex(trimmedOptions))
+		optionsMethod := stargateOptionsSetterMethod(parsedABI)
+		txHash, txErr := s.sendTx(ctx, resolved.sourceChainID, adapter, parsedABI, optionsMethod, resolved.destCAIP2, common.FromHex(trimmedOptions))
 		if txErr != nil {
-			return "", txHashes, wrapAdminTxError("setEnforcedOptions", txErr)
+			return "", txHashes, wrapAdminTxError(optionsMethod, txErr)
 		}
 		txHashes = append(txHashes, txHash)
 	}
@@ -719,18 +721,33 @@ func (s *evmAdminOpsService) ConfigureStargateE2E(
 		if !strings.HasPrefix(options, "0x") {
 			options = "0x" + options
 		}
-		currentOptions, optsReadErr := s.readBytes(ctx, resolved.sourceChainID, sourceSender, senderABI, "enforcedOptions", resolved.destCAIP2)
+		optionsMethod := stargateOptionsSetterMethod(senderABI)
+		optionsGetter := stargateOptionsGetterMethod(senderABI)
+		currentOptions, optsReadErr := s.readBytes(ctx, resolved.sourceChainID, sourceSender, senderABI, optionsGetter, resolved.destCAIP2)
 		if optsReadErr == nil && strings.EqualFold("0x"+common.Bytes2Hex(currentOptions), options) {
-			addSkipped("setEnforcedOptions", "already-configured")
+			addSkipped(optionsMethod, "already-configured")
 		} else {
-			txHash, txErr := s.sendTx(ctx, resolved.sourceChainID, sourceSender, senderABI, "setEnforcedOptions", resolved.destCAIP2, common.FromHex(options))
+			txHash, txErr := s.sendTx(ctx, resolved.sourceChainID, sourceSender, senderABI, optionsMethod, resolved.destCAIP2, common.FromHex(options))
 			if txErr != nil {
-				return nil, wrapAdminTxError("setEnforcedOptions", txErr)
+				return nil, wrapAdminTxError(optionsMethod, txErr)
 			}
-			addSuccess("setEnforcedOptions", txHash)
+			addSuccess(optionsMethod, txHash)
 		}
 	} else {
-		addSkipped("setEnforcedOptions", "no-options")
+		addSkipped(stargateOptionsSetterMethod(senderABI), "no-options")
+	}
+
+	if input.Source.ComposeGasLimit > 0 {
+		currentComposeGas, gasReadErr := s.readUint64Compatible(ctx, resolved.sourceChainID, sourceSender, senderABI, "destinationComposeGasLimits", resolved.destCAIP2)
+		if gasReadErr == nil && currentComposeGas == input.Source.ComposeGasLimit {
+			addSkipped("setDestinationComposeGasLimit", "already-configured")
+		} else if _, ok := senderABI.Methods["setDestinationComposeGasLimit"]; ok {
+			txHash, txErr := s.sendTx(ctx, resolved.sourceChainID, sourceSender, senderABI, "setDestinationComposeGasLimit", resolved.destCAIP2, input.Source.ComposeGasLimit)
+			if txErr != nil {
+				return nil, wrapAdminTxError("setDestinationComposeGasLimit", txErr)
+			}
+			addSuccess("setDestinationComposeGasLimit", txHash)
+		}
 	}
 
 	if input.Source.RegisterDelegate {
@@ -1068,6 +1085,45 @@ func (s *evmAdminOpsService) readBytes(
 		return nil, fmt.Errorf("invalid %s return type", method)
 	}
 	return value, nil
+}
+
+func (s *evmAdminOpsService) readUint64Compatible(
+	ctx context.Context,
+	chainID uuid.UUID,
+	contractAddress string,
+	parsedABI abi.ABI,
+	method string,
+	args ...interface{},
+) (uint64, error) {
+	values, err := s.readValues(ctx, chainID, contractAddress, parsedABI, method, args...)
+	if err != nil {
+		return 0, err
+	}
+	switch value := values[0].(type) {
+	case uint64:
+		return value, nil
+	case *big.Int:
+		if value == nil || !value.IsUint64() {
+			return 0, fmt.Errorf("invalid %s return type", method)
+		}
+		return value.Uint64(), nil
+	default:
+		return 0, fmt.Errorf("invalid %s return type", method)
+	}
+}
+
+func stargateOptionsSetterMethod(parsedABI abi.ABI) string {
+	if _, ok := parsedABI.Methods["setDestinationExtraOptions"]; ok {
+		return "setDestinationExtraOptions"
+	}
+	return "setEnforcedOptions"
+}
+
+func stargateOptionsGetterMethod(parsedABI abi.ABI) string {
+	if _, ok := parsedABI.Methods["destinationExtraOptions"]; ok {
+		return "destinationExtraOptions"
+	}
+	return "enforcedOptions"
 }
 
 func (s *evmAdminOpsService) readPathState(

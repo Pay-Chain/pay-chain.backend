@@ -67,7 +67,7 @@ func buildStatusRPCServer(t *testing.T, cfg rpcStatusConfig) *httptest.Server {
 		{"inputs":[{"internalType":"string","name":"","type":"string"}],"name":"isRouteConfigured","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},
 		{"inputs":[{"internalType":"string","name":"","type":"string"}],"name":"dstEids","outputs":[{"internalType":"uint32","name":"","type":"uint32"}],"stateMutability":"view","type":"function"},
 		{"inputs":[{"internalType":"string","name":"","type":"string"}],"name":"peers","outputs":[{"internalType":"bytes32","name":"","type":"bytes32"}],"stateMutability":"view","type":"function"},
-		{"inputs":[{"internalType":"string","name":"","type":"string"}],"name":"enforcedOptions","outputs":[{"internalType":"bytes","name":"","type":"bytes"}],"stateMutability":"view","type":"function"}
+		{"inputs":[{"internalType":"string","name":"","type":"string"}],"name":"destinationExtraOptions","outputs":[{"internalType":"bytes","name":"","type":"bytes"}],"stateMutability":"view","type":"function"}
 	]`)
 	hyperbridgeABI := mustParseABIPreflight(t, `[
 		{"inputs":[{"internalType":"string","name":"","type":"string"}],"name":"isChainConfigured","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},
@@ -81,7 +81,7 @@ func buildStatusRPCServer(t *testing.T, cfg rpcStatusConfig) *httptest.Server {
 	lzConfiguredMethodID := "0x" + hex.EncodeToString(stargateABI.Methods["isRouteConfigured"].ID)
 	lzDstEidMethodID := "0x" + hex.EncodeToString(stargateABI.Methods["dstEids"].ID)
 	lzPeerMethodID := "0x" + hex.EncodeToString(stargateABI.Methods["peers"].ID)
-	lzOptionsMethodID := "0x" + hex.EncodeToString(stargateABI.Methods["enforcedOptions"].ID)
+	lzOptionsMethodID := "0x" + hex.EncodeToString(stargateABI.Methods["destinationExtraOptions"].ID)
 	hyperConfiguredMethodID := "0x" + hex.EncodeToString(hyperbridgeABI.Methods["isChainConfigured"].ID)
 	hyperStateMachineMethodID := "0x" + hex.EncodeToString(hyperbridgeABI.Methods["stateMachineIds"].ID)
 	hyperDestinationMethodID := "0x" + hex.EncodeToString(hyperbridgeABI.Methods["destinationContracts"].ID)
@@ -153,7 +153,7 @@ func buildStatusRPCServer(t *testing.T, cfg rpcStatusConfig) *httptest.Server {
 			case lzPeerMethodID:
 				res.Result = encodeOutPreflight(t, stargateABI.Methods["peers"], [32]byte{1})
 			case lzOptionsMethodID:
-				res.Result = encodeOutPreflight(t, stargateABI.Methods["enforcedOptions"], []byte{0x01})
+				res.Result = encodeOutPreflight(t, stargateABI.Methods["destinationExtraOptions"], []byte{0x01})
 			case hyperConfiguredMethodID:
 				res.Result = encodeOutPreflight(t, hyperbridgeABI.Methods["isChainConfigured"], true)
 			case hyperStateMachineMethodID:

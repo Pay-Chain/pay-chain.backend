@@ -173,7 +173,7 @@ func TestOnchainAdapterUsecase_GetStatus_AllBridgeAdapters(t *testing.T) {
 		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"}],"name":"isRouteConfigured","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},
 		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"}],"name":"dstEids","outputs":[{"internalType":"uint32","name":"","type":"uint32"}],"stateMutability":"view","type":"function"},
 		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"}],"name":"peers","outputs":[{"internalType":"bytes32","name":"","type":"bytes32"}],"stateMutability":"view","type":"function"},
-		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"}],"name":"enforcedOptions","outputs":[{"internalType":"bytes","name":"","type":"bytes"}],"stateMutability":"view","type":"function"}
+		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"}],"name":"destinationExtraOptions","outputs":[{"internalType":"bytes","name":"","type":"bytes"}],"stateMutability":"view","type":"function"}
 	]`)
 
 	adapter0 := common.HexToAddress("0x1111111111111111111111111111111111111111")
@@ -206,7 +206,7 @@ func TestOnchainAdapterUsecase_GetStatus_AllBridgeAdapters(t *testing.T) {
 		encodeOut(t, stargateABI.Methods["isRouteConfigured"], true),
 		encodeOut(t, stargateABI.Methods["dstEids"], uint32(30110)),
 		encodeOut(t, stargateABI.Methods["peers"], stargatePeer),
-		encodeOut(t, stargateABI.Methods["enforcedOptions"], []byte{0x01, 0x02}),
+		encodeOut(t, stargateABI.Methods["destinationExtraOptions"], []byte{0x01, 0x02}),
 	}
 
 	var (

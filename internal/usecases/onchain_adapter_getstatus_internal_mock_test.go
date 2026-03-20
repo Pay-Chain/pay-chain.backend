@@ -31,7 +31,7 @@ func encodeMethodOut(t *testing.T, methodName string, values ...interface{}) []b
 		out, err = FallbackHyperbridgeSenderAdminABI.Methods[methodName].Outputs.Pack(values...)
 	case "chainSelectors", "destinationAdapters":
 		out, err = FallbackCCIPSenderAdminABI.Methods[methodName].Outputs.Pack(values...)
-	case "isRouteConfigured", "dstEids", "peers", "enforcedOptions":
+	case "isRouteConfigured", "dstEids", "peers", "destinationExtraOptions":
 		out, err = FallbackStargateSenderAdminABI.Methods[methodName].Outputs.Pack(values...)
 	default:
 		t.Fatalf("unsupported method: %s", methodName)
@@ -119,8 +119,8 @@ func TestOnchainAdapterUsecase_GetStatus_WithInjectedClient(t *testing.T) {
 			return encodeMethodOut(t, "dstEids", uint32(30110)), nil
 		case "0x" + hex.EncodeToString(FallbackStargateSenderAdminABI.Methods["peers"].ID):
 			return encodeMethodOut(t, "peers", [32]byte{1}), nil
-		case "0x" + hex.EncodeToString(FallbackStargateSenderAdminABI.Methods["enforcedOptions"].ID):
-			return encodeMethodOut(t, "enforcedOptions", []byte{0x01, 0x02}), nil
+		case "0x" + hex.EncodeToString(FallbackStargateSenderAdminABI.Methods["destinationExtraOptions"].ID):
+			return encodeMethodOut(t, "destinationExtraOptions", []byte{0x01, 0x02}), nil
 		default:
 			return nil, fmt.Errorf("unexpected method id: %s", methodID)
 		}

@@ -37,7 +37,7 @@ func TestOnchainAdapterUsecase_CallHelpers_Success(t *testing.T) {
 		mustEncodeOutputFromABI(t, FallbackStargateSenderAdminABI, "isRouteConfigured", true),
 		mustEncodeOutputFromABI(t, FallbackStargateSenderAdminABI, "dstEids", uint32(40161)),
 		mustEncodeOutputFromABI(t, FallbackStargateSenderAdminABI, "peers", [32]byte(peerHash)),
-		mustEncodeOutputFromABI(t, FallbackStargateSenderAdminABI, "enforcedOptions", lzOptions),
+		mustEncodeOutputFromABI(t, FallbackStargateSenderAdminABI, "destinationExtraOptions", lzOptions),
 	})
 
 	vBridge, err := u.callDefaultBridgeType(context.Background(), client, routerAddr.Hex(), FallbackPaymentKitaGatewayABI, dest)

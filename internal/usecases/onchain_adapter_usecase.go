@@ -78,10 +78,14 @@ var (
 	]`)
 	FallbackStargateSenderAdminABI = mustParseABI(`[
 		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"},{"internalType":"uint32","name":"dstEid","type":"uint32"},{"internalType":"bytes32","name":"peer","type":"bytes32"}],"name":"setRoute","outputs":[],"stateMutability":"nonpayable","type":"function"},
+		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"},{"internalType":"bytes","name":"extraOptions","type":"bytes"}],"name":"setDestinationExtraOptions","outputs":[],"stateMutability":"nonpayable","type":"function"},
+		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"},{"internalType":"uint128","name":"gasLimit","type":"uint128"}],"name":"setDestinationComposeGasLimit","outputs":[],"stateMutability":"nonpayable","type":"function"},
 		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"},{"internalType":"bytes","name":"options","type":"bytes"}],"name":"setEnforcedOptions","outputs":[],"stateMutability":"nonpayable","type":"function"},
 		{"inputs":[],"name":"registerDelegate","outputs":[],"stateMutability":"nonpayable","type":"function"},
 		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"}],"name":"dstEids","outputs":[{"internalType":"uint32","name":"","type":"uint32"}],"stateMutability":"view","type":"function"},
 		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"}],"name":"peers","outputs":[{"internalType":"bytes32","name":"","type":"bytes32"}],"stateMutability":"view","type":"function"},
+		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"}],"name":"destinationExtraOptions","outputs":[{"internalType":"bytes","name":"","type":"bytes"}],"stateMutability":"view","type":"function"},
+		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"}],"name":"destinationComposeGasLimits","outputs":[{"internalType":"uint128","name":"","type":"uint128"}],"stateMutability":"view","type":"function"},
 		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"}],"name":"enforcedOptions","outputs":[{"internalType":"bytes","name":"","type":"bytes"}],"stateMutability":"view","type":"function"},
 		{"inputs":[{"internalType":"string","name":"destChainId","type":"string"}],"name":"isRouteConfigured","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"}
 	]`)
@@ -168,6 +172,7 @@ type OnchainAdapterStatus struct {
 	StargateDstEID                uint32 `json:"stargateDstEid"`
 	StargatePeer                  string `json:"stargatePeer"`
 	StargateOptionsHex            string `json:"stargateOptionsHex"`
+	StargateComposeGasLimit       string `json:"stargateComposeGasLimit"`
 }
 
 type OnchainAdapterUsecase struct {
@@ -316,6 +321,7 @@ func (u *OnchainAdapterUsecase) GetStatus(ctx context.Context, sourceChainInput,
 	stargateDstEid := uint32(0)
 	stargatePeer := ""
 	stargateOptionsHex := ""
+	stargateComposeGasLimit := ""
 
 	if has0 && adapter0 != "" && adapter0 != "0x0000000000000000000000000000000000000000" {
 		hyperABI, _ := u.ResolveABIWithFallback(ctx, sourceChainID, entities.ContractTypeAdapterHyperbridge)
@@ -360,6 +366,9 @@ func (u *OnchainAdapterUsecase) GetStatus(ctx context.Context, sourceChainInput,
 		}
 		if opts, oErr := u.callStargateOptions(ctx, evmClient, adapter2, lzABI, destCAIP2); oErr == nil && len(opts) > 0 {
 			stargateOptionsHex = "0x" + common.Bytes2Hex(opts)
+		}
+		if gasLimit, gErr := u.callStargateComposeGasLimit(ctx, evmClient, adapter2, lzABI, destCAIP2); gErr == nil && gasLimit != nil && gasLimit.Sign() > 0 {
+			stargateComposeGasLimit = gasLimit.String()
 		}
 	}
 	if has3 && adapter3 != "" && adapter3 != "0x0000000000000000000000000000000000000000" {
@@ -414,6 +423,7 @@ func (u *OnchainAdapterUsecase) GetStatus(ctx context.Context, sourceChainInput,
 		StargateDstEID:                stargateDstEid,
 		StargatePeer:                  stargatePeer,
 		StargateOptionsHex:            stargateOptionsHex,
+		StargateComposeGasLimit:       stargateComposeGasLimit,
 	}, nil
 }
 
@@ -905,7 +915,17 @@ func (u *OnchainAdapterUsecase) callStargatePeer(ctx context.Context, client *bl
 }
 
 func (u *OnchainAdapterUsecase) callStargateOptions(ctx context.Context, client *blockchain.EVMClient, adapterAddress string, parsedABI abi.ABI, destCAIP2 string) ([]byte, error) {
+	if _, ok := parsedABI.Methods["destinationExtraOptions"]; ok {
+		return callTypedView[[]byte](ctx, client, adapterAddress, parsedABI, "destinationExtraOptions", destCAIP2)
+	}
 	return callTypedView[[]byte](ctx, client, adapterAddress, parsedABI, "enforcedOptions", destCAIP2)
+}
+
+func (u *OnchainAdapterUsecase) callStargateComposeGasLimit(ctx context.Context, client *blockchain.EVMClient, adapterAddress string, parsedABI abi.ABI, destCAIP2 string) (*big.Int, error) {
+	if _, ok := parsedABI.Methods["destinationComposeGasLimits"]; ok {
+		return callTypedView[*big.Int](ctx, client, adapterAddress, parsedABI, "destinationComposeGasLimits", destCAIP2)
+	}
+	return nil, fmt.Errorf("destinationComposeGasLimits not supported by ABI")
 }
 
 func callTypedView[T any](
