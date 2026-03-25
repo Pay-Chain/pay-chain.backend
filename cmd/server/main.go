@@ -168,9 +168,11 @@ func runMainProcess() error {
 		smartContractRepo,
 		tokenRepo,
 		chainRepo,
+		merchantRepo,
 		uow,
 		jweService,
 		paymentRequestUsecase,
+		paymentUsecase,
 		os.Getenv("PARTNER_CHECKOUT_BASE_URL"),
 	)
 	createPaymentUsecase := usecases.NewCreatePaymentUsecase(

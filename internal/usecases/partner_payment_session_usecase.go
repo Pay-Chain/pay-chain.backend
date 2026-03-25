@@ -2,12 +2,17 @@ package usecases
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"os"
 	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/google/uuid"
 	domainentities "payment-kita.backend/internal/domain/entities"
 	domainerrors "payment-kita.backend/internal/domain/errors"
@@ -111,9 +116,11 @@ type PartnerPaymentSessionUsecase struct {
 	contractRepo        domainrepos.SmartContractRepository
 	tokenRepo           domainrepos.TokenRepository
 	chainRepo           domainrepos.ChainRepository
+	merchantRepo        domainrepos.MerchantRepository
 	uow                 domainrepos.UnitOfWork
 	jweService          services.JWEService
 	paymentRequestLogic *PaymentRequestUsecase
+	paymentUC           *PaymentUsecase
 	chainResolver       *ChainResolver
 	checkoutBaseURL     string
 }
@@ -125,9 +132,11 @@ func NewPartnerPaymentSessionUsecase(
 	contractRepo domainrepos.SmartContractRepository,
 	tokenRepo domainrepos.TokenRepository,
 	chainRepo domainrepos.ChainRepository,
+	merchantRepo domainrepos.MerchantRepository,
 	uow domainrepos.UnitOfWork,
 	jweService services.JWEService,
 	paymentRequestLogic *PaymentRequestUsecase,
+	paymentUC *PaymentUsecase,
 	checkoutBaseURL string,
 ) *PartnerPaymentSessionUsecase {
 	baseURL := strings.TrimSpace(checkoutBaseURL)
@@ -137,6 +146,7 @@ func NewPartnerPaymentSessionUsecase(
 	if baseURL == "" {
 		baseURL = defaultPartnerCheckoutBaseURL
 	}
+
 	return &PartnerPaymentSessionUsecase{
 		quoteRepo:           quoteRepo,
 		sessionRepo:         sessionRepo,
@@ -144,9 +154,11 @@ func NewPartnerPaymentSessionUsecase(
 		contractRepo:        contractRepo,
 		tokenRepo:           tokenRepo,
 		chainRepo:           chainRepo,
+		merchantRepo:        merchantRepo,
 		uow:                 uow,
 		jweService:          jweService,
 		paymentRequestLogic: paymentRequestLogic,
+		paymentUC:           paymentUC,
 		chainResolver:       NewChainResolver(chainRepo),
 		checkoutBaseURL:     strings.TrimRight(baseURL, "/"),
 	}
@@ -221,7 +233,71 @@ func (u *PartnerPaymentSessionUsecase) CreateSession(ctx context.Context, input 
 		}
 
 		contract, _ := u.contractRepo.GetActiveContract(txCtx, selectedChainID, domainentities.ContractTypeGateway)
-		txData := u.paymentRequestLogic.buildTransactionData(paymentRequest, contract)
+
+		destChainID, destChainCAIP2, err := u.chainResolver.ResolveFromAny(txCtx, coalesceString(strings.TrimSpace(input.DestChainOverride), quote.SelectedChainID))
+		if err != nil {
+			return domainerrors.BadRequest(fmt.Sprintf("invalid destination chain: %v", err))
+		}
+		destTokenAddress := coalesceString(strings.TrimSpace(input.DestTokenOverride), quote.SelectedTokenAddress)
+
+		// V2 Logic: Calculate native bridge fee if necessary
+		bridgeFeeNative := big.NewInt(0)
+		if u.paymentUC != nil && contract != nil {
+			tempPayment := &domainentities.Payment{
+				SourceChainID:      selectedChainID,
+				DestChainID:        destChainID,
+				SourceTokenAddress: quote.SelectedTokenAddress,
+				DestTokenAddress:   destTokenAddress,
+				SourceAmount:       quote.QuotedAmount,
+				ReceiverAddress:    strings.TrimSpace(input.DestWallet),
+			}
+			onchainCost, err := u.paymentUC.quoteGatewayPaymentCost(txCtx, tempPayment, contract.ContractAddress, nil)
+			if err == nil && onchainCost != nil {
+				if f, ok := new(big.Int).SetString(onchainCost.BridgeFeeNative, 10); ok {
+					bridgeFeeNative = f
+				}
+			}
+		}
+
+		// V2 Logic: Build transaction data
+		var txData *domainentities.PaymentRequestTxData
+		if contract != nil {
+			addrType, _ := abi.NewType("address", "", nil)
+			receiverPacked, _ := abi.Arguments{{Type: addrType}}.Pack(common.HexToAddress(normalizeEvmAddress(paymentRequest.WalletAddress)))
+
+			amountInSource := new(big.Int)
+			amountInSource.SetString(paymentRequest.Amount, 10)
+
+			v2Args := PaymentRequestV2Args{
+				DestChainIDBytes:   []byte(destChainCAIP2),
+				ReceiverBytes:      receiverPacked,
+				SourceToken:        common.HexToAddress(normalizeEvmAddress(quote.SelectedTokenAddress)),
+				BridgeTokenSource:  common.Address{}, // Default
+				DestToken:          common.HexToAddress(normalizeEvmAddress(destTokenAddress)),
+				AmountInSource:     amountInSource,
+				MinBridgeAmountOut: big.NewInt(0),
+				MinDestAmountOut:   big.NewInt(0),
+				Mode:               0, // Standard
+				BridgeOption:       1, // Default Bridge
+			}
+
+			dataHex, err := packCreatePaymentDefaultBridgeV2Calldata(v2Args)
+			if err == nil {
+				dataBytes, _ := hex.DecodeString(strings.TrimPrefix(dataHex, "0x"))
+				txData = &domainentities.PaymentRequestTxData{
+					To:     contract.ContractAddress,
+					Hex:    dataHex,
+					Base64: base64.StdEncoding.EncodeToString(dataBytes),
+					Base58: base58Encode(dataBytes),
+				}
+			}
+		}
+
+		// Fallback to legacy if V2 fails or contract missing
+		if txData == nil {
+			txData = u.paymentRequestLogic.buildTransactionData(paymentRequest, contract)
+		}
+
 		if txData == nil {
 			return domainerrors.InternalServerError("failed to build payment instruction")
 		}
@@ -237,15 +313,15 @@ func (u *PartnerPaymentSessionUsecase) CreateSession(ctx context.Context, input 
 			SelectedTokenAddress:  quote.SelectedTokenAddress,
 			SelectedTokenSymbol:   quote.SelectedTokenSymbol,
 			SelectedTokenDecimals: quote.SelectedTokenDecimals,
-			DestChain:             coalesceString(strings.TrimSpace(input.DestChainOverride), quote.SelectedChainID),
-			DestToken:             coalesceString(strings.TrimSpace(input.DestTokenOverride), quote.SelectedTokenAddress),
+			DestChain:             destChainCAIP2,
+			DestToken:             destTokenAddress,
 			DestWallet:            strings.TrimSpace(input.DestWallet),
 			PaymentAmount:         quote.QuotedAmount,
 			PaymentAmountDecimals: quote.SelectedTokenDecimals,
 			Status:                domainentities.PartnerPaymentSessionStatusPending,
 			PaymentURL:            u.checkoutBaseURL + "/" + paymentRequest.ID.String(),
 			InstructionTo:         txData.To,
-			InstructionValue:      "0",
+			InstructionValue:      bridgeFeeNative.String(),
 			InstructionDataHex:    txData.Hex,
 			InstructionDataBase58: txData.Base58,
 			InstructionDataBase64: txData.Base64,

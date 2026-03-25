@@ -53,10 +53,19 @@ jobs:
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no "$LOGIN_VPS" "
             set -euo pipefail
             cd ~/app/payment-kita.backend
+            git checkout main
             git pull origin main
+            
             docker stop '$CONTAINER_NAME' || true
             docker rm '$CONTAINER_NAME' || true
+            
             docker build -t '$CONTAINER_NAME:latest' .
-            docker run -d --name '$CONTAINER_NAME' -p '$HOST_PORT:$CONTAINER_PORT' '$CONTAINER_NAME:latest'
+            
+            ENV_FILE_ARG=\"\"
+            if [ -f .env ]; then
+              ENV_FILE_ARG=\"--env-file .env\"
+            fi
+            
+            docker run -d --name '$CONTAINER_NAME' \$ENV_FILE_ARG -p '$HOST_PORT:$CONTAINER_PORT' '$CONTAINER_NAME:latest'
             docker image prune -f
           "

@@ -154,8 +154,8 @@ func TestCreatePayment_SettlementProfileScenarios_Integration(t *testing.T) {
 					return big.NewInt(2950000), nil
 				}
 			})
-			paymentRequestUsecase := usecases.NewPaymentRequestUsecase(paymentRequestRepo, nil, nil, chainRepo, contractRepo, tokenRepo, jweService)
-			sessionUsecase := usecases.NewPartnerPaymentSessionUsecase(quoteRepo, sessionRepo, paymentRequestRepo, contractRepo, tokenRepo, chainRepo, uow, jweService, paymentRequestUsecase, "https://partner.pay.test/checkout")
+			paymentRequestUsecase := usecases.NewPaymentRequestUsecase(paymentRequestRepo, merchantRepo, nil, chainRepo, contractRepo, tokenRepo, jweService)
+			sessionUsecase := usecases.NewPartnerPaymentSessionUsecase(quoteRepo, sessionRepo, paymentRequestRepo, contractRepo, tokenRepo, chainRepo, merchantRepo, uow, jweService, paymentRequestUsecase, nil, "https://partner.pay.test/checkout")
 			createPaymentUsecase := usecases.NewCreatePaymentUsecase(merchantRepo, settlementProfileRepo, walletRepo, tokenRepo, chainRepo, quoteRepo, quoteUsecase, sessionUsecase)
 			handler := NewCreatePaymentHandler(createPaymentUsecase)
 

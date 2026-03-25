@@ -74,7 +74,8 @@ func TestPartnerFlow_QuoteSessionHostedReadResolveWebhookSync_Integration(t *tes
 		return big.NewInt(2950000), nil
 	}
 
-	paymentRequestUsecase := NewPaymentRequestUsecase(paymentRequestRepo, nil, nil, chainRepo, contractRepo, tokenRepo, jweService)
+	merchantRepo := infrarepos.NewMerchantRepository(db)
+	paymentRequestUsecase := NewPaymentRequestUsecase(paymentRequestRepo, merchantRepo, nil, chainRepo, contractRepo, tokenRepo, jweService)
 	sessionUsecase := NewPartnerPaymentSessionUsecase(
 		quoteRepo,
 		sessionRepo,
@@ -82,9 +83,11 @@ func TestPartnerFlow_QuoteSessionHostedReadResolveWebhookSync_Integration(t *tes
 		contractRepo,
 		tokenRepo,
 		chainRepo,
+		merchantRepo,
 		uow,
 		jweService,
 		paymentRequestUsecase,
+		nil, // paymentUC
 		"https://partner.pay.test/checkout",
 	)
 	webhookUsecase := NewWebhookUsecase(nil, nil, paymentRequestRepo, sessionRepo, nil, nil, nil, nil)

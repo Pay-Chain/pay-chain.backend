@@ -80,7 +80,8 @@ func TestPartnerHTTPFlow_QuoteSessionReadResolveWebhook(t *testing.T) {
 	}
 	quoteUsecaseCreateFns(quoteUsecase, quoteUsecaseRoute)
 
-	paymentRequestUsecase := usecases.NewPaymentRequestUsecase(paymentRequestRepo, nil, nil, chainRepo, contractRepo, tokenRepo, jweService)
+	merchantRepo := repositories.NewMerchantRepository(db)
+	paymentRequestUsecase := usecases.NewPaymentRequestUsecase(paymentRequestRepo, merchantRepo, nil, chainRepo, contractRepo, tokenRepo, jweService)
 	sessionUsecase := usecases.NewPartnerPaymentSessionUsecase(
 		quoteRepo,
 		sessionRepo,
@@ -88,9 +89,11 @@ func TestPartnerHTTPFlow_QuoteSessionReadResolveWebhook(t *testing.T) {
 		contractRepo,
 		tokenRepo,
 		chainRepo,
+		merchantRepo,
 		uow,
 		jweService,
 		paymentRequestUsecase,
+		nil,
 		"https://partner.pay.test/checkout",
 	)
 	webhookUsecase := usecases.NewWebhookUsecase(nil, nil, paymentRequestRepo, sessionRepo, nil, nil, nil, nil)
@@ -262,7 +265,7 @@ func TestPartnerHTTPFlow_CreatePaymentReadResolveWebhook(t *testing.T) {
 		UniversalV4:  "0xuniversalrouter",
 		SwapRouterV3: "",
 	})
-	paymentRequestUsecase := usecases.NewPaymentRequestUsecase(paymentRequestRepo, nil, nil, chainRepo, contractRepo, tokenRepo, jweService)
+	paymentRequestUsecase := usecases.NewPaymentRequestUsecase(paymentRequestRepo, merchantRepo, nil, chainRepo, contractRepo, tokenRepo, jweService)
 	sessionUsecase := usecases.NewPartnerPaymentSessionUsecase(
 		quoteRepo,
 		sessionRepo,
@@ -270,9 +273,11 @@ func TestPartnerHTTPFlow_CreatePaymentReadResolveWebhook(t *testing.T) {
 		contractRepo,
 		tokenRepo,
 		chainRepo,
+		merchantRepo,
 		uow,
 		jweService,
 		paymentRequestUsecase,
+		nil,
 		"https://partner.pay.test/checkout",
 	)
 	createPaymentUsecase := usecases.NewCreatePaymentUsecase(

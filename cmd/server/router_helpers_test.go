@@ -27,6 +27,42 @@ func TestApplyCORSMiddleware(t *testing.T) {
 		t.Fatalf("unexpected allow-origin: %s", got)
 	}
 
+	// allowed netlify origin
+	req = httptest.NewRequest(http.MethodGet, "/x", nil)
+	req.Header.Set("Origin", "https://paymentkita.netlify.app")
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "https://paymentkita.netlify.app" {
+		t.Fatalf("unexpected allow-origin for netlify: %s", got)
+	}
+
+	// allowed dompet-ku origin
+	req = httptest.NewRequest(http.MethodGet, "/x", nil)
+	req.Header.Set("Origin", "https://api-dompet-ku.excitech.id")
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "https://api-dompet-ku.excitech.id" {
+		t.Fatalf("unexpected allow-origin for dompet-ku: %s", got)
+	}
+
+	// disallowed origin should not be reflected
+	req = httptest.NewRequest(http.MethodGet, "/x", nil)
+	req.Header.Set("Origin", "https://evil.example.com")
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "" {
+		t.Fatalf("expected empty allow-origin for disallowed origin, got %s", got)
+	}
+
 	// options preflight
 	req = httptest.NewRequest(http.MethodOptions, "/x", nil)
 	rec = httptest.NewRecorder()

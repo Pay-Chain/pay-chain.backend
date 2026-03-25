@@ -2,12 +2,20 @@ package main
 
 import "github.com/gin-gonic/gin"
 
+var allowedCORSOrigins = map[string]struct{}{
+	"http://localhost:3000":            {},
+	"http://127.0.0.1:3000":            {},
+	"https://payment-kita.excitech.id": {},
+	"https://paymentkita.netlify.app":  {},
+	"https://api-dompet-ku.excitech.id": {},
+}
+
 func applyCORSMiddleware(r *gin.Engine) {
 	r.Use(func(c *gin.Context) {
 		origin := c.Request.Header.Get("Origin")
-		if origin != "" {
+		if _, ok := allowedCORSOrigins[origin]; ok {
 			c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
-		} else {
+		} else if origin == "" {
 			c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 		}
 
