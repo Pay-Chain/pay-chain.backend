@@ -686,7 +686,7 @@ func (u *PaymentUsecase) buildTransactionDataWithInput(
 			}
 			approvalAmount := strings.TrimSpace(previewApprovalAmount)
 			if approvalAmount == "" || approvalAmount == "0" {
-				approvalAmountResolved, approvalErr := u.calculateOnchainApprovalAmount(payment, contract.ContractAddress)
+				approvalAmountResolved, approvalErr := u.CalculateOnchainApprovalAmount(payment, contract.ContractAddress)
 				if approvalErr != nil {
 					// Keep payment creation resilient when optional quote path is unavailable.
 					// Fallback to total charged amount (or source amount) to avoid API hard-fail.
@@ -993,7 +993,7 @@ func (u *PaymentUsecase) buildDeployEscrowHex(salt [32]byte, owner common.Addres
 	return "0x" + hex.EncodeToString(append(common.FromHex(DeployEscrowSelector), packed...))
 }
 
-func (u *PaymentUsecase) calculateOnchainApprovalAmount(payment *entities.Payment, gatewayAddress string) (string, error) {
+func (u *PaymentUsecase) CalculateOnchainApprovalAmount(payment *entities.Payment, gatewayAddress string) (string, error) {
 	if payment == nil || gatewayAddress == "" {
 		return "", fmt.Errorf("invalid payment or gateway address")
 	}
@@ -1102,6 +1102,14 @@ func (u *PaymentUsecase) calculateOnchainApprovalAmount(payment *entities.Paymen
 	if onchainTotal.Cmp(totalCharged) < 0 {
 		onchainTotal = totalCharged
 	}
+
+	// Add 1% safety buffer (standard practice for bridges/DEXs to handle minor fee fluctuations)
+	buffer := new(big.Int).Div(onchainTotal, big.NewInt(100))
+	if buffer.Cmp(big.NewInt(1000)) < 0 {
+		buffer = big.NewInt(1000) // Minimum 1000 atomic units buffer
+	}
+	onchainTotal.Add(onchainTotal, buffer)
+
 	return onchainTotal.String(), nil
 }
 

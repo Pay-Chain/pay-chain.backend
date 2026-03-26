@@ -346,7 +346,34 @@ func (u *PartnerPaymentSessionUsecase) CreateSession(ctx context.Context, input 
 			normalizedToken := normalizeEvmAddress(quote.SelectedTokenAddress)
 			if normalizedToken != "0x0000000000000000000000000000000000000000" {
 				session.InstructionApprovalTo = normalizedToken
-				session.InstructionApprovalDataHex = u.paymentUC.buildErc20ApproveHex(contract.ContractAddress, amountInSource.String())
+				
+				// Resolve chain IDs to internal UUIDs for CalculateOnchainApprovalAmount
+				sourceChain, _ := u.chainRepo.GetByCAIP2(txCtx, quote.SelectedChainID)
+				destChain, _ := u.chainRepo.GetByCAIP2(txCtx, destChainCAIP2)
+
+				// Create a temporary payment object to satisfy CalculateOnchainApprovalAmount
+				// TotalCharged should be at least source amount; calculation logic will handle fees.
+				tempPayment := &domainentities.Payment{
+					SourceTokenAddress: quote.SelectedTokenAddress,
+					SourceAmount:       quote.QuotedAmount,
+					TotalCharged:       quote.QuotedAmount,
+					DestTokenAddress:   destTokenAddress,
+					ReceiverAddress:    session.DestWallet,
+				}
+				if sourceChain != nil {
+					tempPayment.SourceChainID = sourceChain.ID
+				}
+				if destChain != nil {
+					tempPayment.DestChainID = destChain.ID
+				}
+
+				approvalAmount, err := u.paymentUC.CalculateOnchainApprovalAmount(tempPayment, contract.ContractAddress)
+				if err != nil {
+					// Fallback to base amount if on-chain calculation fails
+					approvalAmount = quote.QuotedAmount
+				}
+
+				session.InstructionApprovalDataHex = u.paymentUC.buildErc20ApproveHex(contract.ContractAddress, approvalAmount)
 			}
 		}
 
