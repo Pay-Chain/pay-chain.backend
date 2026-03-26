@@ -57,6 +57,8 @@ type PartnerPaymentSession struct {
 	InstructionDataHex    string     `gorm:"type:text"`
 	InstructionDataBase58 string     `gorm:"type:text"`
 	InstructionDataBase64 string     `gorm:"type:text"`
+	InstructionApprovalTo string     `gorm:"type:varchar(128)"`
+	InstructionApprovalDataHex string `gorm:"type:text"`
 	QuoteRate             *string    `gorm:"type:decimal(78,18)"`
 	QuoteSource           *string    `gorm:"type:varchar(128)"`
 	QuoteRoute            *string    `gorm:"type:text"`

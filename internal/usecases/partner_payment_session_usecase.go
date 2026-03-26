@@ -52,6 +52,8 @@ type CreatePartnerPaymentSessionOutput struct {
 		ProgramID  string `json:"program_id,omitempty"`
 		DataBase58 string `json:"data_base58,omitempty"`
 		DataBase64 string `json:"data_base64,omitempty"`
+		ApprovalTo string `json:"approval_to,omitempty"`
+		ApprovalHex string `json:"approval_hex_data,omitempty"`
 	} `json:"payment_instruction"`
 	Quote struct {
 		QuoteID        string    `json:"quote_id"`
@@ -81,6 +83,8 @@ type GetPartnerPaymentSessionOutput struct {
 		ProgramID  string `json:"program_id,omitempty"`
 		DataBase58 string `json:"data_base58,omitempty"`
 		DataBase64 string `json:"data_base64,omitempty"`
+		ApprovalTo string `json:"approval_to,omitempty"`
+		ApprovalHex string `json:"approval_hex_data,omitempty"`
 	} `json:"payment_instruction"`
 }
 
@@ -106,6 +110,8 @@ type ResolvePartnerPaymentCodeOutput struct {
 		ProgramID  string `json:"program_id,omitempty"`
 		DataBase58 string `json:"data_base58,omitempty"`
 		DataBase64 string `json:"data_base64,omitempty"`
+		ApprovalTo string `json:"approval_to,omitempty"`
+		ApprovalHex string `json:"approval_hex_data,omitempty"`
 	} `json:"payment_instruction"`
 }
 
@@ -261,12 +267,12 @@ func (u *PartnerPaymentSessionUsecase) CreateSession(ctx context.Context, input 
 
 		// V2 Logic: Build transaction data
 		var txData *domainentities.PaymentRequestTxData
+		amountInSource := new(big.Int)
+		amountInSource.SetString(paymentRequest.Amount, 10)
+
 		if contract != nil {
 			addrType, _ := abi.NewType("address", "", nil)
 			receiverPacked, _ := abi.Arguments{{Type: addrType}}.Pack(common.HexToAddress(normalizeEvmAddress(paymentRequest.WalletAddress)))
-
-			amountInSource := new(big.Int)
-			amountInSource.SetString(paymentRequest.Amount, 10)
 
 			v2Args := PaymentRequestV2Args{
 				DestChainIDBytes:   []byte(destChainCAIP2),
@@ -335,6 +341,15 @@ func (u *PartnerPaymentSessionUsecase) CreateSession(ctx context.Context, input 
 			UpdatedAt:             now,
 		}
 
+		// ERC20 Approval logic for EVM
+		if strings.HasPrefix(selectedChainCAIP2, "eip155:") && contract != nil {
+			normalizedToken := normalizeEvmAddress(quote.SelectedTokenAddress)
+			if normalizedToken != "0x0000000000000000000000000000000000000000" {
+				session.InstructionApprovalTo = normalizedToken
+				session.InstructionApprovalDataHex = u.paymentUC.buildErc20ApproveHex(contract.ContractAddress, amountInSource.String())
+			}
+		}
+
 		session.PaymentCode, err = u.jweService.Encrypt(services.JWEPayload{
 			Version:    "partner_session.v1",
 			SessionID:  session.ID.String(),
@@ -375,12 +390,16 @@ func (u *PartnerPaymentSessionUsecase) CreateSession(ctx context.Context, input 
 			Status:          string(session.Status),
 		}
 		output.PaymentInstruction.ChainID = session.SelectedChainID
-		output.PaymentInstruction.To = txData.To
-		output.PaymentInstruction.Value = "0"
-		output.PaymentInstruction.Data = txData.Hex
-		output.PaymentInstruction.ProgramID = txData.ProgramID
-		output.PaymentInstruction.DataBase58 = txData.Base58
-		output.PaymentInstruction.DataBase64 = txData.Base64
+		if txData != nil {
+			output.PaymentInstruction.To = txData.To
+			output.PaymentInstruction.Value = "0"
+			output.PaymentInstruction.Data = txData.Hex
+			output.PaymentInstruction.ProgramID = txData.ProgramID
+			output.PaymentInstruction.DataBase58 = txData.Base58
+			output.PaymentInstruction.DataBase64 = txData.Base64
+		}
+		output.PaymentInstruction.ApprovalTo = session.InstructionApprovalTo
+		output.PaymentInstruction.ApprovalHex = session.InstructionApprovalDataHex
 		output.Quote.QuoteID = quote.ID.String()
 		output.Quote.PriceSource = quote.PriceSource
 		output.Quote.QuoteRate = quote.QuoteRate
@@ -457,6 +476,8 @@ func (u *PartnerPaymentSessionUsecase) ResolvePaymentCode(ctx context.Context, i
 	out.PaymentInstruction.ProgramID = instructionProgramID(session)
 	out.PaymentInstruction.DataBase58 = session.InstructionDataBase58
 	out.PaymentInstruction.DataBase64 = session.InstructionDataBase64
+	out.PaymentInstruction.ApprovalTo = session.InstructionApprovalTo
+	out.PaymentInstruction.ApprovalHex = session.InstructionApprovalDataHex
 	return out, nil
 }
 
@@ -480,6 +501,8 @@ func buildPartnerPaymentSessionReadModel(session *domainentities.PartnerPaymentS
 	out.PaymentInstruction.ProgramID = instructionProgramID(session)
 	out.PaymentInstruction.DataBase58 = session.InstructionDataBase58
 	out.PaymentInstruction.DataBase64 = session.InstructionDataBase64
+	out.PaymentInstruction.ApprovalTo = session.InstructionApprovalTo
+	out.PaymentInstruction.ApprovalHex = session.InstructionApprovalDataHex
 	return out
 }
 

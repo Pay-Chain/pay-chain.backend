@@ -63,6 +63,8 @@ type CreatePaymentOutput struct {
 		ProgramID  string `json:"program_id,omitempty"`
 		DataBase58 string `json:"data_base58,omitempty"`
 		DataBase64 string `json:"data_base64,omitempty"`
+		ApprovalTo   string `json:"approval_to,omitempty"`
+		ApprovalHex  string `json:"approval_hex_data,omitempty"`
 	} `json:"payment_instruction"`
 }
 
@@ -242,6 +244,8 @@ func (u *CreatePaymentUsecase) CreatePayment(ctx context.Context, input *CreateP
 	out.PaymentInstruction.ProgramID = sessionOut.PaymentInstruction.ProgramID
 	out.PaymentInstruction.DataBase58 = sessionOut.PaymentInstruction.DataBase58
 	out.PaymentInstruction.DataBase64 = sessionOut.PaymentInstruction.DataBase64
+	out.PaymentInstruction.ApprovalTo = sessionOut.PaymentInstruction.ApprovalTo
+	out.PaymentInstruction.ApprovalHex = sessionOut.PaymentInstruction.ApprovalHex
 	return out, nil
 }
 

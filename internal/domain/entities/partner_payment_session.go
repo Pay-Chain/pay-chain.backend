@@ -72,6 +72,8 @@ type PartnerPaymentSession struct {
 	InstructionDataHex    string                      `json:"instructionDataHex,omitempty"`
 	InstructionDataBase58 string                      `json:"instructionDataBase58,omitempty"`
 	InstructionDataBase64 string                      `json:"instructionDataBase64,omitempty"`
+	InstructionApprovalTo string                      `json:"instructionApprovalTo,omitempty"`
+	InstructionApprovalDataHex string                 `json:"instructionApprovalDataHex,omitempty"`
 	QuoteRate             *string                     `json:"quoteRate,omitempty"`
 	QuoteSource           *string                     `json:"quoteSource,omitempty"`
 	QuoteRoute            *string                     `json:"quoteRoute,omitempty"`
