@@ -51,7 +51,7 @@ func TestPaymentUsecase_ResolveVaultAddressForApproval(t *testing.T) {
 			},
 		},
 	}
-	got := u.resolveVaultAddressForApproval(chainID, "")
+	got := u.ResolveVaultAddressForApproval(chainID, "")
 	require.Equal(t, "0x1111111111111111111111111111111111111111", got)
 
 	u2 := &PaymentUsecase{
@@ -61,18 +61,18 @@ func TestPaymentUsecase_ResolveVaultAddressForApproval(t *testing.T) {
 			},
 		},
 	}
-	got = u2.resolveVaultAddressForApproval(chainID, "")
+	got = u2.ResolveVaultAddressForApproval(chainID, "")
 	require.Equal(t, "", got)
 }
 
 func TestPaymentUsecase_CalculateOnchainApprovalAmount_Guards(t *testing.T) {
 	u := &PaymentUsecase{}
 
-	_, err := u.calculateOnchainApprovalAmount(nil, "0xabc")
+	_, err := u.CalculateOnchainApprovalAmount(nil, "0xabc")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid payment or gateway address")
 
-	_, err = u.calculateOnchainApprovalAmount(&entities.Payment{SourceAmount: "bad"}, "0xabc")
+	_, err = u.CalculateOnchainApprovalAmount(&entities.Payment{SourceAmount: "bad"}, "0xabc")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid source amount")
 }

@@ -680,7 +680,7 @@ func (u *PaymentUsecase) buildTransactionDataWithInput(
 		}
 
 		if u.shouldRequireEvmApproval(payment.SourceTokenAddress) {
-			vaultAddress := u.resolveVaultAddressForApproval(payment.SourceChainID, contract.ContractAddress)
+			vaultAddress := u.ResolveVaultAddressForApproval(payment.SourceChainID, contract.ContractAddress)
 			if vaultAddress == "" {
 				return nil, fmt.Errorf("vault contract address is not configured for source chain")
 			}
@@ -839,7 +839,7 @@ func (u *PaymentUsecase) shouldRequireEvmApproval(tokenAddress string) bool {
 	return addr != "" && addr != "native" && addr != "0x0000000000000000000000000000000000000000"
 }
 
-func (u *PaymentUsecase) resolveVaultAddressForApproval(sourceChainID uuid.UUID, gatewayAddress string) string {
+func (u *PaymentUsecase) ResolveVaultAddressForApproval(sourceChainID uuid.UUID, gatewayAddress string) string {
 	if vaultContract, err := u.contractRepo.GetActiveContract(context.Background(), sourceChainID, entities.ContractTypeVault); err == nil && vaultContract != nil {
 		return vaultContract.ContractAddress
 	}

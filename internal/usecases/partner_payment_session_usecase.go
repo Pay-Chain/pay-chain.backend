@@ -367,13 +367,19 @@ func (u *PartnerPaymentSessionUsecase) CreateSession(ctx context.Context, input 
 					tempPayment.DestChainID = destChain.ID
 				}
 
+				vaultAddress := u.paymentUC.ResolveVaultAddressForApproval(sourceChain.ID, contract.ContractAddress)
+				if vaultAddress == "" {
+					// Fallback to gateway if vault resolution fails
+					vaultAddress = contract.ContractAddress
+				}
+
 				approvalAmount, err := u.paymentUC.CalculateOnchainApprovalAmount(tempPayment, contract.ContractAddress)
 				if err != nil {
 					// Fallback to base amount if on-chain calculation fails
 					approvalAmount = quote.QuotedAmount
 				}
 
-				session.InstructionApprovalDataHex = u.paymentUC.buildErc20ApproveHex(contract.ContractAddress, approvalAmount)
+				session.InstructionApprovalDataHex = u.paymentUC.buildErc20ApproveHex(vaultAddress, approvalAmount)
 			}
 		}
 

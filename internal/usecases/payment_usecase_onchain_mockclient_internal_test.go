@@ -50,7 +50,7 @@ func TestPaymentUsecase_CalculateOnchainApprovalAmount_MockClientBranches(t *tes
 			}),
 			ABIResolverMixin: NewABIResolverMixin(scRepo),
 		}
-		val, err := u.calculateOnchainApprovalAmount(&entities.Payment{
+		val, err := u.CalculateOnchainApprovalAmount(&entities.Payment{
 			SourceChainID: chainID,
 			SourceAmount:  "1000",
 			TotalCharged:  "1050",
@@ -69,7 +69,7 @@ func TestPaymentUsecase_CalculateOnchainApprovalAmount_MockClientBranches(t *tes
 			}),
 			ABIResolverMixin: NewABIResolverMixin(scRepo),
 		}
-		_, err := u.calculateOnchainApprovalAmount(&entities.Payment{
+		_, err := u.CalculateOnchainApprovalAmount(&entities.Payment{
 			SourceChainID: chainID,
 			SourceAmount:  "1000",
 			TotalCharged:  "1000",
@@ -89,7 +89,7 @@ func TestPaymentUsecase_CalculateOnchainApprovalAmount_MockClientBranches(t *tes
 			}),
 			ABIResolverMixin: NewABIResolverMixin(scRepo),
 		}
-		_, err := u.calculateOnchainApprovalAmount(&entities.Payment{
+		_, err := u.CalculateOnchainApprovalAmount(&entities.Payment{
 			SourceChainID: chainID,
 			SourceAmount:  "1000",
 			TotalCharged:  "1000",
@@ -109,7 +109,7 @@ func TestPaymentUsecase_CalculateOnchainApprovalAmount_MockClientBranches(t *tes
 			}),
 			ABIResolverMixin: NewABIResolverMixin(scRepo),
 		}
-		val, err := u.calculateOnchainApprovalAmount(&entities.Payment{
+		val, err := u.CalculateOnchainApprovalAmount(&entities.Payment{
 			SourceChainID: chainID,
 			SourceAmount:  "1000",
 			TotalCharged:  "1200",
@@ -130,7 +130,7 @@ func TestPaymentUsecase_CalculateOnchainApprovalAmount_MockClientBranches(t *tes
 			}),
 			ABIResolverMixin: NewABIResolverMixin(scRepo),
 		}
-		val, err := u.calculateOnchainApprovalAmount(&entities.Payment{
+		val, err := u.CalculateOnchainApprovalAmount(&entities.Payment{
 			SourceChainID: chainID,
 			SourceAmount:  "1000",
 			TotalCharged:  "1000",
@@ -157,7 +157,7 @@ func TestPaymentUsecase_CalculateOnchainApprovalAmount_MockClientBranches(t *tes
 			routePolicyRepo:  nil,
 			ABIResolverMixin: NewABIResolverMixin(scRepo),
 		}
-		val, err := u.calculateOnchainApprovalAmount(&entities.Payment{
+		val, err := u.CalculateOnchainApprovalAmount(&entities.Payment{
 			SourceChainID: chainID,
 			SourceAmount:  "1000",
 			TotalCharged:  "not-a-number",
@@ -176,7 +176,7 @@ func TestPaymentUsecase_CalculateOnchainApprovalAmount_MockClientBranches(t *tes
 			}),
 			ABIResolverMixin: NewABIResolverMixin(scRepo),
 		}
-		_, err := u.calculateOnchainApprovalAmount(&entities.Payment{
+		_, err := u.CalculateOnchainApprovalAmount(&entities.Payment{
 			SourceChainID: chainID,
 			SourceAmount:  "1000",
 			TotalCharged:  "1000",
@@ -196,7 +196,7 @@ func TestPaymentUsecase_CalculateOnchainApprovalAmount_MockClientBranches(t *tes
 			}),
 			ABIResolverMixin: NewABIResolverMixin(scRepo),
 		}
-		_, err := u.calculateOnchainApprovalAmount(&entities.Payment{
+		_, err := u.CalculateOnchainApprovalAmount(&entities.Payment{
 			SourceChainID: chainID,
 			SourceAmount:  "1000",
 			TotalCharged:  "1000",

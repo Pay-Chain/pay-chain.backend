@@ -20,7 +20,7 @@ func TestPaymentUsecase_ResolveVaultAddress_EmptyGatewayBranch(t *testing.T) {
 		contractRepo:     scRepo,
 		ABIResolverMixin: NewABIResolverMixin(scRepo),
 	}
-	got := u.resolveVaultAddressForApproval(uuid.New(), "")
+	got := u.ResolveVaultAddressForApproval(uuid.New(), "")
 	require.Equal(t, "", got)
 }
 
@@ -44,7 +44,7 @@ func TestPaymentUsecase_CalculateOnchainApprovalAmount_MoreErrorBranches(t *test
 			clientFactory:    blockchain.NewClientFactory(),
 			ABIResolverMixin: NewABIResolverMixin(scRepo),
 		}
-		_, err := u.calculateOnchainApprovalAmount(&entities.Payment{
+		_, err := u.CalculateOnchainApprovalAmount(&entities.Payment{
 			SourceChainID: chainID,
 			SourceAmount:  "1000",
 			TotalCharged:  "1000",
@@ -75,7 +75,7 @@ func TestPaymentUsecase_CalculateOnchainApprovalAmount_MoreErrorBranches(t *test
 			clientFactory:    blockchain.NewClientFactory(),
 			ABIResolverMixin: NewABIResolverMixin(scRepo),
 		}
-		_, err := u.calculateOnchainApprovalAmount(&entities.Payment{
+		_, err := u.CalculateOnchainApprovalAmount(&entities.Payment{
 			SourceChainID: chainID,
 			SourceAmount:  "1000",
 			TotalCharged:  "1000",

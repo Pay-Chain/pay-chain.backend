@@ -135,7 +135,7 @@ func TestPaymentUsecase_CalculateOnchainApprovalAmount_QuoteSuccess(t *testing.T
 	}
 
 	payment := &entities.Payment{SourceChainID: chainID, SourceAmount: "1000", TotalCharged: "1050"}
-	amount, err := u.calculateOnchainApprovalAmount(payment, "0x1111111111111111111111111111111111111111")
+	amount, err := u.CalculateOnchainApprovalAmount(payment, "0x1111111111111111111111111111111111111111")
 	require.NoError(t, err)
 	require.Equal(t, "1100", amount)
 }
@@ -167,7 +167,7 @@ func TestPaymentUsecase_CalculateOnchainApprovalAmount_FallbackFeePath(t *testin
 	}
 
 	payment := &entities.Payment{SourceChainID: chainID, SourceAmount: "1000", TotalCharged: "1000"}
-	amount, err := u.calculateOnchainApprovalAmount(payment, "0x1111111111111111111111111111111111111111")
+	amount, err := u.CalculateOnchainApprovalAmount(payment, "0x1111111111111111111111111111111111111111")
 	require.NoError(t, err)
 	require.Equal(t, "1010", amount)
 }
@@ -195,7 +195,7 @@ func TestPaymentUsecase_ResolveVaultAddressForApproval_FromGatewayView(t *testin
 		ABIResolverMixin: NewABIResolverMixin(scRepo),
 	}
 
-	got := u.resolveVaultAddressForApproval(chainID, "0x1111111111111111111111111111111111111111")
+	got := u.ResolveVaultAddressForApproval(chainID, "0x1111111111111111111111111111111111111111")
 	require.Equal(t, vaultAddress.Hex(), got)
 }
 
@@ -208,7 +208,7 @@ func TestPaymentUsecase_ResolveVaultAddressForApproval_FallbackBranches(t *testi
 			chainRepo:     &approvalChainRepoStub{chain: nil},
 			clientFactory: blockchain.NewClientFactory(),
 		}
-		got := u.resolveVaultAddressForApproval(uuid.New(), "0x1111111111111111111111111111111111111111")
+		got := u.ResolveVaultAddressForApproval(uuid.New(), "0x1111111111111111111111111111111111111111")
 		require.Equal(t, "", got)
 	})
 
@@ -225,7 +225,7 @@ func TestPaymentUsecase_ResolveVaultAddressForApproval_FallbackBranches(t *testi
 			}},
 			clientFactory: blockchain.NewClientFactory(),
 		}
-		got := u.resolveVaultAddressForApproval(chainID, "0x1111111111111111111111111111111111111111")
+		got := u.ResolveVaultAddressForApproval(chainID, "0x1111111111111111111111111111111111111111")
 		require.Equal(t, "", got)
 	})
 
@@ -244,7 +244,7 @@ func TestPaymentUsecase_ResolveVaultAddressForApproval_FallbackBranches(t *testi
 			}},
 			clientFactory: blockchain.NewClientFactory(),
 		}
-		got := u.resolveVaultAddressForApproval(chainID, "0x1111111111111111111111111111111111111111")
+		got := u.ResolveVaultAddressForApproval(chainID, "0x1111111111111111111111111111111111111111")
 		require.Equal(t, "", got)
 	})
 }
@@ -252,14 +252,14 @@ func TestPaymentUsecase_ResolveVaultAddressForApproval_FallbackBranches(t *testi
 func TestPaymentUsecase_CalculateOnchainApprovalAmount_ErrorBranches(t *testing.T) {
 	t.Run("invalid payment input", func(t *testing.T) {
 		u := &PaymentUsecase{}
-		_, err := u.calculateOnchainApprovalAmount(nil, "")
+		_, err := u.CalculateOnchainApprovalAmount(nil, "")
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "invalid payment or gateway address")
 	})
 
 	t.Run("invalid source amount", func(t *testing.T) {
 		u := &PaymentUsecase{}
-		_, err := u.calculateOnchainApprovalAmount(&entities.Payment{
+		_, err := u.CalculateOnchainApprovalAmount(&entities.Payment{
 			SourceAmount: "not-number",
 		}, "0x1111111111111111111111111111111111111111")
 		require.Error(t, err)
@@ -271,7 +271,7 @@ func TestPaymentUsecase_CalculateOnchainApprovalAmount_ErrorBranches(t *testing.
 			chainRepo:     &approvalChainRepoStub{chain: nil},
 			clientFactory: blockchain.NewClientFactory(),
 		}
-		_, err := u.calculateOnchainApprovalAmount(&entities.Payment{
+		_, err := u.CalculateOnchainApprovalAmount(&entities.Payment{
 			SourceChainID: uuid.New(),
 			SourceAmount:  "1000",
 			TotalCharged:  "1000",
@@ -289,7 +289,7 @@ func TestPaymentUsecase_CalculateOnchainApprovalAmount_ErrorBranches(t *testing.
 			}},
 			clientFactory: blockchain.NewClientFactory(),
 		}
-		_, err := u.calculateOnchainApprovalAmount(&entities.Payment{
+		_, err := u.CalculateOnchainApprovalAmount(&entities.Payment{
 			SourceChainID: chainID,
 			SourceAmount:  "1000",
 			TotalCharged:  "1000",
@@ -321,7 +321,7 @@ func TestPaymentUsecase_CalculateOnchainApprovalAmount_ErrorBranches(t *testing.
 			clientFactory:    blockchain.NewClientFactory(),
 			ABIResolverMixin: NewABIResolverMixin(scRepo),
 		}
-		_, err := u.calculateOnchainApprovalAmount(&entities.Payment{
+		_, err := u.CalculateOnchainApprovalAmount(&entities.Payment{
 			SourceChainID: chainID,
 			SourceAmount:  "1000",
 			TotalCharged:  "1000",
@@ -355,7 +355,7 @@ func TestPaymentUsecase_CalculateOnchainApprovalAmount_ErrorBranches(t *testing.
 			clientFactory:    blockchain.NewClientFactory(),
 			ABIResolverMixin: NewABIResolverMixin(scRepo),
 		}
-		_, err := u.calculateOnchainApprovalAmount(&entities.Payment{
+		_, err := u.CalculateOnchainApprovalAmount(&entities.Payment{
 			SourceChainID: chainID,
 			SourceAmount:  "1000",
 			TotalCharged:  "1000",
@@ -389,7 +389,7 @@ func TestPaymentUsecase_CalculateOnchainApprovalAmount_ErrorBranches(t *testing.
 			clientFactory:    blockchain.NewClientFactory(),
 			ABIResolverMixin: NewABIResolverMixin(scRepo),
 		}
-		amount, err := u.calculateOnchainApprovalAmount(&entities.Payment{
+		amount, err := u.CalculateOnchainApprovalAmount(&entities.Payment{
 			SourceChainID: chainID,
 			SourceAmount:  "1000",
 			TotalCharged:  "invalid",

@@ -56,7 +56,7 @@ func TestPaymentUsecase_ResolveVaultAddressForApproval_MoreBranches(t *testing.T
 			}},
 			chainRepo: &approvalNilChainRepoStub{chain: nil},
 		}
-		got := u.resolveVaultAddressForApproval(chainID, "0x1111111111111111111111111111111111111111")
+		got := u.ResolveVaultAddressForApproval(chainID, "0x1111111111111111111111111111111111111111")
 		require.Equal(t, "", got)
 	})
 
@@ -75,7 +75,7 @@ func TestPaymentUsecase_ResolveVaultAddressForApproval_MoreBranches(t *testing.T
 			}},
 			clientFactory: blockchain.NewClientFactory(),
 		}
-		got := u.resolveVaultAddressForApproval(chainID, "0x1111111111111111111111111111111111111111")
+		got := u.ResolveVaultAddressForApproval(chainID, "0x1111111111111111111111111111111111111111")
 		require.Equal(t, "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa", got)
 	})
 
@@ -97,7 +97,7 @@ func TestPaymentUsecase_ResolveVaultAddressForApproval_MoreBranches(t *testing.T
 			chainRepo:     &approvalNilChainRepoStub{chain: &entities.Chain{ID: chainID, RPCURL: rpcURL}},
 			clientFactory: factory,
 		}
-		got := u.resolveVaultAddressForApproval(chainID, "0x1111111111111111111111111111111111111111")
+		got := u.ResolveVaultAddressForApproval(chainID, "0x1111111111111111111111111111111111111111")
 		require.Equal(t, "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa", got)
 	})
 
@@ -107,7 +107,7 @@ func TestPaymentUsecase_ResolveVaultAddressForApproval_MoreBranches(t *testing.T
 				return nil, errors.New("not found")
 			}},
 		}
-		got := u.resolveVaultAddressForApproval(chainID, "")
+		got := u.ResolveVaultAddressForApproval(chainID, "")
 		require.Equal(t, "", got)
 	})
 
@@ -124,7 +124,7 @@ func TestPaymentUsecase_ResolveVaultAddressForApproval_MoreBranches(t *testing.T
 			chainRepo:     &approvalNilChainRepoStub{chain: &entities.Chain{ID: chainID, RPCURL: rpcURL}},
 			clientFactory: factory,
 		}
-		got := u.resolveVaultAddressForApproval(chainID, "0x1111111111111111111111111111111111111111")
+		got := u.ResolveVaultAddressForApproval(chainID, "0x1111111111111111111111111111111111111111")
 		require.Equal(t, "", got)
 	})
 
@@ -136,7 +136,7 @@ func TestPaymentUsecase_ResolveVaultAddressForApproval_MoreBranches(t *testing.T
 			chainRepo:     &approvalNilChainRepoStub{chain: &entities.Chain{ID: chainID}},
 			clientFactory: blockchain.NewClientFactory(),
 		}
-		got := u.resolveVaultAddressForApproval(chainID, "0x1111111111111111111111111111111111111111")
+		got := u.ResolveVaultAddressForApproval(chainID, "0x1111111111111111111111111111111111111111")
 		require.Equal(t, "", got)
 	})
 }

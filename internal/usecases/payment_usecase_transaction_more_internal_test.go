@@ -258,7 +258,7 @@ func TestPaymentUsecase_ResolveVaultAddressForApproval_UsesActiveRPCList(t *test
 		clientFactory: blockchain.NewClientFactory(),
 	}
 
-	got := u.resolveVaultAddressForApproval(chainID, "0x1111111111111111111111111111111111111111")
+	got := u.ResolveVaultAddressForApproval(chainID, "0x1111111111111111111111111111111111111111")
 	require.Equal(t, vault.Hex(), got)
 }
 
@@ -275,7 +275,7 @@ func TestPaymentUsecase_CalculateOnchainApprovalAmount_ClientCreateError(t *test
 		}},
 		ABIResolverMixin: NewABIResolverMixin(&scRepoStub{}),
 	}
-	_, err := u.calculateOnchainApprovalAmount(&entities.Payment{
+	_, err := u.CalculateOnchainApprovalAmount(&entities.Payment{
 		SourceChainID: chainID,
 		SourceAmount:  "1000",
 		TotalCharged:  "1000",
