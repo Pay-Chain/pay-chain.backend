@@ -3,6 +3,7 @@ package usecases
 import (
 	"context"
 	"fmt"
+	"math/big"
 	"strings"
 	"time"
 
@@ -56,15 +57,15 @@ type CreatePaymentOutput struct {
 	PaymentURL               string    `json:"payment_url"`
 	PaymentCode              string    `json:"payment_code"`
 	PaymentInstruction       struct {
-		ChainID    string `json:"chain_id"`
-		To         string `json:"to,omitempty"`
-		Value      string `json:"value,omitempty"`
-		Data       string `json:"data,omitempty"`
-		ProgramID  string `json:"program_id,omitempty"`
-		DataBase58 string `json:"data_base58,omitempty"`
-		DataBase64 string `json:"data_base64,omitempty"`
-		ApprovalTo   string `json:"approval_to,omitempty"`
-		ApprovalHex  string `json:"approval_hex_data,omitempty"`
+		ChainID     string `json:"chain_id"`
+		To          string `json:"to,omitempty"`
+		Value       string `json:"value,omitempty"`
+		Data        string `json:"data,omitempty"`
+		ProgramID   string `json:"program_id,omitempty"`
+		DataBase58  string `json:"data_base58,omitempty"`
+		DataBase64  string `json:"data_base64,omitempty"`
+		ApprovalTo  string `json:"approval_to,omitempty"`
+		ApprovalHex string `json:"approval_hex_data,omitempty"`
 	} `json:"payment_instruction"`
 }
 
@@ -322,7 +323,7 @@ func (u *CreatePaymentUsecase) createSyntheticSelectedTokenQuote(ctx context.Con
 		SelectedTokenSymbol:   selectedToken.Symbol,
 		SelectedTokenDecimals: selectedToken.Decimals,
 		QuotedAmount:          atomicAmount,
-		QuoteRate:             fmt.Sprintf("1 %s = 1 %s", selectedToken.Symbol, selectedToken.Symbol),
+		QuoteRate:             quoteRateFromAtomicAmounts(atomicAmount, selectedToken.Decimals, atomicAmount, selectedToken.Decimals),
 		PriceSource:           priceSource,
 		Route:                 selectedToken.Symbol,
 		SlippageBps:           0,
@@ -374,7 +375,7 @@ func (u *CreatePaymentUsecase) createInvoiceCurrencyQuote(ctx context.Context, m
 		return nil, err
 	}
 	if strings.EqualFold(selectedToken.Symbol, settlement.BridgeTokenSymbol) {
-		return u.createCompositeQuote(ctx, merchantID, selectedChainCAIP2, selectedToken, settlement.InvoiceToken.Symbol, invoiceAtomic, destBridgeAmount, fmt.Sprintf("cross-chain-bridge-token-direct-via-%s", strings.ToLower(settlement.BridgeTokenSymbol)), routeSummary)
+		return u.createCompositeQuote(ctx, merchantID, selectedChainCAIP2, selectedToken, settlement.InvoiceToken.Symbol, settlement.InvoiceToken.Decimals, invoiceAtomic, destBridgeAmount, fmt.Sprintf("cross-chain-bridge-token-direct-via-%s", strings.ToLower(settlement.BridgeTokenSymbol)), routeSummary)
 	}
 
 	sourceBridgeToken, err := u.tokenRepo.GetBySymbol(ctx, settlement.BridgeTokenSymbol, selectedToken.ChainUUID)
@@ -403,6 +404,7 @@ func (u *CreatePaymentUsecase) createInvoiceCurrencyQuote(ctx context.Context, m
 		selectedChainCAIP2,
 		selectedToken,
 		settlement.InvoiceToken.Symbol,
+		settlement.InvoiceToken.Decimals,
 		invoiceAtomic,
 		sourceLegQuote.QuotedAmount,
 		fmt.Sprintf("cross-chain-normalized-via-%s", strings.ToLower(settlement.BridgeTokenSymbol)),
@@ -432,7 +434,7 @@ func (u *CreatePaymentUsecase) resolveCrossChainBridgeAmount(ctx context.Context
 	return destQuote.QuotedAmount, destQuote.Route, destQuote.PriceSource, nil
 }
 
-func (u *CreatePaymentUsecase) createCompositeQuote(ctx context.Context, merchantID uuid.UUID, selectedChainCAIP2 string, selectedToken *entities.Token, invoiceCurrency string, invoiceAtomic string, quotedAmount string, priceSource string, route string) (*CreatePartnerQuoteOutput, error) {
+func (u *CreatePaymentUsecase) createCompositeQuote(ctx context.Context, merchantID uuid.UUID, selectedChainCAIP2 string, selectedToken *entities.Token, invoiceCurrency string, invoiceDecimals int, invoiceAtomic string, quotedAmount string, priceSource string, route string) (*CreatePartnerQuoteOutput, error) {
 	now := time.Now().UTC()
 	quote := &entities.PaymentQuote{
 		ID:                    utils.GenerateUUIDv7(),
@@ -444,7 +446,7 @@ func (u *CreatePaymentUsecase) createCompositeQuote(ctx context.Context, merchan
 		SelectedTokenSymbol:   selectedToken.Symbol,
 		SelectedTokenDecimals: selectedToken.Decimals,
 		QuotedAmount:          quotedAmount,
-		QuoteRate:             fmt.Sprintf("%s normalized to %s", invoiceCurrency, selectedToken.Symbol),
+		QuoteRate:             quoteRateFromAtomicAmounts(quotedAmount, selectedToken.Decimals, invoiceAtomic, invoiceDecimals),
 		PriceSource:           priceSource,
 		Route:                 route,
 		SlippageBps:           partnerQuoteSlippage,
@@ -536,4 +538,16 @@ func smallestUnitToDecimalString(amount string, decimals int) string {
 		return whole
 	}
 	return whole + "." + frac
+}
+
+func quoteRateFromAtomicAmounts(quotedAmount string, quotedDecimals int, invoiceAmount string, invoiceDecimals int) string {
+	quoted, ok := new(big.Int).SetString(strings.TrimSpace(quotedAmount), 10)
+	if !ok || quoted == nil || quoted.Sign() <= 0 {
+		return "0"
+	}
+	invoice, ok := new(big.Int).SetString(strings.TrimSpace(invoiceAmount), 10)
+	if !ok || invoice == nil || invoice.Sign() <= 0 {
+		return "0"
+	}
+	return formatNormalizedTokenRatio(quoted, quotedDecimals, invoice, invoiceDecimals, 18)
 }
