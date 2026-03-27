@@ -19,6 +19,7 @@ type CreatePaymentHandler struct {
 
 type createPaymentUsecase interface {
 	CreatePayment(ctx context.Context, input *usecases.CreatePaymentInput) (*usecases.CreatePaymentOutput, error)
+	GetPayment(ctx context.Context, paymentID uuid.UUID) (*usecases.CreatePaymentOutput, error)
 }
 
 func NewCreatePaymentHandler(usecase createPaymentUsecase) *CreatePaymentHandler {
@@ -76,6 +77,26 @@ func (h *CreatePaymentHandler) CreatePayment(c *gin.Context) {
 		PricingType:       req.PricingType,
 		RequestedAmount:   requestedAmount,
 	})
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, http.StatusOK, out)
+}
+
+func (h *CreatePaymentHandler) GetPayment(c *gin.Context) {
+	if h == nil || h.usecase == nil {
+		response.Error(c, domainerrors.InternalServerError("create payment handler is not configured"))
+		return
+	}
+
+	paymentID, err := uuid.Parse(strings.TrimSpace(c.Param("id")))
+	if err != nil {
+		response.Error(c, domainerrors.BadRequest("payment id must be a valid UUID"))
+		return
+	}
+
+	out, err := h.usecase.GetPayment(c.Request.Context(), paymentID)
 	if err != nil {
 		response.Error(c, err)
 		return

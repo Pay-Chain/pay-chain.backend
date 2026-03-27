@@ -287,6 +287,7 @@ func TestPartnerHTTPFlow_CreatePaymentReadResolveWebhook(t *testing.T) {
 		tokenRepo,
 		chainRepo,
 		quoteRepo,
+		sessionRepo,
 		quoteUsecase,
 		sessionUsecase,
 	)

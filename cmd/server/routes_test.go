@@ -57,6 +57,7 @@ func TestRegisterAPIV1Routes_RegistersKeyRoutes(t *testing.T) {
 		{"GET", "/api/v1/payments/:id"},
 		{"GET", "/api/v1/pay/:id"},
 		{"POST", "/api/v1/create-payment"},
+		{"GET", "/api/v1/create-payment/:id"},
 		{"POST", "/api/v1/partner/quotes"},
 		{"POST", "/api/v1/partner/payment-sessions"},
 		{"GET", "/api/v1/partner/payment-sessions/:id"},

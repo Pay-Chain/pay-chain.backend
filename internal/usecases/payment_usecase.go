@@ -11,6 +11,7 @@ import (
 	"math/big"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -38,6 +39,7 @@ var (
 
 var knownUniswapV3QuotersByCAIP2 = map[string]string{
 	"eip155:8453": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
+	"eip155:137":  "0x61fFE014bA17989E743c5F6cB21bF9697530B21e",
 }
 
 // PaymentUsecase handles payment business logic
@@ -2845,6 +2847,7 @@ func (u *PaymentUsecase) getSwapQuote(
 	tokenIn, tokenOut string,
 	amountIn *big.Int,
 ) (*big.Int, error) {
+	ctx = withQuoteRequestCache(ctx)
 	if tokenIn == tokenOut {
 		return new(big.Int).Set(amountIn), nil
 	}
@@ -2854,8 +2857,11 @@ func (u *PaymentUsecase) getSwapQuote(
 		return nil, err
 	}
 
-	swapper, err := u.contractRepo.GetActiveContract(ctx, chain.ID, entities.ContractTypeTokenSwapper)
+	swapper, err := u.getCachedActiveContract(ctx, chain.ID, entities.ContractTypeTokenSwapper)
 	if err != nil {
+		return nil, fmt.Errorf("active swapper not found")
+	}
+	if swapper == nil {
 		return nil, fmt.Errorf("active swapper not found")
 	}
 
@@ -2864,7 +2870,7 @@ func (u *PaymentUsecase) getSwapQuote(
 		return nil, err
 	}
 
-	swapperABI, err := u.ResolveABIWithFallback(ctx, chain.ID, entities.ContractTypeTokenSwapper)
+	swapperABI, err := u.getCachedResolvedABI(ctx, chain.ID, entities.ContractTypeTokenSwapper)
 	if err != nil {
 		return nil, err
 	}
@@ -2897,12 +2903,111 @@ type AccurateSwapQuoteResult struct {
 	RouteSummary string
 }
 
+type AccurateSwapRequiredInputResult struct {
+	AmountIn     *big.Int
+	PriceSource  string
+	RouteSummary string
+}
+
+type accurateQuoteContext struct {
+	chain      *entities.Chain
+	client     *blockchain.EVMClient
+	swapper    *entities.SmartContract
+	swapperABI abi.ABI
+	routePath  []string
+	quoterV3   common.Address
+}
+
+func (u *PaymentUsecase) prepareAccurateQuoteContext(
+	ctx context.Context,
+	chainID uuid.UUID,
+	tokenIn, tokenOut string,
+) (*accurateQuoteContext, error) {
+	var (
+		chain      *entities.Chain
+		swapper    *entities.SmartContract
+		swapperABI abi.ABI
+		chainErr   error
+		swapperErr error
+		abiErr     error
+	)
+
+	var headerWG sync.WaitGroup
+	headerWG.Add(3)
+	go func() {
+		defer headerWG.Done()
+		chain, chainErr = u.chainRepo.GetByID(ctx, chainID)
+	}()
+	go func() {
+		defer headerWG.Done()
+		swapper, swapperErr = u.getCachedActiveContract(ctx, chainID, entities.ContractTypeTokenSwapper)
+	}()
+	go func() {
+		defer headerWG.Done()
+		swapperABI, abiErr = u.getCachedResolvedABI(ctx, chainID, entities.ContractTypeTokenSwapper)
+	}()
+	headerWG.Wait()
+
+	if chainErr != nil {
+		return nil, chainErr
+	}
+	if swapperErr != nil || swapper == nil {
+		return nil, fmt.Errorf("active swapper not found")
+	}
+	if abiErr != nil {
+		return nil, abiErr
+	}
+
+	client, err := u.clientFactory.GetEVMClient(chain.RPCURL)
+	if err != nil {
+		return nil, err
+	}
+
+	var (
+		routePath []string
+		quoterV3  common.Address
+		routeErr  error
+		quoterErr error
+	)
+	var routeWG sync.WaitGroup
+	routeWG.Add(2)
+	go func() {
+		defer routeWG.Done()
+		routePath, routeErr = u.getCachedRoutePath(ctx, client, chainID, swapper.ContractAddress, swapperABI, tokenIn, tokenOut)
+	}()
+	go func() {
+		defer routeWG.Done()
+		quoterV3, quoterErr = u.getCachedQuoterV3(ctx, client, chainID, chain, swapper.ContractAddress)
+	}()
+	routeWG.Wait()
+
+	if routeErr != nil {
+		return nil, routeErr
+	}
+	if quoterErr != nil {
+		return nil, quoterErr
+	}
+	if len(routePath) < 2 {
+		return nil, fmt.Errorf("accurate quote unavailable because route path is empty")
+	}
+
+	return &accurateQuoteContext{
+		chain:      chain,
+		client:     client,
+		swapper:    swapper,
+		swapperABI: swapperABI,
+		routePath:  routePath,
+		quoterV3:   quoterV3,
+	}, nil
+}
+
 func (u *PaymentUsecase) getAccuratePartnerQuote(
 	ctx context.Context,
 	chainID uuid.UUID,
 	tokenIn, tokenOut string,
 	amountIn *big.Int,
 ) (*AccurateSwapQuoteResult, error) {
+	ctx = withQuoteRequestCache(ctx)
 	if amountIn == nil || amountIn.Sign() <= 0 {
 		return nil, fmt.Errorf("amountIn must be positive")
 	}
@@ -2913,50 +3018,95 @@ func (u *PaymentUsecase) getAccuratePartnerQuote(
 		}, nil
 	}
 
-	chain, err := u.chainRepo.GetByID(ctx, chainID)
-	if err != nil {
-		return nil, err
-	}
-	swapper, err := u.contractRepo.GetActiveContract(ctx, chain.ID, entities.ContractTypeTokenSwapper)
-	if err != nil || swapper == nil {
-		return nil, fmt.Errorf("active swapper not found")
-	}
-	client, err := u.clientFactory.GetEVMClient(chain.RPCURL)
+	quoteCtx, err := u.prepareAccurateQuoteContext(ctx, chainID, tokenIn, tokenOut)
 	if err != nil {
 		return nil, err
 	}
 
-	active, feeTier, err := readV3PoolConfig(ctx, client, swapper.ContractAddress, tokenIn, tokenOut)
-	if err != nil {
-		return nil, err
-	}
-	if !active {
-		return nil, fmt.Errorf("accurate quote unavailable for non-v3-direct route")
-	}
-
-	quoterV3, err := callAddressBySignature(ctx, client, swapper.ContractAddress, "quoterV3()")
-	if err != nil {
-		return nil, err
-	}
-	if quoterV3 == (common.Address{}) {
-		if fallback := fallbackKnownUniswapV3Quoter(chain); fallback != "" {
-			quoterV3 = common.HexToAddress(fallback)
-		} else {
-			return nil, fmt.Errorf("accurate quote unavailable because quoterV3 is not configured")
+	currentAmount := new(big.Int).Set(amountIn)
+	for i := 0; i < len(quoteCtx.routePath)-1; i++ {
+		hopIn := normalizeEvmAddress(quoteCtx.routePath[i])
+		hopOut := normalizeEvmAddress(quoteCtx.routePath[i+1])
+		active, feeTier, hopErr := u.getCachedV3PoolConfig(ctx, quoteCtx.client, chainID, quoteCtx.swapper.ContractAddress, hopIn, hopOut)
+		if hopErr != nil {
+			return nil, hopErr
 		}
+		if !active {
+			return nil, fmt.Errorf("accurate quote unavailable for non-v3 route hop %s -> %s", hopIn, hopOut)
+		}
+
+		hopOutAmount, hopQuoteErr := callQuoterV3ExactInputSingle(ctx, quoteCtx.client, quoteCtx.quoterV3.Hex(), hopIn, hopOut, currentAmount, feeTier)
+		if hopQuoteErr != nil {
+			return nil, hopQuoteErr
+		}
+		if hopOutAmount == nil || hopOutAmount.Sign() <= 0 {
+			return nil, fmt.Errorf("invalid quoter v3 amount")
+		}
+		currentAmount = hopOutAmount
 	}
 
-	amountOut, err := callQuoterV3ExactInputSingle(ctx, client, quoterV3.Hex(), tokenIn, tokenOut, amountIn, feeTier)
-	if err != nil {
-		return nil, err
-	}
-	if amountOut == nil || amountOut.Sign() <= 0 {
-		return nil, fmt.Errorf("invalid quoter v3 amount")
+	priceSource := fmt.Sprintf("uniswap-v3-%s", strings.ToLower(quoteCtx.chain.Name))
+	if len(quoteCtx.routePath) > 2 {
+		priceSource = priceSource + "-multihop"
 	}
 
 	return &AccurateSwapQuoteResult{
-		AmountOut:   amountOut,
-		PriceSource: fmt.Sprintf("uniswap-v3-%s", strings.ToLower(chain.Name)),
+		AmountOut:   currentAmount,
+		PriceSource: priceSource,
+	}, nil
+}
+
+func (u *PaymentUsecase) getAccuratePartnerRequiredInput(
+	ctx context.Context,
+	chainID uuid.UUID,
+	tokenIn, tokenOut string,
+	targetAmountOut *big.Int,
+) (*AccurateSwapRequiredInputResult, error) {
+	ctx = withQuoteRequestCache(ctx)
+	if targetAmountOut == nil || targetAmountOut.Sign() <= 0 {
+		return nil, fmt.Errorf("target amountOut must be positive")
+	}
+	if strings.EqualFold(tokenIn, tokenOut) {
+		return &AccurateSwapRequiredInputResult{
+			AmountIn:    new(big.Int).Set(targetAmountOut),
+			PriceSource: "identity",
+		}, nil
+	}
+
+	quoteCtx, err := u.prepareAccurateQuoteContext(ctx, chainID, tokenIn, tokenOut)
+	if err != nil {
+		return nil, err
+	}
+
+	requiredInput := new(big.Int).Set(targetAmountOut)
+	for i := len(quoteCtx.routePath) - 2; i >= 0; i-- {
+		hopIn := normalizeEvmAddress(quoteCtx.routePath[i])
+		hopOut := normalizeEvmAddress(quoteCtx.routePath[i+1])
+		active, feeTier, hopErr := u.getCachedV3PoolConfig(ctx, quoteCtx.client, chainID, quoteCtx.swapper.ContractAddress, hopIn, hopOut)
+		if hopErr != nil {
+			return nil, hopErr
+		}
+		if !active {
+			return nil, fmt.Errorf("accurate exact-output quote unavailable for non-v3 route hop %s -> %s", hopIn, hopOut)
+		}
+
+		hopInput, hopQuoteErr := callQuoterV3ExactOutputSingle(ctx, quoteCtx.client, quoteCtx.quoterV3.Hex(), hopIn, hopOut, requiredInput, feeTier)
+		if hopQuoteErr != nil {
+			return nil, hopQuoteErr
+		}
+		if hopInput == nil || hopInput.Sign() <= 0 {
+			return nil, fmt.Errorf("invalid quoter v3 amountIn")
+		}
+		requiredInput = hopInput
+	}
+
+	priceSource := fmt.Sprintf("uniswap-v3-%s-exact-output", strings.ToLower(quoteCtx.chain.Name))
+	if len(quoteCtx.routePath) > 2 {
+		priceSource = priceSource + "-multihop"
+	}
+	return &AccurateSwapRequiredInputResult{
+		AmountIn:    requiredInput,
+		PriceSource: priceSource,
 	}, nil
 }
 
@@ -2990,6 +3140,7 @@ func (u *PaymentUsecase) CheckRouteSupportDetailed(
 	chainID uuid.UUID,
 	tokenIn, tokenOut string,
 ) (*TokenRouteSupportStatus, error) {
+	ctx = withQuoteRequestCache(ctx)
 	if tokenIn == tokenOut {
 		return &TokenRouteSupportStatus{
 			Exists:     true,
@@ -2998,14 +3149,27 @@ func (u *PaymentUsecase) CheckRouteSupportDetailed(
 			Executable: true,
 		}, nil
 	}
+	cache := getQuoteRequestCache(ctx)
+	routeKey := routeSupportCacheKey(chainID, tokenIn, tokenOut)
+	if cache != nil {
+		cache.mu.RLock()
+		if cached, ok := cache.routeSupports[routeKey]; ok {
+			cache.mu.RUnlock()
+			return cloneRouteSupportStatus(cached), nil
+		}
+		cache.mu.RUnlock()
+	}
 
 	chain, err := u.chainRepo.GetByID(ctx, chainID)
 	if err != nil {
 		return nil, err
 	}
 
-	swapper, err := u.contractRepo.GetActiveContract(ctx, chain.ID, entities.ContractTypeTokenSwapper)
+	swapper, err := u.getCachedActiveContract(ctx, chain.ID, entities.ContractTypeTokenSwapper)
 	if err != nil {
+		return nil, fmt.Errorf("active swapper not found")
+	}
+	if swapper == nil {
 		return nil, fmt.Errorf("active swapper not found")
 	}
 
@@ -3014,7 +3178,7 @@ func (u *PaymentUsecase) CheckRouteSupportDetailed(
 		return nil, err
 	}
 
-	swapperABI, err := u.ResolveABIWithFallback(ctx, chain.ID, entities.ContractTypeTokenSwapper)
+	swapperABI, err := u.getCachedResolvedABI(ctx, chain.ID, entities.ContractTypeTokenSwapper)
 	if err != nil {
 		return nil, err
 	}
@@ -3058,8 +3222,23 @@ func (u *PaymentUsecase) CheckRouteSupportDetailed(
 		return status, nil
 	}
 
-	v3Router, v3Err := callAddressBySignature(ctx, client, swapper.ContractAddress, "swapRouterV3()")
-	uniRouter, uniErr := callAddressBySignature(ctx, client, swapper.ContractAddress, "universalRouter()")
+	var (
+		v3Router  common.Address
+		uniRouter common.Address
+		v3Err     error
+		uniErr    error
+	)
+	var routerWG sync.WaitGroup
+	routerWG.Add(2)
+	go func() {
+		defer routerWG.Done()
+		v3Router, v3Err = callAddressBySignature(ctx, client, swapper.ContractAddress, "swapRouterV3()")
+	}()
+	go func() {
+		defer routerWG.Done()
+		uniRouter, uniErr = callAddressBySignature(ctx, client, swapper.ContractAddress, "universalRouter()")
+	}()
+	routerWG.Wait()
 
 	if v3Err == nil {
 		status.SwapRouterV3 = v3Router.Hex()
@@ -3088,6 +3267,11 @@ func (u *PaymentUsecase) CheckRouteSupportDetailed(
 		status.Reasons = append(status.Reasons, "NO_EXECUTOR_CONFIGURED")
 	}
 
+	if cache != nil {
+		cache.mu.Lock()
+		cache.routeSupports[routeKey] = cloneRouteSupportStatus(status)
+		cache.mu.Unlock()
+	}
 	return status, nil
 }
 
@@ -3101,6 +3285,38 @@ func callAddressBySignature(ctx context.Context, client *blockchain.EVMClient, c
 		return common.Address{}, fmt.Errorf("invalid %s response", signature)
 	}
 	return common.BytesToAddress(out[len(out)-20:]), nil
+}
+
+func readRoutePath(ctx context.Context, client *blockchain.EVMClient, swapperAddress string, swapperABI abi.ABI, tokenIn, tokenOut string) ([]string, error) {
+	findRouteCall, err := swapperABI.Pack("findRoute", common.HexToAddress(tokenIn), common.HexToAddress(tokenOut))
+	if err != nil {
+		return nil, err
+	}
+
+	out, err := client.CallView(ctx, swapperAddress, findRouteCall)
+	if err != nil {
+		return nil, err
+	}
+
+	results, err := swapperABI.Unpack("findRoute", out)
+	if err != nil || len(results) < 3 {
+		return nil, fmt.Errorf("failed to unpack findRoute")
+	}
+
+	exists, ok1 := results[0].(bool)
+	pathAddrs, ok2 := results[2].([]common.Address)
+	if !ok1 || !ok2 {
+		return nil, fmt.Errorf("failed to type cast findRoute results")
+	}
+	if !exists {
+		return nil, fmt.Errorf("accurate quote unavailable because route does not exist")
+	}
+
+	path := make([]string, len(pathAddrs))
+	for i, addr := range pathAddrs {
+		path[i] = addr.Hex()
+	}
+	return path, nil
 }
 
 func readV3PoolConfig(ctx context.Context, client *blockchain.EVMClient, contractAddress, tokenIn, tokenOut string) (bool, uint32, error) {
@@ -3209,6 +3425,61 @@ func callQuoterV3ExactInputSingle(ctx context.Context, client *blockchain.EVMCli
 		return nil, fmt.Errorf("invalid quoter v3 amountOut type")
 	}
 	return amountOut, nil
+}
+
+func callQuoterV3ExactOutputSingle(ctx context.Context, client *blockchain.EVMClient, quoterAddress, tokenIn, tokenOut string, amountOut *big.Int, feeTier uint32) (*big.Int, error) {
+	uint256Type, _ := abi.NewType("uint256", "", nil)
+	uint160Type, _ := abi.NewType("uint160", "", nil)
+	tupleType, err := abi.NewType("tuple", "", []abi.ArgumentMarshaling{
+		{Name: "tokenIn", Type: "address"},
+		{Name: "tokenOut", Type: "address"},
+		{Name: "amount", Type: "uint256"},
+		{Name: "fee", Type: "uint24"},
+		{Name: "sqrtPriceLimitX96", Type: "uint160"},
+	})
+	if err != nil {
+		return nil, err
+	}
+	args := abi.Arguments{{Type: tupleType}}
+	type quoteExactOutputSingleParams struct {
+		TokenIn           common.Address
+		TokenOut          common.Address
+		Amount            *big.Int
+		Fee               *big.Int
+		SqrtPriceLimitX96 *big.Int
+	}
+	callData, err := args.Pack(quoteExactOutputSingleParams{
+		TokenIn:           common.HexToAddress(normalizeEvmAddress(tokenIn)),
+		TokenOut:          common.HexToAddress(normalizeEvmAddress(tokenOut)),
+		Amount:            amountOut,
+		Fee:               big.NewInt(int64(feeTier)),
+		SqrtPriceLimitX96: big.NewInt(0),
+	})
+	if err != nil {
+		return nil, err
+	}
+	selector := crypto.Keccak256([]byte("quoteExactOutputSingle((address,address,uint256,uint24,uint160))"))[:4]
+	out, err := client.CallView(ctx, quoterAddress, append(selector, callData...))
+	if err != nil {
+		return nil, err
+	}
+
+	uint32Type, _ := abi.NewType("uint32", "", nil)
+	outputs := abi.Arguments{
+		{Type: uint256Type},
+		{Type: uint160Type},
+		{Type: uint32Type},
+		{Type: uint256Type},
+	}
+	results, err := outputs.Unpack(out)
+	if err != nil {
+		return nil, err
+	}
+	amountIn, ok := results[0].(*big.Int)
+	if !ok {
+		return nil, fmt.Errorf("invalid quoter v3 amountIn type")
+	}
+	return amountIn, nil
 }
 
 func computePairKey(tokenA, tokenB string) [32]byte {

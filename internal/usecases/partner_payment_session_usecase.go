@@ -334,8 +334,9 @@ func (u *PartnerPaymentSessionUsecase) CreateSession(ctx context.Context, input 
 			return domainerrors.InternalServerError("failed to build payment instruction")
 		}
 
+		sessionID := utils.GenerateUUIDv7()
 		session := &domainentities.PartnerPaymentSession{
-			ID:                    utils.GenerateUUIDv7(),
+			ID:                    sessionID,
 			MerchantID:            input.MerchantID,
 			QuoteID:               &quote.ID,
 			PaymentRequestID:      &paymentRequest.ID,
@@ -351,7 +352,7 @@ func (u *PartnerPaymentSessionUsecase) CreateSession(ctx context.Context, input 
 			PaymentAmount:         quote.QuotedAmount,
 			PaymentAmountDecimals: quote.SelectedTokenDecimals,
 			Status:                domainentities.PartnerPaymentSessionStatusPending,
-			PaymentURL:            u.checkoutBaseURL + "/" + paymentRequest.ID.String(),
+			PaymentURL:            buildSessionPaymentURL(u.checkoutBaseURL, sessionID),
 			InstructionTo:         txData.To,
 			InstructionValue:      bridgeFeeNative.String(),
 			InstructionDataHex:    txData.Hex,
@@ -550,7 +551,7 @@ func buildPartnerPaymentSessionReadModel(session *domainentities.PartnerPaymentS
 		DestToken:      session.DestToken,
 		DestWallet:     session.DestWallet,
 		ExpiresAt:      session.ExpiresAt,
-		PaymentURL:     session.PaymentURL,
+		PaymentURL:     normalizePaymentURLWithSessionID(session.PaymentURL, session.ID),
 		PaymentCode:    session.PaymentCode,
 	}
 	out.PaymentInstruction.ChainID = session.SelectedChainID
@@ -592,6 +593,25 @@ func stringPtr(v string) *string {
 	}
 	out := v
 	return &out
+}
+
+func buildSessionPaymentURL(baseURL string, sessionID uuid.UUID) string {
+	return strings.TrimRight(baseURL, "/") + "/" + sessionID.String()
+}
+
+func normalizePaymentURLWithSessionID(storedURL string, sessionID uuid.UUID) string {
+	raw := strings.TrimSpace(storedURL)
+	if raw == "" {
+		return raw
+	}
+
+	trimmed := strings.TrimRight(raw, "/")
+	lastSlash := strings.LastIndex(trimmed, "/")
+	if lastSlash < 0 {
+		return raw
+	}
+
+	return trimmed[:lastSlash+1] + sessionID.String()
 }
 
 func mustJSON(v interface{}) string {

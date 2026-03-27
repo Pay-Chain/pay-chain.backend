@@ -252,6 +252,66 @@ func TestSmartContractRepository_Query_DBErrorAndFilterCompat(t *testing.T) {
 	})
 }
 
+func TestSmartContractRepository_GetActiveContractAddress(t *testing.T) {
+	db := newTestDB(t)
+	createSmartContractTable(t, db)
+	ctx := context.Background()
+
+	chainID := uuid.New()
+	repo := NewSmartContractRepository(db, &stubChainRepo{
+		chains: map[uuid.UUID]*entities.Chain{
+			chainID: {ID: chainID, ChainID: "eip155:8453"},
+		},
+	})
+
+	olderAddr := "0x1111111111111111111111111111111111111111"
+	newerAddr := "0x2222222222222222222222222222222222222222"
+	now := time.Now()
+
+	mustExec(t, db, `INSERT INTO smart_contracts (
+		id,name,type,version,chain_id,address,deployer_address,is_active,abi,metadata,start_block,created_at,updated_at
+	) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		uuid.New().String(),
+		"Gateway Old",
+		string(entities.ContractTypeGateway),
+		"1.0.0",
+		chainID.String(),
+		olderAddr,
+		"",
+		true,
+		`[]`,
+		`{}`,
+		0,
+		now.Add(-2*time.Hour),
+		now.Add(-2*time.Hour),
+	)
+	mustExec(t, db, `INSERT INTO smart_contracts (
+		id,name,type,version,chain_id,address,deployer_address,is_active,abi,metadata,start_block,created_at,updated_at
+	) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		uuid.New().String(),
+		"Gateway New",
+		string(entities.ContractTypeGateway),
+		"1.0.1",
+		chainID.String(),
+		newerAddr,
+		"",
+		true,
+		`[]`,
+		`{}`,
+		0,
+		now,
+		now,
+	)
+
+	addr, err := repo.GetActiveContractAddress(ctx, chainID, entities.ContractTypeGateway)
+	require.NoError(t, err)
+	require.Equal(t, newerAddr, addr)
+
+	addr, err = repo.GetActiveContractAddress(ctx, chainID, entities.ContractTypeRouter)
+	require.NoError(t, err)
+	require.Equal(t, "", addr)
+}
+
 func TestSmartContractRepository_DBErrorBranches_OnSingleLookups(t *testing.T) {
 	db := newTestDB(t)
 	// intentionally skip table creation

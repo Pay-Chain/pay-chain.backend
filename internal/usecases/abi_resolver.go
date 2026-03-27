@@ -17,6 +17,11 @@ import (
 type ABIResolverMixin struct {
 	contractRepo repositories.SmartContractRepository
 	abiCache     sync.Map // map[string]*abi.ABI (key: chainID+contractType)
+	logOnce      sync.Map // map[string]struct{} to reduce repeated resolver log spam
+}
+
+type activeContractAddressReader interface {
+	GetActiveContractAddress(ctx context.Context, chainID uuid.UUID, contractType entities.SmartContractType) (string, error)
 }
 
 func NewABIResolverMixin(contractRepo repositories.SmartContractRepository) *ABIResolverMixin {
@@ -35,6 +40,16 @@ func (u *ABIResolverMixin) ResolveABI(
 	// Check cache
 	if cached, ok := u.abiCache.Load(cacheKey); ok {
 		if parsedABI, ok := cached.(*abi.ABI); ok {
+			if addressReader, ok := u.contractRepo.(activeContractAddressReader); ok {
+				address, err := addressReader.GetActiveContractAddress(ctx, chainID, contractType)
+				if err != nil {
+					return nil, "", fmt.Errorf("contract %s not found: %w", contractType, err)
+				}
+				if address == "" {
+					return nil, "", fmt.Errorf("contract %s not found", contractType)
+				}
+				return parsedABI, address, nil
+			}
 			contract, err := u.contractRepo.GetActiveContract(ctx, chainID, contractType)
 			if err != nil {
 				return nil, "", fmt.Errorf("contract %s not found: %w", contractType, err)
@@ -94,19 +109,19 @@ func (u *ABIResolverMixin) ResolveABIWithFallback(ctx context.Context, chainID u
 			// Unified adapter can be either a basic sender or a token gateway sender
 			isValid = hasSetStateMachine || hasSetSettlementExecutor
 			if !isValid {
-				fmt.Printf("[ResolveABI] ABI for %s has %d methods but missing Hyperbridge methods. Using fallback.\n", contractType, len(parsed.Methods))
+				u.logResolverfOnce("invalid:"+fmt.Sprintf("%s:%s", chainID.String(), contractType), "[ResolveABI] ABI for %s has %d methods but missing Hyperbridge methods. Using fallback.\n", contractType, len(parsed.Methods))
 			}
 		case entities.ContractTypeAdapterCCIP:
 			_, hasSetChainSelector := parsed.Methods["setChainSelector"]
 			_, hasSetChainConfig := parsed.Methods["setChainConfig"]
 			isValid = hasSetChainSelector || hasSetChainConfig
 			if !isValid {
-				fmt.Printf("[ResolveABI] ABI for %s has %d methods but missing 'setChainSelector'/'setChainConfig'. Using fallback.\n", contractType, len(parsed.Methods))
+				u.logResolverfOnce("invalid:"+fmt.Sprintf("%s:%s", chainID.String(), contractType), "[ResolveABI] ABI for %s has %d methods but missing 'setChainSelector'/'setChainConfig'. Using fallback.\n", contractType, len(parsed.Methods))
 			}
 		case entities.ContractTypeAdapterStargate:
 			_, isValid = parsed.Methods["setRoute"]
 			if !isValid {
-				fmt.Printf("[ResolveABI] ABI for %s has %d methods but missing 'setRoute'. Using fallback.\n", contractType, len(parsed.Methods))
+				u.logResolverfOnce("invalid:"+fmt.Sprintf("%s:%s", chainID.String(), contractType), "[ResolveABI] ABI for %s has %d methods but missing 'setRoute'. Using fallback.\n", contractType, len(parsed.Methods))
 			}
 		default:
 			// For others (or if we don't need strict validation), checks length
@@ -114,11 +129,11 @@ func (u *ABIResolverMixin) ResolveABIWithFallback(ctx context.Context, chainID u
 		}
 
 		if isValid {
-			fmt.Printf("[ResolveABI] Found validated ABI for %s on %s. Methods: %d\n", contractType, chainID, len(parsed.Methods))
+			u.logResolverfOnce("valid:"+fmt.Sprintf("%s:%s", chainID.String(), contractType), "[ResolveABI] Found validated ABI for %s on %s. Methods: %d\n", contractType, chainID, len(parsed.Methods))
 			return *parsed, nil
 		}
 	} else if err != nil {
-		fmt.Printf("[ResolveABI] Failed to resolve from DB for %s on %s: %v. Falling back.\n", contractType, chainID, err)
+		u.logResolverfOnce("fallback:"+fmt.Sprintf("%s:%s", chainID.String(), contractType), "[ResolveABI] Failed to resolve from DB for %s on %s: %v. Falling back.\n", contractType, chainID, err)
 	}
 
 	// Fallback logic
@@ -144,4 +159,15 @@ func (u *ABIResolverMixin) ResolveABIWithFallback(ctx context.Context, chainID u
 	// Valid contract but no ABI in DB, and no fallback for this type?
 	// or ResolveABI returned nil parsed but no error
 	return abi.ABI{}, fmt.Errorf("no ABI found for %s", contractType)
+}
+
+func (u *ABIResolverMixin) logResolverfOnce(key string, format string, args ...interface{}) {
+	if key == "" {
+		fmt.Printf(format, args...)
+		return
+	}
+	if _, loaded := u.logOnce.LoadOrStore(key, struct{}{}); loaded {
+		return
+	}
+	fmt.Printf(format, args...)
 }

@@ -109,6 +109,26 @@ func (r *SmartContractRepositoryImpl) GetActiveContract(ctx context.Context, cha
 	return r.toEntity(&m), nil
 }
 
+// GetActiveContractAddress returns only active contract address.
+// This avoids ABI/metadata decoding when caller only needs address.
+func (r *SmartContractRepositoryImpl) GetActiveContractAddress(ctx context.Context, chainID uuid.UUID, contractType entities.SmartContractType) (string, error) {
+	var row struct {
+		ContractAddress string `gorm:"column:address"`
+	}
+	if err := r.db.WithContext(ctx).
+		Model(&models.SmartContract{}).
+		Select("address").
+		Where("chain_id = ? AND type = ? AND is_active = ?", chainID, contractType, true).
+		Order("updated_at DESC, created_at DESC, version DESC, id DESC").
+		Take(&row).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return "", nil
+		}
+		return "", err
+	}
+	return row.ContractAddress, nil
+}
+
 func (r *SmartContractRepositoryImpl) GetByChain(ctx context.Context, chainID uuid.UUID, pagination utils.PaginationParams) ([]*entities.SmartContract, int64, error) {
 	var ms []models.SmartContract
 	var totalCount int64

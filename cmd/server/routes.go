@@ -143,6 +143,9 @@ func registerAPIV1Routes(r *gin.Engine, d routeDeps) {
 				createPayment.POST("/create-payment", d.createPaymentHandler.CreatePayment)
 			}
 		}
+		if d.createPaymentHandler != nil {
+			v1.GET("/create-payment/:id", middleware.RateLimitMiddleware(middleware.IPIdentifier, 120, time.Minute), d.createPaymentHandler.GetPayment)
+		}
 
 		// Wallet routes (protected)
 		wallets := v1.Group("/wallets")

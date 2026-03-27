@@ -199,3 +199,280 @@ func TestPartnerQuoteUsecase_CreateQuote_UnsupportedPair(t *testing.T) {
 	require.True(t, errors.As(err, &appErr))
 	require.Equal(t, 400, appErr.Status)
 }
+
+func TestPartnerQuoteUsecase_CreateQuote_AccurateQuoteFallbacksToSwapQuote(t *testing.T) {
+	chainID := uuid.New()
+	quoteRepo := &partnerQuoteRepoStub{}
+	tokenRepo := &partnerQuoteTokenRepoStub{
+		byAddress: map[string]*domainentities.Token{
+			"0xusdc": {ChainUUID: chainID, ContractAddress: "0xusdc", Symbol: "USDC", Decimals: 6, IsActive: true},
+			"0xidrx": {ChainUUID: chainID, ContractAddress: "0xidrx", Symbol: "IDRX", Decimals: 2, IsActive: true},
+		},
+		bySymbol: map[string]*domainentities.Token{
+			"USDC": {ChainUUID: chainID, ContractAddress: "0xusdc", Symbol: "USDC", Decimals: 6, IsActive: true},
+			"IDRX": {ChainUUID: chainID, ContractAddress: "0xidrx", Symbol: "IDRX", Decimals: 2, IsActive: true},
+		},
+	}
+	chainRepo := &partnerQuoteChainRepoStub{
+		chain: &domainentities.Chain{ID: chainID, ChainID: "137", Name: "Polygon", Type: domainentities.ChainTypeEVM},
+	}
+
+	uc := NewPartnerQuoteUsecase(quoteRepo, tokenRepo, chainRepo, nil)
+	uc.routeSupportFn = func(ctx context.Context, chainID uuid.UUID, tokenIn string, tokenOut string) (*TokenRouteSupportStatus, error) {
+		return &TokenRouteSupportStatus{
+			Exists:       true,
+			IsDirect:     false,
+			Path:         []string{"0xidrx", "0xweth", "0xusdc"},
+			Executable:   true,
+			UniversalV4:  "0xrouterv4",
+			SwapRouterV3: "0xrouterv3",
+		}, nil
+	}
+	uc.accurateQuoteFn = func(ctx context.Context, chainID uuid.UUID, tokenIn string, tokenOut string, amountIn *big.Int) (*AccurateSwapQuoteResult, error) {
+		return nil, errors.New("accurate quote unavailable for non-v3-direct route")
+	}
+	uc.swapQuoteFn = func(ctx context.Context, chainID uuid.UUID, tokenIn string, tokenOut string, amountIn *big.Int) (*big.Int, error) {
+		return big.NewInt(2950000), nil
+	}
+
+	out, err := uc.CreateQuote(context.Background(), &CreatePartnerQuoteInput{
+		MerchantID:      uuid.New(),
+		InvoiceCurrency: "IDRX",
+		InvoiceAmount:   "5000000",
+		SelectedChain:   "eip155:137",
+		SelectedToken:   "0xusdc",
+		DestWallet:      "0xmerchant",
+	})
+	require.NoError(t, err)
+	require.NotNil(t, out)
+	require.Equal(t, "2950000", out.QuotedAmount)
+	require.Equal(t, "uniswap-v4-polygon-usdc-idrx", out.PriceSource)
+}
+
+func TestPartnerQuoteUsecase_CreateQuote_UsesExplicitInvoiceTokenAddress(t *testing.T) {
+	chainID := uuid.New()
+	quoteRepo := &partnerQuoteRepoStub{}
+	tokenRepo := &partnerQuoteTokenRepoStub{
+		byAddress: map[string]*domainentities.Token{
+			"0xusdc": {ChainUUID: chainID, ContractAddress: "0xusdc", Symbol: "USDC", Decimals: 6, IsActive: true},
+			"0xidrt": {ChainUUID: chainID, ContractAddress: "0xidrt", Symbol: "IDRT", Decimals: 6, IsActive: true},
+		},
+		bySymbol: map[string]*domainentities.Token{
+			// Intentionally incorrect symbol mapping to ensure InvoiceToken address is honored.
+			"USDC": {ChainUUID: chainID, ContractAddress: "0xidrt", Symbol: "USDC", Decimals: 6, IsActive: true},
+		},
+	}
+	chainRepo := &partnerQuoteChainRepoStub{
+		chain: &domainentities.Chain{ID: chainID, ChainID: "137", Name: "Polygon", Type: domainentities.ChainTypeEVM},
+	}
+
+	uc := NewPartnerQuoteUsecase(quoteRepo, tokenRepo, chainRepo, nil)
+	uc.routeSupportFn = func(ctx context.Context, chainID uuid.UUID, tokenIn string, tokenOut string) (*TokenRouteSupportStatus, error) {
+		require.Equal(t, "0xusdc", tokenIn)
+		require.Equal(t, "0xidrt", tokenOut)
+		return &TokenRouteSupportStatus{Exists: true, Executable: true, Path: []string{"0xusdc", "0xidrt"}}, nil
+	}
+	uc.swapQuoteFn = func(ctx context.Context, chainID uuid.UUID, tokenIn string, tokenOut string, amountIn *big.Int) (*big.Int, error) {
+		require.Equal(t, "0xusdc", tokenIn)
+		require.Equal(t, "0xidrt", tokenOut)
+		return big.NewInt(500000000), nil
+	}
+
+	out, err := uc.CreateQuote(context.Background(), &CreatePartnerQuoteInput{
+		MerchantID:      uuid.New(),
+		InvoiceCurrency: "USDC",
+		InvoiceToken:    "0xusdc",
+		InvoiceAmount:   "29647",
+		SelectedChain:   "eip155:137",
+		SelectedToken:   "0xidrt",
+		DestWallet:      "0xmerchant",
+	})
+	require.NoError(t, err)
+	require.NotNil(t, out)
+	require.Equal(t, "500000000", out.QuotedAmount)
+}
+
+func TestPartnerQuoteUsecase_CreateQuote_PlaceholderFallsBackToSimulator(t *testing.T) {
+	chainID := uuid.New()
+	quoteRepo := &partnerQuoteRepoStub{}
+	tokenRepo := &partnerQuoteTokenRepoStub{
+		byAddress: map[string]*domainentities.Token{
+			"0xusdc": {ChainUUID: chainID, ContractAddress: "0xusdc", Symbol: "USDC", Decimals: 6, IsActive: true},
+			"0xidrx": {ChainUUID: chainID, ContractAddress: "0xidrx", Symbol: "IDRX", Decimals: 2, IsActive: true},
+		},
+		bySymbol: map[string]*domainentities.Token{
+			"USDC": {ChainUUID: chainID, ContractAddress: "0xusdc", Symbol: "USDC", Decimals: 6, IsActive: true},
+			"IDRX": {ChainUUID: chainID, ContractAddress: "0xidrx", Symbol: "IDRX", Decimals: 2, IsActive: true},
+		},
+	}
+	chainRepo := &partnerQuoteChainRepoStub{
+		chain: &domainentities.Chain{ID: chainID, ChainID: "137", Name: "Polygon", Type: domainentities.ChainTypeEVM},
+	}
+
+	uc := NewPartnerQuoteUsecase(quoteRepo, tokenRepo, chainRepo, nil)
+	uc.routeSupportFn = func(ctx context.Context, chainID uuid.UUID, tokenIn string, tokenOut string) (*TokenRouteSupportStatus, error) {
+		return &TokenRouteSupportStatus{
+			Exists:       true,
+			IsDirect:     false,
+			Path:         []string{"0xidrx", "0xweth", "0xusdc"},
+			Executable:   true,
+			UniversalV4:  "0xrouterv4",
+			SwapRouterV3: "0xrouterv3",
+		}, nil
+	}
+	uc.accurateQuoteFn = func(ctx context.Context, chainID uuid.UUID, tokenIn string, tokenOut string, amountIn *big.Int) (*AccurateSwapQuoteResult, error) {
+		return nil, errors.New("accurate quote unavailable for non-v3 route hop")
+	}
+	uc.swapQuoteFn = func(ctx context.Context, chainID uuid.UUID, tokenIn string, tokenOut string, amountIn *big.Int) (*big.Int, error) {
+		// Placeholder 1:1 from swapper simulation.
+		return new(big.Int).Set(amountIn), nil
+	}
+	uc.simulatorQuoteFn = func(ctx context.Context, chainID uuid.UUID, tokenIn string, tokenOut string, amountIn *big.Int) (*AccurateSwapQuoteResult, error) {
+		return &AccurateSwapQuoteResult{
+			AmountOut:   big.NewInt(2950000),
+			PriceSource: "simulator-engine-v1",
+		}, nil
+	}
+
+	out, err := uc.CreateQuote(context.Background(), &CreatePartnerQuoteInput{
+		MerchantID:      uuid.New(),
+		InvoiceCurrency: "IDRX",
+		InvoiceAmount:   "5000000",
+		SelectedChain:   "eip155:137",
+		SelectedToken:   "0xusdc",
+		DestWallet:      "0xmerchant",
+	})
+	require.NoError(t, err)
+	require.NotNil(t, out)
+	require.Equal(t, "2950000", out.QuotedAmount)
+	require.Equal(t, "simulator-engine-v1", out.PriceSource)
+}
+
+func TestPartnerQuoteUsecase_CreateQuote_PlaceholderRejectedWithoutSimulator(t *testing.T) {
+	chainID := uuid.New()
+	quoteRepo := &partnerQuoteRepoStub{}
+	tokenRepo := &partnerQuoteTokenRepoStub{
+		byAddress: map[string]*domainentities.Token{
+			"0xusdc": {ChainUUID: chainID, ContractAddress: "0xusdc", Symbol: "USDC", Decimals: 6, IsActive: true},
+			"0xidrx": {ChainUUID: chainID, ContractAddress: "0xidrx", Symbol: "IDRX", Decimals: 2, IsActive: true},
+		},
+		bySymbol: map[string]*domainentities.Token{
+			"USDC": {ChainUUID: chainID, ContractAddress: "0xusdc", Symbol: "USDC", Decimals: 6, IsActive: true},
+			"IDRX": {ChainUUID: chainID, ContractAddress: "0xidrx", Symbol: "IDRX", Decimals: 2, IsActive: true},
+		},
+	}
+	chainRepo := &partnerQuoteChainRepoStub{
+		chain: &domainentities.Chain{ID: chainID, ChainID: "137", Name: "Polygon", Type: domainentities.ChainTypeEVM},
+	}
+
+	uc := NewPartnerQuoteUsecase(quoteRepo, tokenRepo, chainRepo, nil)
+	uc.routeSupportFn = func(ctx context.Context, chainID uuid.UUID, tokenIn string, tokenOut string) (*TokenRouteSupportStatus, error) {
+		return &TokenRouteSupportStatus{
+			Exists:     true,
+			IsDirect:   true,
+			Path:       []string{"0xidrx", "0xusdc"},
+			Executable: true,
+		}, nil
+	}
+	uc.accurateQuoteFn = func(ctx context.Context, chainID uuid.UUID, tokenIn string, tokenOut string, amountIn *big.Int) (*AccurateSwapQuoteResult, error) {
+		return nil, errors.New("accurate quote unavailable")
+	}
+	uc.swapQuoteFn = func(ctx context.Context, chainID uuid.UUID, tokenIn string, tokenOut string, amountIn *big.Int) (*big.Int, error) {
+		return new(big.Int).Set(amountIn), nil
+	}
+
+	out, err := uc.CreateQuote(context.Background(), &CreatePartnerQuoteInput{
+		MerchantID:      uuid.New(),
+		InvoiceCurrency: "IDRX",
+		InvoiceAmount:   "5000000",
+		SelectedChain:   "eip155:137",
+		SelectedToken:   "0xusdc",
+		DestWallet:      "0xmerchant",
+	})
+	require.Nil(t, out)
+	require.Error(t, err)
+	var appErr *domainerrors.AppError
+	require.True(t, errors.As(err, &appErr))
+	require.Equal(t, 400, appErr.Status)
+	require.Contains(t, appErr.Message, "placeholder quote")
+}
+
+func TestPartnerQuoteUsecase_PreviewRequiredInputForOutput_SupportedPair(t *testing.T) {
+	chainID := uuid.New()
+	quoteRepo := &partnerQuoteRepoStub{}
+	tokenRepo := &partnerQuoteTokenRepoStub{
+		byAddress: map[string]*domainentities.Token{
+			"0xusdc": {ChainUUID: chainID, ContractAddress: "0xusdc", Symbol: "USDC", Decimals: 6, IsActive: true},
+			"0xidrx": {ChainUUID: chainID, ContractAddress: "0xidrx", Symbol: "IDRX", Decimals: 6, IsActive: true},
+		},
+	}
+	chainRepo := &partnerQuoteChainRepoStub{
+		chain: &domainentities.Chain{ID: chainID, ChainID: "8453", Name: "Base", Type: domainentities.ChainTypeEVM},
+	}
+
+	uc := NewPartnerQuoteUsecase(quoteRepo, tokenRepo, chainRepo, nil)
+	uc.routeSupportFn = func(ctx context.Context, cid uuid.UUID, tokenIn string, tokenOut string) (*TokenRouteSupportStatus, error) {
+		return &TokenRouteSupportStatus{
+			Exists:       true,
+			IsDirect:     true,
+			Path:         []string{"0xusdc", "0xidrx"},
+			Executable:   true,
+			SwapRouterV3: "0xrouterv3",
+		}, nil
+	}
+	uc.accurateRequiredInputFn = func(ctx context.Context, cid uuid.UUID, tokenIn string, tokenOut string, amountOut *big.Int) (*AccurateSwapRequiredInputResult, error) {
+		require.Equal(t, "0xusdc", tokenIn)
+		require.Equal(t, "0xidrx", tokenOut)
+		require.Equal(t, "2950000", amountOut.String())
+		return &AccurateSwapRequiredInputResult{
+			AmountIn:    big.NewInt(500000000),
+			PriceSource: "uniswap-v3-base-exact-output",
+		}, nil
+	}
+
+	out, err := uc.PreviewRequiredInputForOutput(context.Background(), &PreviewRequiredInputForOutputInput{
+		MerchantID:         uuid.New(),
+		SelectedChain:      "eip155:8453",
+		InputToken:         "0xusdc",
+		OutputToken:        "0xidrx",
+		TargetOutputAmount: "2950000",
+	})
+	require.NoError(t, err)
+	require.NotNil(t, out)
+	require.Equal(t, "500000000", out.RequiredInputAmount)
+	require.Equal(t, "uniswap-v3-base-exact-output", out.PriceSource)
+	require.Equal(t, "USDC->IDRX", out.Route)
+}
+
+func TestPartnerQuoteUsecase_PreviewRequiredInputForOutput_UnsupportedWhenExactOutputEngineMissing(t *testing.T) {
+	chainID := uuid.New()
+	quoteRepo := &partnerQuoteRepoStub{}
+	tokenRepo := &partnerQuoteTokenRepoStub{
+		byAddress: map[string]*domainentities.Token{
+			"0xusdc": {ChainUUID: chainID, ContractAddress: "0xusdc", Symbol: "USDC", Decimals: 6, IsActive: true},
+			"0xidrx": {ChainUUID: chainID, ContractAddress: "0xidrx", Symbol: "IDRX", Decimals: 6, IsActive: true},
+		},
+	}
+	chainRepo := &partnerQuoteChainRepoStub{
+		chain: &domainentities.Chain{ID: chainID, ChainID: "8453", Name: "Base", Type: domainentities.ChainTypeEVM},
+	}
+
+	uc := NewPartnerQuoteUsecase(quoteRepo, tokenRepo, chainRepo, nil)
+	uc.routeSupportFn = func(ctx context.Context, cid uuid.UUID, tokenIn string, tokenOut string) (*TokenRouteSupportStatus, error) {
+		return &TokenRouteSupportStatus{Exists: true, Executable: true, Path: []string{"0xusdc", "0xidrx"}}, nil
+	}
+	uc.accurateRequiredInputFn = nil
+
+	out, err := uc.PreviewRequiredInputForOutput(context.Background(), &PreviewRequiredInputForOutputInput{
+		MerchantID:         uuid.New(),
+		SelectedChain:      "eip155:8453",
+		InputToken:         "0xusdc",
+		OutputToken:        "0xidrx",
+		TargetOutputAmount: "2950000",
+	})
+	require.Nil(t, out)
+	require.Error(t, err)
+	var appErr *domainerrors.AppError
+	require.True(t, errors.As(err, &appErr))
+	require.Equal(t, 400, appErr.Status)
+}

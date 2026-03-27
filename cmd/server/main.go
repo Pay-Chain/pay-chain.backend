@@ -182,6 +182,7 @@ func runMainProcess() error {
 		tokenRepo,
 		chainRepo,
 		paymentQuoteRepo,
+		repositories.NewPartnerPaymentSessionRepository(db),
 		partnerQuoteUsecase,
 		partnerPaymentSessionUsecase,
 	)

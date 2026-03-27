@@ -25,6 +25,10 @@ func (s *createPaymentUsecaseStub) CreatePayment(ctx context.Context, input *use
 	return s.out, s.err
 }
 
+func (s *createPaymentUsecaseStub) GetPayment(ctx context.Context, paymentID uuid.UUID) (*usecases.CreatePaymentOutput, error) {
+	return s.out, s.err
+}
+
 func TestCreatePaymentHandler_ResponseShape(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -90,4 +94,51 @@ func TestCreatePaymentHandler_ResponseShape(t *testing.T) {
 	require.Equal(t, float64(6), got["quoted_token_decimals"])
 	require.Equal(t, "eyJ.mock", got["payment_code"])
 	require.NotEmpty(t, got["payment_instruction"])
+}
+
+func TestCreatePaymentHandler_GetPayment_ResponseShape(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	out := &usecases.CreatePaymentOutput{
+		PaymentID:                "0195-payment",
+		MerchantID:               "0195-merchant",
+		Amount:                   "2950000",
+		InvoiceCurrency:          "IDRX",
+		InvoiceAmount:            "50000",
+		PayerSelectedChain:       "eip155:8453",
+		PayerSelectedToken:       "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+		PayerSelectedTokenSymbol: "USDC",
+		QuotedTokenSymbol:        "USDC",
+		QuotedTokenAmount:        "2.95",
+		QuotedTokenAmountAtomic:  "2950000",
+		QuotedTokenDecimals:      6,
+		QuoteRate:                "1 IDRX = 0.000059 USDC",
+		QuoteSource:              "uniswap-v4-base-usdc-idrx",
+		QuoteExpiresAt:           time.Date(2026, 3, 20, 10, 20, 0, 0, time.UTC),
+		DestChain:                "eip155:8453",
+		DestToken:                "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+		DestWallet:               "0xMerchantDestination",
+		ExpireTime:               time.Date(2026, 3, 20, 10, 20, 0, 0, time.UTC),
+		PaymentURL:               "https://pay.paymentkita.com/pay/0195-payment",
+		PaymentCode:              "eyJ.mock",
+	}
+	out.PaymentInstruction.ChainID = "eip155:8453"
+	out.PaymentInstruction.To = "0xGateway"
+	out.PaymentInstruction.Value = "0"
+	out.PaymentInstruction.Data = "0xafc93ccd"
+
+	handler := NewCreatePaymentHandler(&createPaymentUsecaseStub{out: out})
+	r := gin.New()
+	r.GET("/api/v1/create-payment/:id", handler.GetPayment)
+
+	req, _ := http.NewRequest("GET", "/api/v1/create-payment/0195d4b4-1e2c-7f2f-9aa1-123456789012", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	var got map[string]interface{}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
+	require.Equal(t, "0195-payment", got["payment_id"])
+	require.Equal(t, "USDC", got["quoted_token_symbol"])
+	require.Equal(t, "eyJ.mock", got["payment_code"])
 }

@@ -11,11 +11,17 @@ import (
 func LoggerMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()
+		method := c.Request.Method
 		path := c.Request.URL.Path
 		raw := c.Request.URL.RawQuery
 
 		// Process request
 		c.Next()
+
+		// CORS preflight can be noisy and does not represent business traffic.
+		if method == "OPTIONS" {
+			return
+		}
 
 		// Calculate latency
 		end := time.Now()
@@ -27,6 +33,6 @@ func LoggerMiddleware() gin.HandlerFunc {
 
 		// Log using our structured logger
 		// The RequestID is expected to be in c.Request.Context() by RequestIDMiddleware
-		logger.LogRequest(c.Request.Context(), c.Request.Method, path, c.Writer.Status(), latency, c.ClientIP())
+		logger.LogRequest(c.Request.Context(), method, path, c.Writer.Status(), latency, c.ClientIP())
 	}
 }

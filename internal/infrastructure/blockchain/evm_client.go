@@ -3,6 +3,10 @@ package blockchain
 import (
 	"context"
 	"math/big"
+	"os"
+	"strconv"
+	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
@@ -21,7 +25,11 @@ var (
 	closeEVMClient = func(client *ethclient.Client) {
 		client.Close()
 	}
+	callViewTimeoutOnce  sync.Once
+	callViewTimeoutValue time.Duration
 )
+
+const defaultEVMCallViewTimeout = 1800 * time.Millisecond
 
 // EVMClient provides EVM blockchain interaction
 type EVMClient struct {
@@ -122,12 +130,24 @@ func (c *EVMClient) CallView(ctx context.Context, to string, data []byte) ([]byt
 	if c.testCallView != nil {
 		return c.testCallView(ctx, to, data)
 	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	callCtx := ctx
+	timeout := resolveEVMCallViewTimeout()
+	if timeout > 0 {
+		if deadline, ok := ctx.Deadline(); !ok || time.Until(deadline) > timeout {
+			var cancel context.CancelFunc
+			callCtx, cancel = context.WithTimeout(ctx, timeout)
+			defer cancel()
+		}
+	}
 	addr := common.HexToAddress(to)
 	msg := ethereum.CallMsg{
 		To:   &addr,
 		Data: data,
 	}
-	return c.client.CallContract(ctx, msg, nil)
+	return c.client.CallContract(callCtx, msg, nil)
 }
 
 // Close closes the client connection
@@ -135,4 +155,20 @@ func (c *EVMClient) Close() {
 	if c.client != nil {
 		closeEVMClient(c.client)
 	}
+}
+
+func resolveEVMCallViewTimeout() time.Duration {
+	callViewTimeoutOnce.Do(func() {
+		callViewTimeoutValue = defaultEVMCallViewTimeout
+		raw := os.Getenv("PAYMENT_EVM_CALL_TIMEOUT_MS")
+		if raw == "" {
+			return
+		}
+		ms, err := strconv.Atoi(raw)
+		if err != nil || ms <= 0 {
+			return
+		}
+		callViewTimeoutValue = time.Duration(ms) * time.Millisecond
+	})
+	return callViewTimeoutValue
 }

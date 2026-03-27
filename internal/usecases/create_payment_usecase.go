@@ -2,8 +2,11 @@ package usecases
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/big"
+	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -20,6 +23,9 @@ const (
 	CreatePaymentPricingTypeInvoiceCurrency   CreatePaymentPricingType = "invoice_currency"
 	CreatePaymentPricingTypePaymentTokenFixed CreatePaymentPricingType = "payment_token_fixed"
 	CreatePaymentPricingTypePaymentTokenDyn   CreatePaymentPricingType = "payment_token_dynamic"
+
+	defaultCreatePaymentQuoteStageTimeout   = 20 * time.Second
+	defaultCreatePaymentSessionStageTimeout = 8 * time.Second
 )
 
 type CreatePaymentInput struct {
@@ -73,6 +79,14 @@ type createPaymentQuoteEngine interface {
 	CreateQuote(ctx context.Context, input *CreatePartnerQuoteInput) (*CreatePartnerQuoteOutput, error)
 }
 
+type createPaymentQuotePreviewEngine interface {
+	PreviewQuote(ctx context.Context, input *CreatePartnerQuoteInput) (*CreatePartnerQuoteOutput, error)
+}
+
+type createPaymentQuoteInversePreviewEngine interface {
+	PreviewRequiredInputForOutput(ctx context.Context, input *PreviewRequiredInputForOutputInput) (*PreviewRequiredInputForOutputOutput, error)
+}
+
 type createPaymentSessionEngine interface {
 	CreateSession(ctx context.Context, input *CreatePartnerPaymentSessionInput) (*CreatePartnerPaymentSessionOutput, error)
 }
@@ -84,6 +98,7 @@ type CreatePaymentUsecase struct {
 	tokenRepo      domainrepos.TokenRepository
 	chainRepo      domainrepos.ChainRepository
 	quoteRepo      domainrepos.PaymentQuoteRepository
+	sessionRepo    domainrepos.PartnerPaymentSessionRepository
 	quoteUC        createPaymentQuoteEngine
 	sessionUC      createPaymentSessionEngine
 	chainResolver  *ChainResolver
@@ -113,6 +128,7 @@ func NewCreatePaymentUsecase(
 	tokenRepo domainrepos.TokenRepository,
 	chainRepo domainrepos.ChainRepository,
 	quoteRepo domainrepos.PaymentQuoteRepository,
+	sessionRepo domainrepos.PartnerPaymentSessionRepository,
 	quoteUC createPaymentQuoteEngine,
 	sessionUC createPaymentSessionEngine,
 ) *CreatePaymentUsecase {
@@ -123,6 +139,7 @@ func NewCreatePaymentUsecase(
 		tokenRepo:      tokenRepo,
 		chainRepo:      chainRepo,
 		quoteRepo:      quoteRepo,
+		sessionRepo:    sessionRepo,
 		quoteUC:        quoteUC,
 		sessionUC:      sessionUC,
 		chainResolver:  NewChainResolver(chainRepo),
@@ -130,6 +147,7 @@ func NewCreatePaymentUsecase(
 }
 
 func (u *CreatePaymentUsecase) CreatePayment(ctx context.Context, input *CreatePaymentInput) (*CreatePaymentOutput, error) {
+	ctx = withQuoteRequestCache(ctx)
 	if input == nil {
 		return nil, domainerrors.BadRequest("input is required")
 	}
@@ -184,24 +202,25 @@ func (u *CreatePaymentUsecase) CreatePayment(ctx context.Context, input *CreateP
 	}
 
 	var quoteOut *CreatePartnerQuoteOutput
+	quoteCtx, quoteCancel := context.WithTimeout(ctx, createPaymentStageTimeoutFromEnv("CREATE_PAYMENT_QUOTE_STAGE_TIMEOUT_MS", defaultCreatePaymentQuoteStageTimeout))
+	defer quoteCancel()
 	switch pricingType {
 	case CreatePaymentPricingTypeInvoiceCurrency:
-		quoteOut, err = u.createInvoiceCurrencyQuote(ctx, merchantID, chainCAIP2, selectedToken, settlement, strings.TrimSpace(input.RequestedAmount), walletAddress)
-		if err != nil {
-			return nil, err
-		}
+		quoteOut, err = u.createInvoiceCurrencyQuote(quoteCtx, merchantID, chainCAIP2, selectedToken, settlement, strings.TrimSpace(input.RequestedAmount), walletAddress)
 	default:
-		quoteOut, err = u.createSyntheticSelectedTokenQuote(ctx, merchantID, chainCAIP2, selectedToken, pricingType, strings.TrimSpace(input.RequestedAmount), settlement)
-		if err != nil {
-			return nil, err
-		}
+		quoteOut, err = u.createSyntheticSelectedTokenQuote(quoteCtx, merchantID, chainCAIP2, selectedToken, pricingType, strings.TrimSpace(input.RequestedAmount), settlement)
+	}
+	if err != nil {
+		return nil, err
 	}
 
 	quoteID, err := uuid.Parse(quoteOut.QuoteID)
 	if err != nil {
 		return nil, domainerrors.InternalServerError("invalid quote id generated")
 	}
-	sessionOut, err := u.sessionUC.CreateSession(ctx, &CreatePartnerPaymentSessionInput{
+	sessionCtx, sessionCancel := context.WithTimeout(ctx, createPaymentStageTimeoutFromEnv("CREATE_PAYMENT_SESSION_STAGE_TIMEOUT_MS", defaultCreatePaymentSessionStageTimeout))
+	defer sessionCancel()
+	sessionOut, err := u.sessionUC.CreateSession(sessionCtx, &CreatePartnerPaymentSessionInput{
 		MerchantID:        merchantID,
 		QuoteID:           quoteID,
 		DestWallet:        walletAddress,
@@ -248,6 +267,134 @@ func (u *CreatePaymentUsecase) CreatePayment(ctx context.Context, input *CreateP
 	out.PaymentInstruction.ApprovalTo = sessionOut.PaymentInstruction.ApprovalTo
 	out.PaymentInstruction.ApprovalHex = sessionOut.PaymentInstruction.ApprovalHex
 	return out, nil
+}
+
+func createPaymentStageTimeoutFromEnv(envName string, fallback time.Duration) time.Duration {
+	if fallback <= 0 {
+		fallback = 5 * time.Second
+	}
+	raw := strings.TrimSpace(os.Getenv(envName))
+	if raw == "" {
+		return fallback
+	}
+	ms, err := strconv.Atoi(raw)
+	if err != nil || ms <= 0 {
+		return fallback
+	}
+	return time.Duration(ms) * time.Millisecond
+}
+
+func (u *CreatePaymentUsecase) GetPayment(ctx context.Context, paymentID uuid.UUID) (*CreatePaymentOutput, error) {
+	if paymentID == uuid.Nil {
+		return nil, domainerrors.BadRequest("payment id is required")
+	}
+	if u.sessionRepo == nil {
+		return nil, domainerrors.InternalServerError("create payment read service is not configured")
+	}
+
+	session, err := u.sessionRepo.GetByID(ctx, paymentID)
+	if err != nil || session == nil {
+		return nil, domainerrors.NotFound("payment not found")
+	}
+	if session.Status == entities.PartnerPaymentSessionStatusPending && time.Now().UTC().After(session.ExpiresAt) {
+		_ = u.sessionRepo.UpdateStatus(ctx, paymentID, entities.PartnerPaymentSessionStatusExpired)
+		session.Status = entities.PartnerPaymentSessionStatusExpired
+	}
+
+	quotedSymbol := strings.TrimSpace(session.SelectedTokenSymbol)
+	quotedAtomic := strings.TrimSpace(session.PaymentAmount)
+	quotedDecimals := session.PaymentAmountDecimals
+	quoteRate := stringValueOrDefault(session.QuoteRate, "")
+	quoteSource := stringValueOrDefault(session.QuoteSource, "")
+	quoteExpiresAt := session.ExpiresAt
+	if session.QuoteExpiresAt != nil {
+		quoteExpiresAt = *session.QuoteExpiresAt
+	}
+
+	if session.QuoteID != nil && u.quoteRepo != nil {
+		if quote, qErr := u.quoteRepo.GetByID(ctx, *session.QuoteID); qErr == nil && quote != nil {
+			if strings.TrimSpace(quote.SelectedTokenSymbol) != "" {
+				quotedSymbol = strings.TrimSpace(quote.SelectedTokenSymbol)
+			}
+			if strings.TrimSpace(quote.QuotedAmount) != "" {
+				quotedAtomic = strings.TrimSpace(quote.QuotedAmount)
+			}
+			if quote.SelectedTokenDecimals > 0 {
+				quotedDecimals = quote.SelectedTokenDecimals
+			}
+			if strings.TrimSpace(quote.QuoteRate) != "" {
+				quoteRate = strings.TrimSpace(quote.QuoteRate)
+			}
+			if strings.TrimSpace(quote.PriceSource) != "" {
+				quoteSource = strings.TrimSpace(quote.PriceSource)
+			}
+			if !quote.ExpiresAt.IsZero() {
+				quoteExpiresAt = quote.ExpiresAt
+			}
+		}
+	}
+
+	out := &CreatePaymentOutput{
+		PaymentID:                session.ID.String(),
+		MerchantID:               session.MerchantID.String(),
+		Amount:                   session.PaymentAmount,
+		InvoiceCurrency:          session.InvoiceCurrency,
+		InvoiceAmount:            session.InvoiceAmount,
+		PayerSelectedChain:       session.SelectedChainID,
+		PayerSelectedToken:       session.SelectedTokenAddress,
+		PayerSelectedTokenSymbol: session.SelectedTokenSymbol,
+		QuotedTokenSymbol:        quotedSymbol,
+		QuotedTokenAmount:        smallestUnitToDecimalString(quotedAtomic, quotedDecimals),
+		QuotedTokenAmountAtomic:  quotedAtomic,
+		QuotedTokenDecimals:      quotedDecimals,
+		QuoteRate:                quoteRate,
+		QuoteSource:              quoteSource,
+		QuoteExpiresAt:           quoteExpiresAt,
+		DestChain:                session.DestChain,
+		DestToken:                session.DestToken,
+		DestWallet:               session.DestWallet,
+		SettlementDestChain:      session.DestChain,
+		SettlementDestToken:      session.DestToken,
+		SettlementDestWallet:     session.DestWallet,
+		ExpireTime:               session.ExpiresAt,
+		PaymentURL:               normalizePaymentURLWithSessionID(session.PaymentURL, session.ID),
+		PaymentCode:              session.PaymentCode,
+	}
+	out.PaymentInstruction.ChainID = session.DestChain
+	out.PaymentInstruction.To = session.InstructionTo
+	out.PaymentInstruction.Value = session.InstructionValue
+	out.PaymentInstruction.Data = session.InstructionDataHex
+	out.PaymentInstruction.ProgramID = readInstructionProgramID(session)
+	out.PaymentInstruction.DataBase58 = session.InstructionDataBase58
+	out.PaymentInstruction.DataBase64 = session.InstructionDataBase64
+	out.PaymentInstruction.ApprovalTo = session.InstructionApprovalTo
+	out.PaymentInstruction.ApprovalHex = session.InstructionApprovalDataHex
+
+	return out, nil
+}
+
+func stringValueOrDefault(input *string, fallback string) string {
+	if input == nil {
+		return fallback
+	}
+	value := strings.TrimSpace(*input)
+	if value == "" {
+		return fallback
+	}
+	return value
+}
+
+func readInstructionProgramID(session *entities.PartnerPaymentSession) string {
+	if session == nil {
+		return ""
+	}
+	if strings.HasPrefix(strings.ToLower(session.DestChain), "solana:") {
+		if strings.TrimSpace(session.InstructionTo) != "" {
+			return strings.TrimSpace(session.InstructionTo)
+		}
+		return strings.TrimSpace(session.DestToken)
+	}
+	return ""
 }
 
 func (u *CreatePaymentUsecase) resolveMerchantCreatePaymentConfig(ctx context.Context, merchant *entities.Merchant) merchantCreatePaymentConfig {
@@ -363,6 +510,7 @@ func (u *CreatePaymentUsecase) createInvoiceCurrencyQuote(ctx context.Context, m
 		return u.quoteUC.CreateQuote(ctx, &CreatePartnerQuoteInput{
 			MerchantID:      merchantID,
 			InvoiceCurrency: settlement.InvoiceToken.Symbol,
+			InvoiceToken:    settlement.InvoiceToken.ContractAddress,
 			InvoiceAmount:   invoiceAtomic,
 			SelectedChain:   selectedChainCAIP2,
 			SelectedToken:   selectedToken.ContractAddress,
@@ -382,20 +530,17 @@ func (u *CreatePaymentUsecase) createInvoiceCurrencyQuote(ctx context.Context, m
 	if err != nil || sourceBridgeToken == nil || !sourceBridgeToken.IsActive {
 		return nil, domainerrors.BadRequest("bridge token is not supported on selected source chain")
 	}
-	sourceLegQuote, err := u.quoteUC.CreateQuote(ctx, &CreatePartnerQuoteInput{
-		MerchantID:      merchantID,
-		InvoiceCurrency: sourceBridgeToken.Symbol,
-		InvoiceAmount:   destBridgeAmount,
-		SelectedChain:   selectedChainCAIP2,
-		SelectedToken:   selectedToken.ContractAddress,
-		DestWallet:      destWallet,
-	})
+	requiredSourceAmount, sourceLegRoute, _, err := u.solveRequiredInputForTargetOutput(
+		ctx,
+		merchantID,
+		selectedChainCAIP2,
+		selectedToken,
+		sourceBridgeToken,
+		destBridgeAmount,
+		destWallet,
+	)
 	if err != nil {
 		return nil, err
-	}
-	sourceLegQuoteID, parseErr := uuid.Parse(sourceLegQuote.QuoteID)
-	if parseErr == nil {
-		_ = u.quoteRepo.UpdateStatus(ctx, sourceLegQuoteID, entities.PaymentQuoteStatusCancelled)
 	}
 
 	return u.createCompositeQuote(
@@ -406,9 +551,9 @@ func (u *CreatePaymentUsecase) createInvoiceCurrencyQuote(ctx context.Context, m
 		settlement.InvoiceToken.Symbol,
 		settlement.InvoiceToken.Decimals,
 		invoiceAtomic,
-		sourceLegQuote.QuotedAmount,
+		requiredSourceAmount,
 		fmt.Sprintf("cross-chain-normalized-via-%s", strings.ToLower(settlement.BridgeTokenSymbol)),
-		fmt.Sprintf("%s | %s", routeSummary, sourceLegQuote.Route),
+		fmt.Sprintf("%s | %s", sourceLegRoute, routeSummary),
 	)
 }
 
@@ -416,22 +561,199 @@ func (u *CreatePaymentUsecase) resolveCrossChainBridgeAmount(ctx context.Context
 	if strings.EqualFold(settlement.InvoiceToken.ContractAddress, settlement.DestBridgeToken.ContractAddress) {
 		return invoiceAtomic, fmt.Sprintf("%s->%s", settlement.InvoiceToken.Symbol, settlement.DestBridgeToken.Symbol), fmt.Sprintf("cross-chain-bridge-token-direct-via-%s", strings.ToLower(settlement.BridgeTokenSymbol)), nil
 	}
-	destQuote, err := u.quoteUC.CreateQuote(ctx, &CreatePartnerQuoteInput{
-		MerchantID:      merchantID,
-		InvoiceCurrency: settlement.InvoiceToken.Symbol,
-		InvoiceAmount:   invoiceAtomic,
-		SelectedChain:   settlement.DestChainCAIP2,
-		SelectedToken:   settlement.DestBridgeToken.ContractAddress,
-		DestWallet:      destWallet,
-	})
+	requiredBridgeAmount, route, source, err := u.solveRequiredInputForTargetOutput(
+		ctx,
+		merchantID,
+		settlement.DestChainCAIP2,
+		settlement.DestBridgeToken,
+		settlement.InvoiceToken,
+		invoiceAtomic,
+		destWallet,
+	)
 	if err != nil {
 		return "", "", "", err
 	}
-	destQuoteID, parseErr := uuid.Parse(destQuote.QuoteID)
-	if parseErr == nil {
-		_ = u.quoteRepo.UpdateStatus(ctx, destQuoteID, entities.PaymentQuoteStatusCancelled)
+	return requiredBridgeAmount, route, source, nil
+}
+
+func (u *CreatePaymentUsecase) solveRequiredInputForTargetOutput(
+	ctx context.Context,
+	merchantID uuid.UUID,
+	chainCAIP2 string,
+	inputToken *entities.Token,
+	outputToken *entities.Token,
+	targetOutputAtomic string,
+	destWallet string,
+) (string, string, string, error) {
+	ctx = withQuoteRequestCache(ctx)
+	target, ok := new(big.Int).SetString(strings.TrimSpace(targetOutputAtomic), 10)
+	if !ok || target == nil || target.Sign() <= 0 {
+		return "", "", "", domainerrors.BadRequest("target output amount must be a positive integer string")
 	}
-	return destQuote.QuotedAmount, destQuote.Route, destQuote.PriceSource, nil
+
+	if inverseUC, ok := u.quoteUC.(createPaymentQuoteInversePreviewEngine); ok {
+		inverseOut, inverseErr := inverseUC.PreviewRequiredInputForOutput(ctx, &PreviewRequiredInputForOutputInput{
+			MerchantID:         merchantID,
+			SelectedChain:      chainCAIP2,
+			InputToken:         inputToken.ContractAddress,
+			OutputToken:        outputToken.ContractAddress,
+			TargetOutputAmount: target.String(),
+		})
+		if inverseErr == nil && inverseOut != nil {
+			required, parsed := new(big.Int).SetString(strings.TrimSpace(inverseOut.RequiredInputAmount), 10)
+			if parsed && required != nil && required.Sign() > 0 {
+				return required.String(), strings.TrimSpace(inverseOut.Route), strings.TrimSpace(inverseOut.PriceSource), nil
+			}
+		}
+	}
+
+	quoteForInput := func(inputAmount *big.Int) (*big.Int, string, string, error) {
+		if inputAmount == nil || inputAmount.Sign() <= 0 {
+			return nil, "", "", domainerrors.BadRequest("input amount must be positive")
+		}
+		quoteInput := &CreatePartnerQuoteInput{
+			MerchantID:      merchantID,
+			InvoiceCurrency: inputToken.Symbol,
+			InvoiceToken:    inputToken.ContractAddress,
+			InvoiceAmount:   inputAmount.String(),
+			SelectedChain:   chainCAIP2,
+			SelectedToken:   outputToken.ContractAddress,
+			DestWallet:      destWallet,
+		}
+		var quoteOut *CreatePartnerQuoteOutput
+		var err error
+		persistedQuote := false
+		if previewUC, ok := u.quoteUC.(createPaymentQuotePreviewEngine); ok {
+			quoteOut, err = previewUC.PreviewQuote(ctx, quoteInput)
+		} else {
+			quoteOut, err = u.quoteUC.CreateQuote(ctx, quoteInput)
+			persistedQuote = true
+		}
+		if err != nil {
+			if shouldTreatQuoteProbeAsZero(err) {
+				// Tiny probe amounts can legitimately be unquotable on quoter paths.
+				// Treat as zero output so the search can continue to larger amounts.
+				return big.NewInt(0), "", "", nil
+			}
+			return nil, "", "", err
+		}
+		if quoteOut == nil {
+			return nil, "", "", domainerrors.InternalServerError("invalid temporary quote output")
+		}
+		if persistedQuote && quoteOut != nil {
+			quoteID, parseErr := uuid.Parse(quoteOut.QuoteID)
+			if parseErr == nil {
+				_ = u.quoteRepo.UpdateStatus(ctx, quoteID, entities.PaymentQuoteStatusCancelled)
+			}
+		}
+		quotedOut, parsed := new(big.Int).SetString(strings.TrimSpace(quoteOut.QuotedAmount), 10)
+		if !parsed || quotedOut == nil || quotedOut.Sign() < 0 {
+			return nil, "", "", domainerrors.InternalServerError("invalid temporary quote amount")
+		}
+		return quotedOut, quoteOut.Route, quoteOut.PriceSource, nil
+	}
+
+	low := big.NewInt(1)
+	high := new(big.Int).Set(target)
+	bestRoute := ""
+	bestSource := ""
+	foundUpperBound := false
+
+	// Anchor probe narrows the initial interval substantially for near-linear pools.
+	// This cuts binary-search probes while preserving exact integer output checks.
+	anchorOut, route, source, anchorErr := quoteForInput(target)
+	if anchorErr == nil && anchorOut != nil && anchorOut.Sign() > 0 {
+		bestRoute = route
+		bestSource = source
+		if anchorOut.Cmp(target) == 0 {
+			return target.String(), bestRoute, bestSource, nil
+		}
+
+		numerator := new(big.Int).Mul(target, target)
+		guess := new(big.Int).Div(numerator, anchorOut)
+		if new(big.Int).Mod(numerator, anchorOut).Sign() > 0 {
+			guess = guess.Add(guess, big.NewInt(1))
+		}
+		if guess.Sign() <= 0 {
+			guess = big.NewInt(1)
+		}
+
+		low = new(big.Int).Div(guess, big.NewInt(2))
+		if low.Sign() <= 0 {
+			low = big.NewInt(1)
+		}
+		high = new(big.Int).Mul(guess, big.NewInt(2))
+		if high.Sign() <= 0 {
+			high = big.NewInt(1)
+		}
+	}
+
+	for i := 0; i < 16; i++ {
+		quotedOut, route, source, err := quoteForInput(high)
+		if err != nil {
+			return "", "", "", err
+		}
+		if quotedOut.Cmp(target) >= 0 {
+			bestRoute = route
+			bestSource = source
+			foundUpperBound = true
+			break
+		}
+		high = new(big.Int).Mul(high, big.NewInt(2))
+	}
+
+	if !foundUpperBound {
+		return "", "", "", domainerrors.BadRequest("unable to estimate required source amount for requested invoice")
+	}
+
+	for i := 0; i < 48 && low.Cmp(high) < 0; i++ {
+		mid := new(big.Int).Add(low, high)
+		mid.Div(mid, big.NewInt(2))
+		if mid.Sign() <= 0 {
+			mid = big.NewInt(1)
+		}
+
+		quotedOut, route, source, err := quoteForInput(mid)
+		if err != nil {
+			return "", "", "", err
+		}
+		if quotedOut.Cmp(target) >= 0 {
+			high = mid
+			bestRoute = route
+			bestSource = source
+		} else {
+			low = new(big.Int).Add(mid, big.NewInt(1))
+		}
+	}
+
+	return high.String(), bestRoute, bestSource, nil
+}
+
+func shouldTreatQuoteProbeAsZero(err error) bool {
+	if err == nil {
+		return false
+	}
+	var appErr *domainerrors.AppError
+	if !errors.As(err, &appErr) {
+		return false
+	}
+	if appErr.Status != 400 {
+		return false
+	}
+	message := strings.ToLower(strings.TrimSpace(appErr.Message))
+	if message == "" {
+		return false
+	}
+	if strings.Contains(message, "placeholder quote") {
+		return true
+	}
+	if strings.Contains(message, "no usable v3 fee tier found") {
+		return true
+	}
+	if strings.Contains(message, "amountout <= 0") {
+		return true
+	}
+	return false
 }
 
 func (u *CreatePaymentUsecase) createCompositeQuote(ctx context.Context, merchantID uuid.UUID, selectedChainCAIP2 string, selectedToken *entities.Token, invoiceCurrency string, invoiceDecimals int, invoiceAtomic string, quotedAmount string, priceSource string, route string) (*CreatePartnerQuoteOutput, error) {
