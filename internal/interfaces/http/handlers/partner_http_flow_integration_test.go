@@ -94,7 +94,7 @@ func TestPartnerHTTPFlow_QuoteSessionReadResolveWebhook(t *testing.T) {
 		jweService,
 		paymentRequestUsecase,
 		nil,
-		"https://partner.pay.test/checkout",
+		"https://partner.pay.test/pay",
 	)
 	webhookUsecase := usecases.NewWebhookUsecase(nil, nil, paymentRequestRepo, sessionRepo, nil, nil, nil, nil)
 
@@ -278,7 +278,7 @@ func TestPartnerHTTPFlow_CreatePaymentReadResolveWebhook(t *testing.T) {
 		jweService,
 		paymentRequestUsecase,
 		nil,
-		"https://partner.pay.test/checkout",
+		"https://partner.pay.test/pay",
 	)
 	createPaymentUsecase := usecases.NewCreatePaymentUsecase(
 		merchantRepo,

@@ -21,7 +21,7 @@ import (
 	"payment-kita.backend/pkg/utils"
 )
 
-const defaultPartnerCheckoutBaseURL = "https://pay.paymentkita.com/checkout"
+const defaultFrontendBaseURL = "https://payment-kita.excitech.id"
 
 type CreatePartnerPaymentSessionInput struct {
 	MerchantID        uuid.UUID
@@ -45,14 +45,14 @@ type CreatePartnerPaymentSessionOutput struct {
 	PaymentURL         string    `json:"payment_url"`
 	PaymentCode        string    `json:"payment_code"`
 	PaymentInstruction struct {
-		ChainID    string `json:"chain_id"`
-		To         string `json:"to,omitempty"`
-		Value      string `json:"value,omitempty"`
-		Data       string `json:"data,omitempty"`
-		ProgramID  string `json:"program_id,omitempty"`
-		DataBase58 string `json:"data_base58,omitempty"`
-		DataBase64 string `json:"data_base64,omitempty"`
-		ApprovalTo string `json:"approval_to,omitempty"`
+		ChainID     string `json:"chain_id"`
+		To          string `json:"to,omitempty"`
+		Value       string `json:"value,omitempty"`
+		Data        string `json:"data,omitempty"`
+		ProgramID   string `json:"program_id,omitempty"`
+		DataBase58  string `json:"data_base58,omitempty"`
+		DataBase64  string `json:"data_base64,omitempty"`
+		ApprovalTo  string `json:"approval_to,omitempty"`
 		ApprovalHex string `json:"approval_hex_data,omitempty"`
 	} `json:"payment_instruction"`
 	Quote struct {
@@ -76,14 +76,14 @@ type GetPartnerPaymentSessionOutput struct {
 	PaymentURL         string    `json:"payment_url"`
 	PaymentCode        string    `json:"payment_code"`
 	PaymentInstruction struct {
-		ChainID    string `json:"chain_id"`
-		To         string `json:"to,omitempty"`
-		Value      string `json:"value,omitempty"`
-		Data       string `json:"data,omitempty"`
-		ProgramID  string `json:"program_id,omitempty"`
-		DataBase58 string `json:"data_base58,omitempty"`
-		DataBase64 string `json:"data_base64,omitempty"`
-		ApprovalTo string `json:"approval_to,omitempty"`
+		ChainID     string `json:"chain_id"`
+		To          string `json:"to,omitempty"`
+		Value       string `json:"value,omitempty"`
+		Data        string `json:"data,omitempty"`
+		ProgramID   string `json:"program_id,omitempty"`
+		DataBase58  string `json:"data_base58,omitempty"`
+		DataBase64  string `json:"data_base64,omitempty"`
+		ApprovalTo  string `json:"approval_to,omitempty"`
 		ApprovalHex string `json:"approval_hex_data,omitempty"`
 	} `json:"payment_instruction"`
 }
@@ -103,14 +103,14 @@ type ResolvePartnerPaymentCodeOutput struct {
 	DestWallet         string    `json:"dest_wallet"`
 	ExpiresAt          time.Time `json:"expires_at"`
 	PaymentInstruction struct {
-		ChainID    string `json:"chain_id"`
-		To         string `json:"to,omitempty"`
-		Value      string `json:"value,omitempty"`
-		Data       string `json:"data,omitempty"`
-		ProgramID  string `json:"program_id,omitempty"`
-		DataBase58 string `json:"data_base58,omitempty"`
-		DataBase64 string `json:"data_base64,omitempty"`
-		ApprovalTo string `json:"approval_to,omitempty"`
+		ChainID     string `json:"chain_id"`
+		To          string `json:"to,omitempty"`
+		Value       string `json:"value,omitempty"`
+		Data        string `json:"data,omitempty"`
+		ProgramID   string `json:"program_id,omitempty"`
+		DataBase58  string `json:"data_base58,omitempty"`
+		DataBase64  string `json:"data_base64,omitempty"`
+		ApprovalTo  string `json:"approval_to,omitempty"`
 		ApprovalHex string `json:"approval_hex_data,omitempty"`
 	} `json:"payment_instruction"`
 }
@@ -145,13 +145,7 @@ func NewPartnerPaymentSessionUsecase(
 	paymentUC *PaymentUsecase,
 	checkoutBaseURL string,
 ) *PartnerPaymentSessionUsecase {
-	baseURL := strings.TrimSpace(checkoutBaseURL)
-	if baseURL == "" {
-		baseURL = strings.TrimSpace(os.Getenv("PARTNER_CHECKOUT_BASE_URL"))
-	}
-	if baseURL == "" {
-		baseURL = defaultPartnerCheckoutBaseURL
-	}
+	baseURL := resolvePartnerPayBaseURL(checkoutBaseURL)
 
 	return &PartnerPaymentSessionUsecase{
 		quoteRepo:           quoteRepo,
@@ -167,6 +161,38 @@ func NewPartnerPaymentSessionUsecase(
 		paymentUC:           paymentUC,
 		chainResolver:       NewChainResolver(chainRepo),
 		checkoutBaseURL:     strings.TrimRight(baseURL, "/"),
+	}
+}
+
+func resolvePartnerPayBaseURL(explicitBaseURL string) string {
+	baseURL := strings.TrimSpace(explicitBaseURL)
+	if baseURL == "" {
+		baseURL = strings.TrimSpace(os.Getenv("PARTNER_CHECKOUT_BASE_URL"))
+	}
+	if baseURL == "" {
+		baseURL = strings.TrimSpace(os.Getenv("FRONTEND_BASE_URL"))
+	}
+	if baseURL == "" {
+		baseURL = strings.TrimSpace(os.Getenv("NEXT_PUBLIC_APP_URL"))
+	}
+	if baseURL == "" {
+		baseURL = strings.TrimSpace(os.Getenv("NEXT_PUBLIC_FRONTEND_URL"))
+	}
+	if baseURL == "" {
+		baseURL = strings.TrimSpace(os.Getenv("NEXT_PUBLIC_SITE_URL"))
+	}
+	if baseURL == "" {
+		baseURL = defaultFrontendBaseURL
+	}
+	baseURL = strings.TrimRight(baseURL, "/")
+	lower := strings.ToLower(baseURL)
+	switch {
+	case strings.HasSuffix(lower, "/pay"):
+		return baseURL
+	case strings.HasSuffix(lower, "/checkout"):
+		return strings.TrimSuffix(baseURL, "/checkout") + "/pay"
+	default:
+		return baseURL + "/pay"
 	}
 }
 
@@ -346,7 +372,7 @@ func (u *PartnerPaymentSessionUsecase) CreateSession(ctx context.Context, input 
 			normalizedToken := normalizeEvmAddress(quote.SelectedTokenAddress)
 			if normalizedToken != "0x0000000000000000000000000000000000000000" {
 				session.InstructionApprovalTo = normalizedToken
-				
+
 				// Resolve chain IDs to internal UUIDs for CalculateOnchainApprovalAmount
 				sourceChain, _ := u.chainRepo.GetByCAIP2(txCtx, quote.SelectedChainID)
 				destChain, _ := u.chainRepo.GetByCAIP2(txCtx, destChainCAIP2)

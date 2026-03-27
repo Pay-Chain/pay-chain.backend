@@ -49,7 +49,7 @@ func TestPartnerPaymentSessionHandler_CreateSession_ResponseShape(t *testing.T) 
 		DestToken:       "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
 		DestWallet:      "0xMerchantDestination",
 		ExpireTime:      time.Date(2026, 3, 20, 10, 20, 0, 0, time.UTC),
-		PaymentURL:      "https://pay.paymentkita.com/checkout/0195-payment",
+		PaymentURL:      "https://pay.paymentkita.com/pay/0195-payment",
 		PaymentCode:     "eyJ.mock",
 		Status:          "PENDING",
 	}
@@ -91,7 +91,7 @@ func TestPartnerPaymentSessionHandler_CreateSession_ResponseShape(t *testing.T) 
 	require.Equal(t, float64(6), got["amount_decimals"])
 	require.Equal(t, "eip155:8453", got["dest_chain"])
 	require.Equal(t, "0xMerchantDestination", got["dest_wallet"])
-	require.Equal(t, "https://pay.paymentkita.com/checkout/0195-payment", got["payment_url"])
+	require.Equal(t, "https://pay.paymentkita.com/pay/0195-payment", got["payment_url"])
 	require.Equal(t, "eyJ.mock", got["payment_code"])
 	require.Equal(t, "PENDING", got["status"])
 	require.NotEmpty(t, got["payment_instruction"])
@@ -110,7 +110,7 @@ func TestPartnerPaymentSessionHandler_GetSession_ResponseShape(t *testing.T) {
 		DestToken:      "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
 		DestWallet:     "0xMerchantDestination",
 		ExpiresAt:      time.Date(2026, 3, 20, 10, 20, 0, 0, time.UTC),
-		PaymentURL:     "https://pay.paymentkita.com/checkout/0195-payment",
+		PaymentURL:     "https://pay.paymentkita.com/pay/0195-payment",
 		PaymentCode:    "eyJ.mock",
 	}
 	getOut.PaymentInstruction.ChainID = "eip155:8453"

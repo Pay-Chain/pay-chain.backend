@@ -48,7 +48,7 @@ func TestCreatePaymentHandler_ResponseShape(t *testing.T) {
 		DestToken:                "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
 		DestWallet:               "0xMerchantDestination",
 		ExpireTime:               time.Date(2026, 3, 20, 10, 20, 0, 0, time.UTC),
-		PaymentURL:               "https://pay.paymentkita.com/checkout/0195-payment",
+		PaymentURL:               "https://pay.paymentkita.com/pay/0195-payment",
 		PaymentCode:              "eyJ.mock",
 	}
 	out.PaymentInstruction.ChainID = "eip155:8453"

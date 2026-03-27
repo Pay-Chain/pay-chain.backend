@@ -15,8 +15,8 @@ import (
 
 	domainentities "payment-kita.backend/internal/domain/entities"
 	"payment-kita.backend/internal/domain/services"
-	infrarepos "payment-kita.backend/internal/infrastructure/repositories"
 	"payment-kita.backend/internal/infrastructure/blockchain"
+	infrarepos "payment-kita.backend/internal/infrastructure/repositories"
 )
 
 func TestPartnerFlow_QuoteSessionHostedReadResolveWebhookSync_Integration(t *testing.T) {
@@ -92,7 +92,7 @@ func TestPartnerFlow_QuoteSessionHostedReadResolveWebhookSync_Integration(t *tes
 			nil, nil, nil, merchantRepo, contractRepo, chainRepo, tokenRepo, nil, nil, nil, uow,
 			blockchain.NewClientFactory(),
 		), // paymentUC
-		"https://partner.pay.test/checkout",
+		"https://partner.pay.test/pay",
 	)
 	// Register a fake EVM client for the test RPC to avoid dial errors
 	sessionUsecase.paymentUC.clientFactory.RegisterEVMClient("https://rpc.base.example", blockchain.NewEVMClientWithCallView(big.NewInt(8453), func(ctx context.Context, to string, data []byte) ([]byte, error) {
@@ -124,7 +124,7 @@ func TestPartnerFlow_QuoteSessionHostedReadResolveWebhookSync_Integration(t *tes
 	})
 	require.NoError(t, err)
 	require.Equal(t, "PENDING", sessionOut.Status)
-	require.Contains(t, sessionOut.PaymentURL, "/checkout/")
+	require.Contains(t, sessionOut.PaymentURL, "/pay/")
 	require.NotEmpty(t, sessionOut.PaymentCode)
 	require.Equal(t, "0xgateway0000000000000000000000000000000000", sessionOut.PaymentInstruction.To)
 	require.Equal(t, "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", sessionOut.PaymentInstruction.ApprovalTo)
