@@ -78,15 +78,15 @@ func DualAuthMiddleware(jwtService *jwt.JWTService, apiKeyUsecase *usecases.ApiK
 		tokenFromTrustedSession := false
 
 		// Check for Session ID first (trusted proxy)
-			sessionID := c.GetHeader("x-session-id")
-			if sessionStore != nil && sessionID != "" && IsTrustedProxyRequest(c) {
-				// Retrieve from Redis
-				session, err := loadSessionFromStore(c.Request.Context(), sessionStore, sessionID)
-				if err == nil && session != nil {
-					tokenString = session.AccessToken
-					tokenFromTrustedSession = true
-				}
+		sessionID := c.GetHeader("x-session-id")
+		if sessionStore != nil && sessionID != "" && IsTrustedProxyRequest(c) {
+			// Retrieve from Redis
+			session, err := loadSessionFromStore(c.Request.Context(), sessionStore, sessionID)
+			if err == nil && session != nil {
+				tokenString = session.AccessToken
+				tokenFromTrustedSession = true
 			}
+		}
 
 		// Legacy fallback (non-strict mode only)
 		if tokenString == "" && !strictSessionMode && authHeader != "" && strings.HasPrefix(authHeader, BearerPrefix) {
@@ -150,6 +150,13 @@ func DualAuthMiddleware(jwtService *jwt.JWTService, apiKeyUsecase *usecases.ApiK
 			c.Set(UserIDKey, claims.UserID)
 			c.Set(UserEmailKey, claims.Email)
 			c.Set(UserRoleKey, claims.Role)
+			if merchantRepo != nil && shouldResolveMerchantContext(c.Request.URL.Path) {
+				merchant, mErr := merchantRepo.GetByUserID(c.Request.Context(), claims.UserID)
+				if mErr == nil && merchant != nil {
+					c.Set(MerchantIDKey, merchant.ID)
+					c.Set(IsMerchantAuthenticatedKey, true)
+				}
+			}
 			c.Next()
 			return
 		}
@@ -164,4 +171,15 @@ func DualAuthMiddleware(jwtService *jwt.JWTService, apiKeyUsecase *usecases.ApiK
 func sha256Hex(data []byte) string {
 	hash := sha256.Sum256(data)
 	return hex.EncodeToString(hash[:])
+}
+
+func shouldResolveMerchantContext(path string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(path))
+	if normalized == "" {
+		return false
+	}
+	if strings.HasPrefix(normalized, "/api/v1/merchants/") {
+		return true
+	}
+	return strings.HasPrefix(normalized, "/api/v1/create-payment")
 }

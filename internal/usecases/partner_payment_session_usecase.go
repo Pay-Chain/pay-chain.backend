@@ -232,7 +232,7 @@ func (u *PartnerPaymentSessionUsecase) CreateSession(ctx context.Context, input 
 			return domainerrors.BadRequest("quote is no longer active")
 		}
 		now := time.Now().UTC()
-		if now.After(quote.ExpiresAt) {
+		if !isUnlimitedExpiryTime(quote.ExpiresAt) && now.After(quote.ExpiresAt) {
 			return domainerrors.BadRequest("quote has expired")
 		}
 
@@ -373,41 +373,49 @@ func (u *PartnerPaymentSessionUsecase) CreateSession(ctx context.Context, input 
 			normalizedToken := normalizeEvmAddress(quote.SelectedTokenAddress)
 			if normalizedToken != "0x0000000000000000000000000000000000000000" {
 				session.InstructionApprovalTo = normalizedToken
+				if u.paymentUC != nil {
+					// Resolve chain IDs to internal UUIDs for CalculateOnchainApprovalAmount
+					sourceChain, _ := u.chainRepo.GetByCAIP2(txCtx, quote.SelectedChainID)
+					destChain, _ := u.chainRepo.GetByCAIP2(txCtx, destChainCAIP2)
 
-				// Resolve chain IDs to internal UUIDs for CalculateOnchainApprovalAmount
-				sourceChain, _ := u.chainRepo.GetByCAIP2(txCtx, quote.SelectedChainID)
-				destChain, _ := u.chainRepo.GetByCAIP2(txCtx, destChainCAIP2)
+					// Create a temporary payment object to satisfy CalculateOnchainApprovalAmount
+					// TotalCharged should be at least source amount; calculation logic will handle fees.
+					tempPayment := &domainentities.Payment{
+						SourceTokenAddress: quote.SelectedTokenAddress,
+						SourceAmount:       quote.QuotedAmount,
+						TotalCharged:       quote.QuotedAmount,
+						DestTokenAddress:   destTokenAddress,
+						ReceiverAddress:    session.DestWallet,
+					}
+					if sourceChain != nil {
+						tempPayment.SourceChainID = sourceChain.ID
+					}
+					if destChain != nil {
+						tempPayment.DestChainID = destChain.ID
+					}
 
-				// Create a temporary payment object to satisfy CalculateOnchainApprovalAmount
-				// TotalCharged should be at least source amount; calculation logic will handle fees.
-				tempPayment := &domainentities.Payment{
-					SourceTokenAddress: quote.SelectedTokenAddress,
-					SourceAmount:       quote.QuotedAmount,
-					TotalCharged:       quote.QuotedAmount,
-					DestTokenAddress:   destTokenAddress,
-					ReceiverAddress:    session.DestWallet,
-				}
-				if sourceChain != nil {
-					tempPayment.SourceChainID = sourceChain.ID
-				}
-				if destChain != nil {
-					tempPayment.DestChainID = destChain.ID
-				}
+					vaultAddress := contract.ContractAddress
+					if sourceChain != nil {
+						resolvedVault := u.paymentUC.ResolveVaultAddressForApproval(sourceChain.ID, contract.ContractAddress)
+						if resolvedVault != "" {
+							vaultAddress = resolvedVault
+						}
+					}
 
-				vaultAddress := u.paymentUC.ResolveVaultAddressForApproval(sourceChain.ID, contract.ContractAddress)
-				if vaultAddress == "" {
-					// Fallback to gateway if vault resolution fails
-					vaultAddress = contract.ContractAddress
-				}
+					approvalAmount, err := u.paymentUC.CalculateOnchainApprovalAmount(tempPayment, contract.ContractAddress)
+					if err != nil {
+						// Fallback to base amount if on-chain calculation fails
+						approvalAmount = quote.QuotedAmount
+					}
 
-				approvalAmount, err := u.paymentUC.CalculateOnchainApprovalAmount(tempPayment, contract.ContractAddress)
-				if err != nil {
-					// Fallback to base amount if on-chain calculation fails
-					approvalAmount = quote.QuotedAmount
+					session.InstructionApprovalDataHex = u.paymentUC.buildErc20ApproveHex(vaultAddress, approvalAmount)
 				}
-
-				session.InstructionApprovalDataHex = u.paymentUC.buildErc20ApproveHex(vaultAddress, approvalAmount)
 			}
+		}
+
+		expiresAtUnix := session.ExpiresAt.Unix()
+		if isUnlimitedExpiryTime(session.ExpiresAt) {
+			expiresAtUnix = 0
 		}
 
 		session.PaymentCode, err = u.jweService.Encrypt(services.JWEPayload{
@@ -421,7 +429,7 @@ func (u *PartnerPaymentSessionUsecase) CreateSession(ctx context.Context, input 
 			DestToken:  session.DestToken,
 			DestWallet: session.DestWallet,
 			Nonce:      utils.GenerateUUIDv7().String(),
-			ExpiresAt:  session.ExpiresAt.Unix(),
+			ExpiresAt:  expiresAtUnix,
 		})
 		if err != nil {
 			return domainerrors.InternalServerError(fmt.Sprintf("failed to generate payment code: %v", err))
@@ -515,7 +523,7 @@ func (u *PartnerPaymentSessionUsecase) ResolvePaymentCode(ctx context.Context, i
 	if session.Status != domainentities.PartnerPaymentSessionStatusPending {
 		return nil, domainerrors.BadRequest("payment session is not payable")
 	}
-	if time.Now().UTC().After(session.ExpiresAt) {
+	if !isUnlimitedExpiryTime(session.ExpiresAt) && time.Now().UTC().After(session.ExpiresAt) {
 		return nil, domainerrors.NewAppError(410, domainerrors.CodeBadRequest, "payment invitation has expired", nil)
 	}
 

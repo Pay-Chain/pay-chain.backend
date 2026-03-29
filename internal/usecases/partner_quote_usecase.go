@@ -21,13 +21,14 @@ const (
 )
 
 type CreatePartnerQuoteInput struct {
-	MerchantID      uuid.UUID
-	InvoiceCurrency string
-	InvoiceToken    string
-	InvoiceAmount   string
-	SelectedChain   string
-	SelectedToken   string
-	DestWallet      string
+	MerchantID        uuid.UUID
+	InvoiceCurrency   string
+	InvoiceToken      string
+	InvoiceAmount     string
+	SelectedChain     string
+	SelectedToken     string
+	DestWallet        string
+	ExpiresAtOverride *time.Time
 }
 
 type CreatePartnerQuoteOutput struct {
@@ -264,7 +265,15 @@ func (u *PartnerQuoteUsecase) createQuoteCore(ctx context.Context, input *Create
 	var quotedAmount *big.Int
 	priceSourceOverride := ""
 	simulatorFallbackReason := ""
-	if u.accurateQuoteFn != nil {
+	if preferDryRunQuote(ctx) {
+		dryQuote, dryErr := u.quoteWithDryRunPreferred(ctx, chainID, invoiceToken, selectedToken, amountIn)
+		if dryErr != nil {
+			return nil, domainerrors.BadRequest(fmt.Sprintf("accurate quote unavailable for selected pair: %v", dryErr))
+		}
+		quotedAmount = dryQuote.AmountOut
+		priceSourceOverride = strings.TrimSpace(dryQuote.PriceSource)
+	}
+	if quotedAmount == nil && u.accurateQuoteFn != nil {
 		accurateQuote, quoteErr := u.accurateQuoteFn(ctx, chainID, invoiceToken.ContractAddress, selectedToken.ContractAddress, amountIn)
 		if quoteErr == nil && accurateQuote != nil {
 			quotedAmount = accurateQuote.AmountOut
@@ -316,7 +325,7 @@ func (u *PartnerQuoteUsecase) createQuoteCore(ctx context.Context, input *Create
 				}
 			}
 		}
-	} else {
+	} else if quotedAmount == nil {
 		quotedAmount, err = u.swapQuoteFn(ctx, chainID, invoiceToken.ContractAddress, selectedToken.ContractAddress, amountIn)
 		if err != nil {
 			if u.simulatorQuoteFn != nil {
@@ -360,6 +369,9 @@ func (u *PartnerQuoteUsecase) createQuoteCore(ctx context.Context, input *Create
 
 	now := time.Now().UTC()
 	expiresAt := now.Add(partnerQuoteTTL)
+	if input.ExpiresAtOverride != nil && !input.ExpiresAtOverride.IsZero() {
+		expiresAt = input.ExpiresAtOverride.UTC()
+	}
 	routeSummary := u.summarizeRouteForProbe(invoiceToken, selectedToken, routeStatus)
 	if persist {
 		routeSummary = u.summarizeRoute(ctx, chainID, invoiceToken, selectedToken, routeStatus)
@@ -413,6 +425,52 @@ func (u *PartnerQuoteUsecase) createQuoteCore(ctx context.Context, input *Create
 	}
 	output.QuoteID = quote.ID.String()
 	return output, nil
+}
+
+func (u *PartnerQuoteUsecase) quoteWithDryRunPreferred(
+	ctx context.Context,
+	chainID uuid.UUID,
+	invoiceToken *domainentities.Token,
+	selectedToken *domainentities.Token,
+	amountIn *big.Int,
+) (*AccurateSwapQuoteResult, error) {
+	if invoiceToken == nil || selectedToken == nil || amountIn == nil || amountIn.Sign() <= 0 {
+		return nil, fmt.Errorf("invalid dry-run quote input")
+	}
+
+	var reasons []string
+	// Swapper quote path is used as primary in dry-run mode because it reflects
+	// the execution router configuration (including v4-aware routes) more directly.
+	if u.swapQuoteFn != nil {
+		quotedAmount, err := u.swapQuoteFn(ctx, chainID, invoiceToken.ContractAddress, selectedToken.ContractAddress, amountIn)
+		if err == nil && quotedAmount != nil && quotedAmount.Sign() > 0 {
+			if quotedAmount.Cmp(amountIn) != 0 || strings.EqualFold(invoiceToken.ContractAddress, selectedToken.ContractAddress) {
+				return &AccurateSwapQuoteResult{
+					AmountOut:   quotedAmount,
+					PriceSource: "",
+				}, nil
+			}
+			reasons = append(reasons, "swapper returned 1:1 placeholder quote")
+		} else if err != nil {
+			reasons = append(reasons, fmt.Sprintf("swapper fallback failed: %v", err))
+		}
+	}
+
+	// Secondary dry-run fallback.
+	if u.simulatorQuoteFn != nil {
+		simQuote, simErr := u.simulatorQuoteFn(ctx, chainID, invoiceToken.ContractAddress, selectedToken.ContractAddress, amountIn)
+		if simErr == nil && simQuote != nil && simQuote.AmountOut != nil && simQuote.AmountOut.Sign() > 0 {
+			return simQuote, nil
+		}
+		if simErr != nil {
+			reasons = append(reasons, fmt.Sprintf("dry-run simulator failed: %v", simErr))
+		}
+	}
+
+	if len(reasons) == 0 {
+		return nil, fmt.Errorf("no quote engine available")
+	}
+	return nil, fmt.Errorf("%s", strings.Join(reasons, "; "))
 }
 
 func (u *PartnerQuoteUsecase) getCachedChainByID(ctx context.Context, chainID uuid.UUID) (*domainentities.Chain, error) {

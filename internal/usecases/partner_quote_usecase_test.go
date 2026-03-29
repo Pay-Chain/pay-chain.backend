@@ -5,6 +5,7 @@ import (
 	"errors"
 	"math/big"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
@@ -158,6 +159,55 @@ func TestPartnerQuoteUsecase_CreateQuote_SupportedPair(t *testing.T) {
 	require.Equal(t, "uniswap-v4-base-usdc-idrx", out.PriceSource)
 	require.NotNil(t, quoteRepo.created)
 	require.Equal(t, domainentities.PaymentQuoteStatusActive, quoteRepo.created.Status)
+}
+
+func TestPartnerQuoteUsecase_CreateQuote_UsesExpiresAtOverride(t *testing.T) {
+	chainID := uuid.New()
+	quoteRepo := &partnerQuoteRepoStub{}
+	tokenRepo := &partnerQuoteTokenRepoStub{
+		byAddress: map[string]*domainentities.Token{
+			"0xusdc": {ChainUUID: chainID, ContractAddress: "0xusdc", Symbol: "USDC", Decimals: 6, IsActive: true},
+			"0xidrx": {ChainUUID: chainID, ContractAddress: "0xidrx", Symbol: "IDRX", Decimals: 2, IsActive: true},
+		},
+		bySymbol: map[string]*domainentities.Token{
+			"USDC": {ChainUUID: chainID, ContractAddress: "0xusdc", Symbol: "USDC", Decimals: 6, IsActive: true},
+			"IDRX": {ChainUUID: chainID, ContractAddress: "0xidrx", Symbol: "IDRX", Decimals: 2, IsActive: true},
+		},
+	}
+	chainRepo := &partnerQuoteChainRepoStub{
+		chain: &domainentities.Chain{ID: chainID, ChainID: "8453", Name: "Base", Type: domainentities.ChainTypeEVM},
+	}
+
+	uc := NewPartnerQuoteUsecase(quoteRepo, tokenRepo, chainRepo, nil)
+	uc.routeSupportFn = func(ctx context.Context, chainID uuid.UUID, tokenIn string, tokenOut string) (*TokenRouteSupportStatus, error) {
+		return &TokenRouteSupportStatus{
+			Exists:       true,
+			IsDirect:     true,
+			Path:         []string{"0xidrx", "0xusdc"},
+			Executable:   true,
+			UniversalV4:  "0xrouterv4",
+			SwapRouterV3: "",
+		}, nil
+	}
+	uc.swapQuoteFn = func(ctx context.Context, chainID uuid.UUID, tokenIn string, tokenOut string, amountIn *big.Int) (*big.Int, error) {
+		return big.NewInt(2950000), nil
+	}
+
+	override := time.Date(2027, time.January, 1, 0, 0, 0, 0, time.UTC)
+	out, err := uc.CreateQuote(context.Background(), &CreatePartnerQuoteInput{
+		MerchantID:        uuid.New(),
+		InvoiceCurrency:   "IDRX",
+		InvoiceAmount:     "5000000",
+		SelectedChain:     "eip155:8453",
+		SelectedToken:     "0xusdc",
+		DestWallet:        "0xmerchant",
+		ExpiresAtOverride: &override,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, out)
+	require.Equal(t, override, out.QuoteExpiresAt)
+	require.NotNil(t, quoteRepo.created)
+	require.Equal(t, override, quoteRepo.created.ExpiresAt)
 }
 
 func TestPartnerQuoteUsecase_CreateQuote_UnsupportedPair(t *testing.T) {

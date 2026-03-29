@@ -25,13 +25,15 @@ func newAuthUsecaseForTest(
 	emailRepo *MockEmailVerificationRepository,
 	walletRepo *MockWalletRepository,
 	chainRepo *MockChainRepository,
+	merchantRepo *MockMerchantRepository,
+	uow *MockUnitOfWork,
 ) *usecases.AuthUsecase {
 	jwtSvc := jwt.NewJWTService("test-secret", 15*time.Minute, 24*time.Hour)
-	return usecases.NewAuthUsecase(userRepo, emailRepo, walletRepo, chainRepo, jwtSvc)
+	return usecases.NewAuthUsecase(userRepo, emailRepo, walletRepo, chainRepo, merchantRepo, uow, jwtSvc)
 }
 
 func TestAuthUsecase_Register_BadWalletInput(t *testing.T) {
-	uc := newAuthUsecaseForTest(new(MockUserRepository), new(MockEmailVerificationRepository), new(MockWalletRepository), new(MockChainRepository))
+	uc := newAuthUsecaseForTest(new(MockUserRepository), new(MockEmailVerificationRepository), new(MockWalletRepository), new(MockChainRepository), new(MockMerchantRepository), new(MockUnitOfWork))
 
 	_, _, err := uc.Register(context.Background(), &entities.CreateUserInput{
 		Email: "a@mail.com",
@@ -45,7 +47,9 @@ func TestAuthUsecase_Register_EmailAlreadyExists(t *testing.T) {
 	emailRepo := new(MockEmailVerificationRepository)
 	walletRepo := new(MockWalletRepository)
 	chainRepo := new(MockChainRepository)
-	uc := newAuthUsecaseForTest(userRepo, emailRepo, walletRepo, chainRepo)
+	merchantRepo := new(MockMerchantRepository)
+	uow := new(MockUnitOfWork)
+	uc := newAuthUsecaseForTest(userRepo, emailRepo, walletRepo, chainRepo, merchantRepo, uow)
 
 	userRepo.On("GetByEmail", context.Background(), "exists@mail.com").Return(&entities.User{ID: uuid.New()}, nil).Once()
 
@@ -65,7 +69,9 @@ func TestAuthUsecase_Register_Success(t *testing.T) {
 	emailRepo := new(MockEmailVerificationRepository)
 	walletRepo := new(MockWalletRepository)
 	chainRepo := new(MockChainRepository)
-	uc := newAuthUsecaseForTest(userRepo, emailRepo, walletRepo, chainRepo)
+	merchantRepo := new(MockMerchantRepository)
+	uow := new(MockUnitOfWork)
+	uc := newAuthUsecaseForTest(userRepo, emailRepo, walletRepo, chainRepo, merchantRepo, uow)
 
 	input := &entities.CreateUserInput{
 		Email:           "new@mail.com",
@@ -85,6 +91,8 @@ func TestAuthUsecase_Register_Success(t *testing.T) {
 		ChainID: "8453",
 	}, nil).Once()
 	walletRepo.On("GetByAddress", context.Background(), chainUUID, input.WalletAddress).Return(nil, domainerrors.ErrNotFound).Once()
+
+	uow.On("Do", context.Background(), mock.Anything).Return(nil).Once()
 	userRepo.On("Create", context.Background(), mock.AnythingOfType("*entities.User")).Return(nil).Run(func(args mock.Arguments) {
 		u := args.Get(1).(*entities.User)
 		u.ID = createdUserID
@@ -101,7 +109,7 @@ func TestAuthUsecase_Register_Success(t *testing.T) {
 
 func TestAuthUsecase_Login_InvalidCredentialCases(t *testing.T) {
 	userRepo := new(MockUserRepository)
-	uc := newAuthUsecaseForTest(userRepo, new(MockEmailVerificationRepository), new(MockWalletRepository), new(MockChainRepository))
+	uc := newAuthUsecaseForTest(userRepo, new(MockEmailVerificationRepository), new(MockWalletRepository), new(MockChainRepository), new(MockMerchantRepository), new(MockUnitOfWork))
 
 	userRepo.On("GetByEmail", context.Background(), "missing@mail.com").Return(nil, domainerrors.ErrNotFound).Once()
 	_, err := uc.Login(context.Background(), &entities.LoginInput{
@@ -126,7 +134,7 @@ func TestAuthUsecase_Login_InvalidCredentialCases(t *testing.T) {
 
 func TestAuthUsecase_Login_SuccessNoSession(t *testing.T) {
 	userRepo := new(MockUserRepository)
-	uc := newAuthUsecaseForTest(userRepo, new(MockEmailVerificationRepository), new(MockWalletRepository), new(MockChainRepository))
+	uc := newAuthUsecaseForTest(userRepo, new(MockEmailVerificationRepository), new(MockWalletRepository), new(MockChainRepository), new(MockMerchantRepository), new(MockUnitOfWork))
 
 	hashed, _ := crypto.HashPassword("correct-password")
 	user := &entities.User{
@@ -151,7 +159,7 @@ func TestAuthUsecase_Login_SuccessNoSession(t *testing.T) {
 func TestAuthUsecase_VerifyEmail(t *testing.T) {
 	userRepo := new(MockUserRepository)
 	emailRepo := new(MockEmailVerificationRepository)
-	uc := newAuthUsecaseForTest(userRepo, emailRepo, new(MockWalletRepository), new(MockChainRepository))
+	uc := newAuthUsecaseForTest(userRepo, emailRepo, new(MockWalletRepository), new(MockChainRepository), new(MockMerchantRepository), new(MockUnitOfWork))
 
 	emailRepo.On("GetByToken", context.Background(), "bad-token").Return(nil, errors.New("not found")).Once()
 	err := uc.VerifyEmail(context.Background(), "bad-token")
@@ -165,7 +173,7 @@ func TestAuthUsecase_VerifyEmail(t *testing.T) {
 
 func TestAuthUsecase_RefreshToken(t *testing.T) {
 	userRepo := new(MockUserRepository)
-	uc := newAuthUsecaseForTest(userRepo, new(MockEmailVerificationRepository), new(MockWalletRepository), new(MockChainRepository))
+	uc := newAuthUsecaseForTest(userRepo, new(MockEmailVerificationRepository), new(MockWalletRepository), new(MockChainRepository), new(MockMerchantRepository), new(MockUnitOfWork))
 
 	_, err := uc.RefreshToken(context.Background(), "not-a-jwt")
 	assert.Error(t, err)
@@ -187,7 +195,7 @@ func TestAuthUsecase_RefreshToken(t *testing.T) {
 }
 
 func TestAuthUsecase_GetTokenExpiry(t *testing.T) {
-	uc := newAuthUsecaseForTest(new(MockUserRepository), new(MockEmailVerificationRepository), new(MockWalletRepository), new(MockChainRepository))
+	uc := newAuthUsecaseForTest(new(MockUserRepository), new(MockEmailVerificationRepository), new(MockWalletRepository), new(MockChainRepository), new(MockMerchantRepository), new(MockUnitOfWork))
 
 	_, err := uc.GetTokenExpiry("bad-token")
 	assert.Error(t, err)
@@ -203,7 +211,7 @@ func TestAuthUsecase_GetTokenExpiry(t *testing.T) {
 }
 
 func TestAuthUsecase_GetTokenExpiry_MissingExpClaim(t *testing.T) {
-	uc := newAuthUsecaseForTest(new(MockUserRepository), new(MockEmailVerificationRepository), new(MockWalletRepository), new(MockChainRepository))
+	uc := newAuthUsecaseForTest(new(MockUserRepository), new(MockEmailVerificationRepository), new(MockWalletRepository), new(MockChainRepository), new(MockMerchantRepository), new(MockUnitOfWork))
 
 	raw := gojwt.NewWithClaims(gojwt.SigningMethodHS256, &gojwt.MapClaims{
 		"userId": uuid.New().String(),
@@ -220,7 +228,7 @@ func TestAuthUsecase_GetTokenExpiry_MissingExpClaim(t *testing.T) {
 
 func TestAuthUsecase_ChangePassword(t *testing.T) {
 	userRepo := new(MockUserRepository)
-	uc := newAuthUsecaseForTest(userRepo, new(MockEmailVerificationRepository), new(MockWalletRepository), new(MockChainRepository))
+	uc := newAuthUsecaseForTest(userRepo, new(MockEmailVerificationRepository), new(MockWalletRepository), new(MockChainRepository), new(MockMerchantRepository), new(MockUnitOfWork))
 
 	userID := uuid.New()
 	currentHash, _ := crypto.HashPassword("current-pass")
@@ -248,7 +256,7 @@ func TestAuthUsecase_ChangePassword(t *testing.T) {
 
 func TestAuthUsecase_ChangePassword_ErrorBranches(t *testing.T) {
 	userRepo := new(MockUserRepository)
-	uc := newAuthUsecaseForTest(userRepo, new(MockEmailVerificationRepository), new(MockWalletRepository), new(MockChainRepository))
+	uc := newAuthUsecaseForTest(userRepo, new(MockEmailVerificationRepository), new(MockWalletRepository), new(MockChainRepository), new(MockMerchantRepository), new(MockUnitOfWork))
 	userID := uuid.New()
 
 	userRepo.On("GetByID", context.Background(), userID).Return(nil, errors.New("db down")).Once()
@@ -276,7 +284,7 @@ func TestAuthUsecase_ChangePassword_ErrorBranches(t *testing.T) {
 
 func TestAuthUsecase_ChangePassword_NewPasswordTooLong(t *testing.T) {
 	userRepo := new(MockUserRepository)
-	uc := newAuthUsecaseForTest(userRepo, new(MockEmailVerificationRepository), new(MockWalletRepository), new(MockChainRepository))
+	uc := newAuthUsecaseForTest(userRepo, new(MockEmailVerificationRepository), new(MockWalletRepository), new(MockChainRepository), new(MockMerchantRepository), new(MockUnitOfWork))
 	userID := uuid.New()
 
 	currentHash, _ := crypto.HashPassword("current-pass")
@@ -299,7 +307,7 @@ func TestAuthUsecase_ChangePassword_NewPasswordTooLong(t *testing.T) {
 
 func TestAuthUsecase_GetUserByID(t *testing.T) {
 	userRepo := new(MockUserRepository)
-	uc := newAuthUsecaseForTest(userRepo, new(MockEmailVerificationRepository), new(MockWalletRepository), new(MockChainRepository))
+	uc := newAuthUsecaseForTest(userRepo, new(MockEmailVerificationRepository), new(MockWalletRepository), new(MockChainRepository), new(MockMerchantRepository), new(MockUnitOfWork))
 
 	id := uuid.New()
 	user := &entities.User{ID: id, Email: "u@paymentkita.io"}
@@ -312,7 +320,7 @@ func TestAuthUsecase_GetUserByID(t *testing.T) {
 
 func TestAuthUsecase_Login_UserRepoError(t *testing.T) {
 	userRepo := new(MockUserRepository)
-	uc := newAuthUsecaseForTest(userRepo, new(MockEmailVerificationRepository), new(MockWalletRepository), new(MockChainRepository))
+	uc := newAuthUsecaseForTest(userRepo, new(MockEmailVerificationRepository), new(MockWalletRepository), new(MockChainRepository), new(MockMerchantRepository), new(MockUnitOfWork))
 
 	userRepo.On("GetByEmail", context.Background(), "err@mail.com").Return(nil, errors.New("db down")).Once()
 	_, err := uc.Login(context.Background(), &entities.LoginInput{
@@ -324,7 +332,7 @@ func TestAuthUsecase_Login_UserRepoError(t *testing.T) {
 
 func TestAuthUsecase_Login_UseSessionRedisError(t *testing.T) {
 	userRepo := new(MockUserRepository)
-	uc := newAuthUsecaseForTest(userRepo, new(MockEmailVerificationRepository), new(MockWalletRepository), new(MockChainRepository))
+	uc := newAuthUsecaseForTest(userRepo, new(MockEmailVerificationRepository), new(MockWalletRepository), new(MockChainRepository), new(MockMerchantRepository), new(MockUnitOfWork))
 
 	redispkg.SetClient(redisv9.NewClient(&redisv9.Options{
 		Addr:         "127.0.0.1:0",
@@ -353,7 +361,7 @@ func TestAuthUsecase_Login_UseSessionRedisError(t *testing.T) {
 
 func TestAuthUsecase_Login_UseSessionSuccess(t *testing.T) {
 	userRepo := new(MockUserRepository)
-	uc := newAuthUsecaseForTest(userRepo, new(MockEmailVerificationRepository), new(MockWalletRepository), new(MockChainRepository))
+	uc := newAuthUsecaseForTest(userRepo, new(MockEmailVerificationRepository), new(MockWalletRepository), new(MockChainRepository), new(MockMerchantRepository), new(MockUnitOfWork))
 
 	srv, err := miniredis.Run()
 	if err != nil {
@@ -388,7 +396,7 @@ func TestAuthUsecase_Login_UseSessionSuccess(t *testing.T) {
 func TestAuthUsecase_Register_ErrorBranches(t *testing.T) {
 	t.Run("user repo email lookup error", func(t *testing.T) {
 		userRepo := new(MockUserRepository)
-		uc := newAuthUsecaseForTest(userRepo, new(MockEmailVerificationRepository), new(MockWalletRepository), new(MockChainRepository))
+		uc := newAuthUsecaseForTest(userRepo, new(MockEmailVerificationRepository), new(MockWalletRepository), new(MockChainRepository), new(MockMerchantRepository), new(MockUnitOfWork))
 
 		userRepo.On("GetByEmail", context.Background(), "err@mail.com").Return(nil, errors.New("db down")).Once()
 		_, _, err := uc.Register(context.Background(), &entities.CreateUserInput{
@@ -405,7 +413,7 @@ func TestAuthUsecase_Register_ErrorBranches(t *testing.T) {
 	t.Run("invalid chain input", func(t *testing.T) {
 		userRepo := new(MockUserRepository)
 		chainRepo := new(MockChainRepository)
-		uc := newAuthUsecaseForTest(userRepo, new(MockEmailVerificationRepository), new(MockWalletRepository), chainRepo)
+		uc := newAuthUsecaseForTest(userRepo, new(MockEmailVerificationRepository), new(MockWalletRepository), chainRepo, new(MockMerchantRepository), new(MockUnitOfWork))
 
 		userRepo.On("GetByEmail", context.Background(), "new@mail.com").Return(nil, domainerrors.ErrNotFound).Once()
 		chainRepo.On("GetByCAIP2", context.Background(), "bad-chain").Return(nil, domainerrors.ErrNotFound).Once()
@@ -426,7 +434,7 @@ func TestAuthUsecase_Register_ErrorBranches(t *testing.T) {
 		userRepo := new(MockUserRepository)
 		walletRepo := new(MockWalletRepository)
 		chainRepo := new(MockChainRepository)
-		uc := newAuthUsecaseForTest(userRepo, new(MockEmailVerificationRepository), walletRepo, chainRepo)
+		uc := newAuthUsecaseForTest(userRepo, new(MockEmailVerificationRepository), walletRepo, chainRepo, new(MockMerchantRepository), new(MockUnitOfWork))
 
 		chainUUID := uuid.New()
 		userRepo.On("GetByEmail", context.Background(), "new2@mail.com").Return(nil, domainerrors.ErrNotFound).Once()
@@ -452,7 +460,7 @@ func TestAuthUsecase_Register_ErrorBranches(t *testing.T) {
 		userRepo := new(MockUserRepository)
 		walletRepo := new(MockWalletRepository)
 		chainRepo := new(MockChainRepository)
-		uc := newAuthUsecaseForTest(userRepo, new(MockEmailVerificationRepository), walletRepo, chainRepo)
+		uc := newAuthUsecaseForTest(userRepo, new(MockEmailVerificationRepository), walletRepo, chainRepo, new(MockMerchantRepository), new(MockUnitOfWork))
 
 		chainUUID := uuid.New()
 		existingUserID := uuid.New()
@@ -485,7 +493,8 @@ func TestAuthUsecase_Register_ErrorBranches(t *testing.T) {
 		userRepo := new(MockUserRepository)
 		walletRepo := new(MockWalletRepository)
 		chainRepo := new(MockChainRepository)
-		uc := newAuthUsecaseForTest(userRepo, new(MockEmailVerificationRepository), walletRepo, chainRepo)
+		uow := new(MockUnitOfWork)
+		uc := newAuthUsecaseForTest(userRepo, new(MockEmailVerificationRepository), walletRepo, chainRepo, new(MockMerchantRepository), uow)
 
 		chainUUID := uuid.New()
 		userRepo.On("GetByEmail", context.Background(), "create-fail@mail.com").Return(nil, domainerrors.ErrNotFound).Once()
@@ -500,6 +509,7 @@ func TestAuthUsecase_Register_ErrorBranches(t *testing.T) {
 			ChainID: chainUUID,
 			Address: "0xabc",
 		}, nil).Once()
+		uow.On("Do", context.Background(), mock.Anything).Return(errors.New("create user failed")).Once()
 		userRepo.On("Create", context.Background(), mock.AnythingOfType("*entities.User")).Return(errors.New("create user failed")).Once()
 
 		_, _, err := uc.Register(context.Background(), &entities.CreateUserInput{
@@ -518,7 +528,8 @@ func TestAuthUsecase_Register_ErrorBranches(t *testing.T) {
 		walletRepo := new(MockWalletRepository)
 		emailRepo := new(MockEmailVerificationRepository)
 		chainRepo := new(MockChainRepository)
-		uc := newAuthUsecaseForTest(userRepo, emailRepo, walletRepo, chainRepo)
+		uow := new(MockUnitOfWork)
+		uc := newAuthUsecaseForTest(userRepo, emailRepo, walletRepo, chainRepo, new(MockMerchantRepository), uow)
 
 		chainUUID := uuid.New()
 		createdUserID := uuid.New()
@@ -529,6 +540,7 @@ func TestAuthUsecase_Register_ErrorBranches(t *testing.T) {
 			ChainID: "8453",
 		}, nil).Once()
 		walletRepo.On("GetByAddress", context.Background(), chainUUID, "0xabc").Return(nil, domainerrors.ErrNotFound).Once()
+		uow.On("Do", context.Background(), mock.Anything).Return(errors.New("wallet create failed")).Once()
 		userRepo.On("Create", context.Background(), mock.AnythingOfType("*entities.User")).Return(nil).Run(func(args mock.Arguments) {
 			u := args.Get(1).(*entities.User)
 			u.ID = createdUserID
@@ -551,7 +563,8 @@ func TestAuthUsecase_Register_ErrorBranches(t *testing.T) {
 		walletRepo := new(MockWalletRepository)
 		emailRepo := new(MockEmailVerificationRepository)
 		chainRepo := new(MockChainRepository)
-		uc := newAuthUsecaseForTest(userRepo, emailRepo, walletRepo, chainRepo)
+		uow := new(MockUnitOfWork)
+		uc := newAuthUsecaseForTest(userRepo, emailRepo, walletRepo, chainRepo, new(MockMerchantRepository), uow)
 
 		chainUUID := uuid.New()
 		createdUserID := uuid.New()
@@ -562,6 +575,7 @@ func TestAuthUsecase_Register_ErrorBranches(t *testing.T) {
 			ChainID: "8453",
 		}, nil).Once()
 		walletRepo.On("GetByAddress", context.Background(), chainUUID, "0xabc").Return(nil, domainerrors.ErrNotFound).Once()
+		uow.On("Do", context.Background(), mock.Anything).Return(errors.New("verification save failed")).Once()
 		userRepo.On("Create", context.Background(), mock.AnythingOfType("*entities.User")).Return(nil).Run(func(args mock.Arguments) {
 			u := args.Get(1).(*entities.User)
 			u.ID = createdUserID
@@ -584,7 +598,7 @@ func TestAuthUsecase_Register_ErrorBranches(t *testing.T) {
 func TestAuthUsecase_VerifyEmail_MarkVerifiedError(t *testing.T) {
 	userRepo := new(MockUserRepository)
 	emailRepo := new(MockEmailVerificationRepository)
-	uc := newAuthUsecaseForTest(userRepo, emailRepo, new(MockWalletRepository), new(MockChainRepository))
+	uc := newAuthUsecaseForTest(userRepo, emailRepo, new(MockWalletRepository), new(MockChainRepository), new(MockMerchantRepository), new(MockUnitOfWork))
 
 	emailRepo.On("GetByToken", context.Background(), "ok-token").Return(&entities.User{ID: uuid.New()}, nil).Once()
 	emailRepo.On("MarkVerified", context.Background(), "ok-token").Return(errors.New("mark failed")).Once()
@@ -595,7 +609,7 @@ func TestAuthUsecase_VerifyEmail_MarkVerifiedError(t *testing.T) {
 
 func TestAuthUsecase_RefreshToken_UserLookupError(t *testing.T) {
 	userRepo := new(MockUserRepository)
-	uc := newAuthUsecaseForTest(userRepo, new(MockEmailVerificationRepository), new(MockWalletRepository), new(MockChainRepository))
+	uc := newAuthUsecaseForTest(userRepo, new(MockEmailVerificationRepository), new(MockWalletRepository), new(MockChainRepository), new(MockMerchantRepository), new(MockUnitOfWork))
 
 	user := &entities.User{
 		ID:    uuid.New(),

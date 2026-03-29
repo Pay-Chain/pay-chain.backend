@@ -163,6 +163,9 @@ func registerAPIV1Routes(r *gin.Engine, d routeDeps) {
 		{
 			merchants.POST("/apply", d.merchantHandler.ApplyMerchant)
 			merchants.GET("/status", d.merchantHandler.GetMerchantStatus)
+			if d.createPaymentHandler != nil {
+				merchants.POST("/create-payment", d.createPaymentHandler.CreatePayment)
+			}
 			if d.merchantSettlementHandler != nil {
 				merchants.GET("/settlement-profile", d.merchantSettlementHandler.GetMySettlementProfile)
 				merchants.PUT("/settlement-profile", d.merchantSettlementHandler.UpsertMySettlementProfile)
@@ -250,6 +253,9 @@ func registerAPIV1Routes(r *gin.Engine, d routeDeps) {
 			admin.GET("/users", d.adminHandler.ListUsers)
 			admin.GET("/merchants", d.adminHandler.ListMerchants)
 			admin.PUT("/merchants/:id/status", d.adminHandler.UpdateMerchantStatus)
+			if d.createPaymentHandler != nil {
+				admin.POST("/merchants/:id/create-payment", d.createPaymentHandler.CreatePaymentAdmin)
+			}
 			admin.GET("/merchants/:id/settlement-profile", d.adminMerchantSettlementHandler.GetSettlementProfile)
 			admin.PUT("/merchants/:id/settlement-profile", d.adminMerchantSettlementHandler.UpsertSettlementProfile)
 			admin.GET("/stats", d.adminHandler.GetStats)

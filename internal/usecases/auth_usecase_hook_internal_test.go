@@ -144,10 +144,44 @@ func (s *authChainRepoStub) GetRPCByID(context.Context, uuid.UUID) (*entities.Ch
 	return nil, domainerrors.ErrNotFound
 }
 
+type authMerchantRepoStub struct {
+	createFn func(context.Context, *entities.Merchant) error
+}
+
+func (s *authMerchantRepoStub) Create(ctx context.Context, merchant *entities.Merchant) error {
+	if s.createFn != nil {
+		return s.createFn(ctx, merchant)
+	}
+	return nil
+}
+func (s *authMerchantRepoStub) GetByID(context.Context, uuid.UUID) (*entities.Merchant, error) {
+	return nil, nil
+}
+func (s *authMerchantRepoStub) GetByUserID(context.Context, uuid.UUID) (*entities.Merchant, error) {
+	return nil, nil
+}
+func (s *authMerchantRepoStub) Update(context.Context, *entities.Merchant) error { return nil }
+func (s *authMerchantRepoStub) UpdateStatus(context.Context, uuid.UUID, entities.MerchantStatus) error {
+	return nil
+}
+func (s *authMerchantRepoStub) List(context.Context) ([]*entities.Merchant, error) { return nil, nil }
+func (s *authMerchantRepoStub) SoftDelete(context.Context, uuid.UUID) error        { return nil }
+
+type authUnitOfWorkStub struct{}
+
+func (s *authUnitOfWorkStub) Do(ctx context.Context, f func(context.Context) error) error {
+	return f(ctx)
+}
+func (s *authUnitOfWorkStub) WithLock(ctx context.Context) context.Context {
+	return ctx
+}
+
 func newAuthUsecaseHook(t *testing.T, userRepo *authUserRepoStub, emailRepo *authEmailRepoStub, walletRepo *authWalletRepoStub, chainRepo *authChainRepoStub) *AuthUsecase {
 	t.Helper()
 	jwtSvc := jwt.NewJWTService("test-secret", 15*time.Minute, 24*time.Hour)
-	return NewAuthUsecase(userRepo, emailRepo, walletRepo, chainRepo, jwtSvc)
+	merchantRepo := &authMerchantRepoStub{}
+	uow := &authUnitOfWorkStub{}
+	return NewAuthUsecase(userRepo, emailRepo, walletRepo, chainRepo, merchantRepo, uow, jwtSvc)
 }
 
 func TestAuthUsecase_Hook_RegisterHashAndTokenErrors(t *testing.T) {

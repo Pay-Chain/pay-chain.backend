@@ -108,13 +108,15 @@ func TestPartnerFlow_QuoteSessionHostedReadResolveWebhookSync_Integration(t *tes
 		SelectedToken:   "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
 		DestWallet:      "0xmerchantdestination",
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("non-evm quote create failed: type=%T value=%+v", err, err)
+	}
 	require.Equal(t, "IDRX", quoteOut.InvoiceCurrency)
 	require.Equal(t, "2950000", quoteOut.QuotedAmount)
 
 	quoteID := uuid.MustParse(quoteOut.QuoteID)
 	quoteEntity, err := quoteRepo.GetByID(ctx, quoteID)
-	require.NoError(t, err)
+	require.NoErrorf(t, err, "native quote create failed: %#v", err)
 	require.Equal(t, domainentities.PaymentQuoteStatusActive, quoteEntity.Status)
 
 	sessionOut, err := sessionUsecase.CreateSession(ctx, &CreatePartnerPaymentSessionInput{
@@ -122,7 +124,7 @@ func TestPartnerFlow_QuoteSessionHostedReadResolveWebhookSync_Integration(t *tes
 		QuoteID:    quoteID,
 		DestWallet: "0xmerchantdestination",
 	})
-	require.NoError(t, err)
+	require.NoErrorf(t, err, "non-evm quote create failed: %#v", err)
 	require.Equal(t, "PENDING", sessionOut.Status)
 	require.Contains(t, sessionOut.PaymentURL, "/pay/")
 	require.NotEmpty(t, sessionOut.PaymentCode)
@@ -225,7 +227,7 @@ func TestPartnerFlow_NativeToken_NoApproval(t *testing.T) {
 		return &TokenRouteSupportStatus{Exists: true, Executable: true}, nil
 	})
 	quoteUsecase.SwapQuoteFnForTest(func(ctx context.Context, chainID uuid.UUID, tokenIn, tokenOut string, amountIn *big.Int) (*big.Int, error) {
-		return amountIn, nil
+		return new(big.Int).Add(amountIn, big.NewInt(1000)), nil
 	})
 	paymentRequestUsecase := NewPaymentRequestUsecase(paymentRequestRepo, merchantRepo, nil, chainRepo, contractRepo, tokenRepo, jweService)
 	sessionUsecase := NewPartnerPaymentSessionUsecase(
@@ -300,7 +302,7 @@ func TestPartnerFlow_NonEVM_NoApproval(t *testing.T) {
 		return &TokenRouteSupportStatus{Exists: true, Executable: true}, nil
 	})
 	quoteUsecase.SwapQuoteFnForTest(func(ctx context.Context, chainID uuid.UUID, tokenIn, tokenOut string, amountIn *big.Int) (*big.Int, error) {
-		return amountIn, nil
+		return new(big.Int).Add(amountIn, big.NewInt(1000)), nil
 	})
 	paymentRequestUsecase := NewPaymentRequestUsecase(paymentRequestRepo, merchantRepo, nil, chainRepo, contractRepo, tokenRepo, jweService)
 	sessionUsecase := NewPartnerPaymentSessionUsecase(
