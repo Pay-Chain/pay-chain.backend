@@ -39,6 +39,15 @@ func TestRequiredFunctions(t *testing.T) {
 	t.Run("stargate adapter", func(t *testing.T) {
 		require.Contains(t, requiredFunctions(entities.ContractTypeAdapterStargate), "setRoute")
 	})
+	t.Run("gateway validator module", func(t *testing.T) {
+		require.Contains(t, requiredFunctions(entities.ContractTypeGatewayValidator), "validateCreate")
+	})
+	t.Run("gateway quote module", func(t *testing.T) {
+		require.Contains(t, requiredFunctions(entities.ContractTypeGatewayQuote), "quoteBridgeForV2")
+	})
+	t.Run("gateway execution module", func(t *testing.T) {
+		require.Contains(t, requiredFunctions(entities.ContractTypeGatewayExecution), "beforeRoute")
+	})
 	t.Run("privacy module", func(t *testing.T) {
 		require.Contains(t, requiredFunctions(entities.ContractTypePrivacyModule), "forwardFromStealth")
 	})

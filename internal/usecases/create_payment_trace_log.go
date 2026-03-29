@@ -42,4 +42,3 @@ func createPaymentTraceWarn(ctx context.Context, msg string, fields ...zap.Field
 	}
 	logger.Warn(ctx, msg, fields...)
 }
-

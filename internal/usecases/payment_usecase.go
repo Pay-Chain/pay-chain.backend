@@ -38,8 +38,9 @@ var (
 )
 
 var knownUniswapV3QuotersByCAIP2 = map[string]string{
-	"eip155:8453": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
-	"eip155:137":  "0x61fFE014bA17989E743c5F6cB21bF9697530B21e",
+	"eip155:8453":  "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
+	"eip155:137":   "0x61fFE014bA17989E743c5F6cB21bF9697530B21e",
+	"eip155:42161": "0x61fFE014bA17989E743c5F6cB21bF9697530B21e",
 }
 
 // PaymentUsecase handles payment business logic

@@ -14,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 	domainentities "payment-kita.backend/internal/domain/entities"
 	domainerrors "payment-kita.backend/internal/domain/errors"
 	domainrepos "payment-kita.backend/internal/domain/repositories"
@@ -197,6 +198,16 @@ func resolvePartnerPayBaseURL(explicitBaseURL string) string {
 }
 
 func (u *PartnerPaymentSessionUsecase) CreateSession(ctx context.Context, input *CreatePartnerPaymentSessionInput) (*CreatePartnerPaymentSessionOutput, error) {
+	startedAt := time.Now()
+	if input != nil {
+		createPaymentTraceInfo(ctx, "partner_session.start",
+			zap.String("merchant_id", input.MerchantID.String()),
+			zap.String("quote_id", input.QuoteID.String()),
+			zap.String("dest_wallet", strings.TrimSpace(input.DestWallet)),
+			zap.String("dest_chain_override", strings.TrimSpace(input.DestChainOverride)),
+			zap.String("dest_token_override", strings.TrimSpace(input.DestTokenOverride)),
+		)
+	}
 	if input == nil {
 		return nil, domainerrors.BadRequest("input is required")
 	}
@@ -232,6 +243,16 @@ func (u *PartnerPaymentSessionUsecase) CreateSession(ctx context.Context, input 
 			return domainerrors.BadRequest("quote is no longer active")
 		}
 		now := time.Now().UTC()
+		createPaymentTraceDebug(txCtx, "partner_session.quote_loaded",
+			zap.String("quote_id", quote.ID.String()),
+			zap.String("quote_chain", strings.TrimSpace(quote.SelectedChainID)),
+			zap.String("quote_selected_token", strings.TrimSpace(quote.SelectedTokenAddress)),
+			zap.String("quote_selected_token_symbol", strings.TrimSpace(quote.SelectedTokenSymbol)),
+			zap.String("quote_amount_atomic", strings.TrimSpace(quote.QuotedAmount)),
+			zap.String("quote_price_source", strings.TrimSpace(quote.PriceSource)),
+			zap.String("quote_route", strings.TrimSpace(quote.Route)),
+			zap.String("quote_expires_at", quote.ExpiresAt.UTC().Format(time.RFC3339)),
+		)
 		if !isUnlimitedExpiryTime(quote.ExpiresAt) && now.After(quote.ExpiresAt) {
 			return domainerrors.BadRequest("quote has expired")
 		}
@@ -263,14 +284,35 @@ func (u *PartnerPaymentSessionUsecase) CreateSession(ctx context.Context, input 
 		if err := u.paymentRequestRepo.Create(txCtx, paymentRequest); err != nil {
 			return domainerrors.InternalServerError(fmt.Sprintf("failed to create payment request primitive: %v", err))
 		}
+		createPaymentTraceDebug(txCtx, "partner_session.payment_request_created",
+			zap.String("payment_request_id", paymentRequest.ID.String()),
+			zap.String("selected_chain_caip2", selectedChainCAIP2),
+			zap.String("selected_token", strings.TrimSpace(selectedToken.ContractAddress)),
+			zap.String("selected_token_symbol", strings.TrimSpace(selectedToken.Symbol)),
+			zap.String("amount_atomic", strings.TrimSpace(paymentRequest.Amount)),
+		)
 
 		contract, _ := u.contractRepo.GetActiveContract(txCtx, selectedChainID, domainentities.ContractTypeGateway)
+		createPaymentTraceDebug(txCtx, "partner_session.gateway_resolved",
+			zap.String("source_chain_caip2", selectedChainCAIP2),
+			zap.String("gateway_address", strings.TrimSpace(func() string {
+				if contract == nil {
+					return ""
+				}
+				return contract.ContractAddress
+			}())),
+		)
 
 		destChainID, destChainCAIP2, err := u.chainResolver.ResolveFromAny(txCtx, coalesceString(strings.TrimSpace(input.DestChainOverride), quote.SelectedChainID))
 		if err != nil {
 			return domainerrors.BadRequest(fmt.Sprintf("invalid destination chain: %v", err))
 		}
 		destTokenAddress := coalesceString(strings.TrimSpace(input.DestTokenOverride), quote.SelectedTokenAddress)
+		createPaymentTraceDebug(txCtx, "partner_session.destination_resolved",
+			zap.String("dest_chain_caip2", destChainCAIP2),
+			zap.String("dest_token", strings.TrimSpace(destTokenAddress)),
+			zap.String("dest_wallet", strings.TrimSpace(input.DestWallet)),
+		)
 
 		// V2 Logic: Calculate native bridge fee if necessary
 		bridgeFeeNative := big.NewInt(0)
@@ -288,6 +330,23 @@ func (u *PartnerPaymentSessionUsecase) CreateSession(ctx context.Context, input 
 				if f, ok := new(big.Int).SetString(onchainCost.BridgeFeeNative, 10); ok {
 					bridgeFeeNative = f
 				}
+				createPaymentTraceDebug(txCtx, "partner_session.gateway_cost_quote_success",
+					zap.String("gateway_address", strings.TrimSpace(contract.ContractAddress)),
+					zap.String("source_chain_id", selectedChainID.String()),
+					zap.String("dest_chain_id", destChainID.String()),
+					zap.String("source_token", strings.TrimSpace(quote.SelectedTokenAddress)),
+					zap.String("dest_token", strings.TrimSpace(destTokenAddress)),
+					zap.String("source_amount_atomic", strings.TrimSpace(quote.QuotedAmount)),
+					zap.String("bridge_fee_native_atomic", bridgeFeeNative.String()),
+				)
+			} else if err != nil {
+				createPaymentTraceWarn(txCtx, "partner_session.gateway_cost_quote_failed",
+					zap.String("gateway_address", strings.TrimSpace(contract.ContractAddress)),
+					zap.String("source_chain_id", selectedChainID.String()),
+					zap.String("dest_chain_id", destChainID.String()),
+					zap.String("source_amount_atomic", strings.TrimSpace(quote.QuotedAmount)),
+					zap.Error(err),
+				)
 			}
 		}
 
@@ -333,6 +392,14 @@ func (u *PartnerPaymentSessionUsecase) CreateSession(ctx context.Context, input 
 		if txData == nil {
 			return domainerrors.InternalServerError("failed to build payment instruction")
 		}
+		createPaymentTraceDebug(txCtx, "partner_session.payment_instruction_built",
+			zap.String("instruction_chain", selectedChainCAIP2),
+			zap.String("instruction_to", strings.TrimSpace(txData.To)),
+			zap.String("instruction_value_atomic", bridgeFeeNative.String()),
+			zap.Bool("has_data_hex", strings.TrimSpace(txData.Hex) != ""),
+			zap.Bool("has_data_base58", strings.TrimSpace(txData.Base58) != ""),
+			zap.Bool("has_data_base64", strings.TrimSpace(txData.Base64) != ""),
+		)
 
 		sessionID := utils.GenerateUUIDv7()
 		session := &domainentities.PartnerPaymentSession{
@@ -441,6 +508,17 @@ func (u *PartnerPaymentSessionUsecase) CreateSession(ctx context.Context, input 
 		if err := u.quoteRepo.MarkUsed(txCtx, quote.ID); err != nil {
 			return domainerrors.InternalServerError(fmt.Sprintf("failed to mark quote used: %v", err))
 		}
+		createPaymentTraceInfo(txCtx, "partner_session.persist_success",
+			zap.String("session_id", session.ID.String()),
+			zap.String("quote_id", quote.ID.String()),
+			zap.String("payment_request_id", paymentRequest.ID.String()),
+			zap.String("status", string(session.Status)),
+			zap.String("instruction_to", strings.TrimSpace(session.InstructionTo)),
+			zap.String("instruction_value_atomic", strings.TrimSpace(session.InstructionValue)),
+			zap.String("dest_chain", strings.TrimSpace(session.DestChain)),
+			zap.String("dest_token", strings.TrimSpace(session.DestToken)),
+			zap.String("dest_wallet", strings.TrimSpace(session.DestWallet)),
+		)
 
 		output = &CreatePartnerPaymentSessionOutput{
 			PaymentID:       session.ID.String(),
@@ -476,8 +554,24 @@ func (u *PartnerPaymentSessionUsecase) CreateSession(ctx context.Context, input 
 		return nil
 	})
 	if err != nil {
+		createPaymentTraceWarn(ctx, "partner_session.failed",
+			zap.String("merchant_id", input.MerchantID.String()),
+			zap.String("quote_id", input.QuoteID.String()),
+			zap.Duration("latency", time.Since(startedAt)),
+			zap.Error(err),
+		)
 		return nil, err
 	}
+	createPaymentTraceInfo(ctx, "partner_session.success",
+		zap.String("payment_id", output.PaymentID),
+		zap.String("merchant_id", output.MerchantID),
+		zap.String("dest_chain", output.DestChain),
+		zap.String("dest_token", output.DestToken),
+		zap.String("instruction_chain", output.PaymentInstruction.ChainID),
+		zap.String("instruction_to", output.PaymentInstruction.To),
+		zap.String("instruction_value", output.PaymentInstruction.Value),
+		zap.Duration("latency", time.Since(startedAt)),
+	)
 	return output, nil
 }
 

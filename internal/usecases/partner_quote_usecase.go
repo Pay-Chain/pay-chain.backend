@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 	domainentities "payment-kita.backend/internal/domain/entities"
 	domainerrors "payment-kita.backend/internal/domain/errors"
 	"payment-kita.backend/internal/domain/repositories"
@@ -190,6 +191,20 @@ func (u *PartnerQuoteUsecase) PreviewRequiredInputForOutput(ctx context.Context,
 
 func (u *PartnerQuoteUsecase) createQuoteCore(ctx context.Context, input *CreatePartnerQuoteInput, persist bool) (*CreatePartnerQuoteOutput, error) {
 	ctx = withQuoteRequestCache(ctx)
+	startedAt := time.Now()
+	if input != nil {
+		createPaymentTraceInfo(ctx, "partner_quote.start",
+			zap.Bool("persist", persist),
+			zap.String("merchant_id", input.MerchantID.String()),
+			zap.String("invoice_currency", strings.TrimSpace(input.InvoiceCurrency)),
+			zap.String("invoice_token", strings.TrimSpace(input.InvoiceToken)),
+			zap.String("invoice_amount_atomic", strings.TrimSpace(input.InvoiceAmount)),
+			zap.String("selected_chain", strings.TrimSpace(input.SelectedChain)),
+			zap.String("selected_token", strings.TrimSpace(input.SelectedToken)),
+			zap.String("dest_wallet", strings.TrimSpace(input.DestWallet)),
+			zap.Bool("prefer_dry_run_quote", preferDryRunQuote(ctx)),
+		)
+	}
 	if input == nil {
 		return nil, domainerrors.BadRequest("input is required")
 	}
@@ -261,23 +276,55 @@ func (u *PartnerQuoteUsecase) createQuoteCore(ctx context.Context, input *Create
 	if routeStatus == nil || !routeStatus.Exists || !routeStatus.Executable {
 		return nil, domainerrors.BadRequest("selected token pair is not supported on selected_chain")
 	}
+	createPaymentTraceDebug(ctx, "partner_quote.route_support",
+		zap.String("selected_chain", chainCAIP2),
+		zap.String("invoice_token_symbol", strings.TrimSpace(invoiceToken.Symbol)),
+		zap.String("selected_token_symbol", strings.TrimSpace(selectedToken.Symbol)),
+		zap.Bool("exists", routeStatus.Exists),
+		zap.Bool("executable", routeStatus.Executable),
+		zap.Bool("is_direct", routeStatus.IsDirect),
+		zap.Strings("path", routeStatus.Path),
+	)
 
 	var quotedAmount *big.Int
 	priceSourceOverride := ""
 	simulatorFallbackReason := ""
 	if preferDryRunQuote(ctx) {
+		createPaymentTraceDebug(ctx, "partner_quote.dry_run_preferred_start",
+			zap.String("chain", chainCAIP2),
+			zap.String("pair", fmt.Sprintf("%s->%s", strings.TrimSpace(invoiceToken.Symbol), strings.TrimSpace(selectedToken.Symbol))),
+			zap.String("amount_in_atomic", amountIn.String()),
+		)
 		dryQuote, dryErr := u.quoteWithDryRunPreferred(ctx, chainID, invoiceToken, selectedToken, amountIn)
 		if dryErr != nil {
+			createPaymentTraceWarn(ctx, "partner_quote.dry_run_preferred_failed",
+				zap.String("chain", chainCAIP2),
+				zap.String("pair", fmt.Sprintf("%s->%s", strings.TrimSpace(invoiceToken.Symbol), strings.TrimSpace(selectedToken.Symbol))),
+				zap.String("amount_in_atomic", amountIn.String()),
+				zap.Error(dryErr),
+			)
 			return nil, domainerrors.BadRequest(fmt.Sprintf("accurate quote unavailable for selected pair: %v", dryErr))
 		}
 		quotedAmount = dryQuote.AmountOut
 		priceSourceOverride = strings.TrimSpace(dryQuote.PriceSource)
+		createPaymentTraceInfo(ctx, "partner_quote.dry_run_preferred_success",
+			zap.String("chain", chainCAIP2),
+			zap.String("pair", fmt.Sprintf("%s->%s", strings.TrimSpace(invoiceToken.Symbol), strings.TrimSpace(selectedToken.Symbol))),
+			zap.String("amount_in_atomic", amountIn.String()),
+			zap.String("amount_out_atomic", quotedAmount.String()),
+			zap.String("price_source", strings.TrimSpace(priceSourceOverride)),
+		)
 	}
 	if quotedAmount == nil && u.accurateQuoteFn != nil {
 		accurateQuote, quoteErr := u.accurateQuoteFn(ctx, chainID, invoiceToken.ContractAddress, selectedToken.ContractAddress, amountIn)
 		if quoteErr == nil && accurateQuote != nil {
 			quotedAmount = accurateQuote.AmountOut
 			priceSourceOverride = strings.TrimSpace(accurateQuote.PriceSource)
+			createPaymentTraceDebug(ctx, "partner_quote.accurate_quote_success",
+				zap.String("chain", chainCAIP2),
+				zap.String("amount_out_atomic", quotedAmount.String()),
+				zap.String("price_source", strings.TrimSpace(priceSourceOverride)),
+			)
 		} else {
 			// Fallback to swapper quote for non-v3-direct or missing quoter configurations.
 			quotedAmount, err = u.swapQuoteFn(ctx, chainID, invoiceToken.ContractAddress, selectedToken.ContractAddress, amountIn)
@@ -294,6 +341,13 @@ func (u *PartnerQuoteUsecase) createQuoteCore(ctx context.Context, input *Create
 				}
 				if quotedAmount == nil || quotedAmount.Sign() <= 0 {
 					if quoteErr != nil {
+						createPaymentTraceWarn(ctx, "partner_quote.accurate_and_swapper_failed",
+							zap.String("chain", chainCAIP2),
+							zap.String("pair", fmt.Sprintf("%s->%s", strings.TrimSpace(invoiceToken.Symbol), strings.TrimSpace(selectedToken.Symbol))),
+							zap.String("amount_in_atomic", amountIn.String()),
+							zap.String("simulator_fallback_reason", simulatorFallbackReason),
+							zap.Error(quoteErr),
+						)
 						if simulatorFallbackReason != "" {
 							return nil, domainerrors.BadRequest(fmt.Sprintf("accurate quote unavailable for selected pair: %v (simulator fallback failed: %s)", quoteErr, simulatorFallbackReason))
 						}
@@ -319,6 +373,12 @@ func (u *PartnerQuoteUsecase) createQuoteCore(ctx context.Context, input *Create
 					quotedAmount.Cmp(amountIn) == 0 &&
 					!strings.EqualFold(invoiceToken.ContractAddress, selectedToken.ContractAddress) {
 					if simulatorFallbackReason != "" {
+						createPaymentTraceWarn(ctx, "partner_quote.placeholder_quote_rejected",
+							zap.String("chain", chainCAIP2),
+							zap.String("pair", fmt.Sprintf("%s->%s", strings.TrimSpace(invoiceToken.Symbol), strings.TrimSpace(selectedToken.Symbol))),
+							zap.String("amount_in_atomic", amountIn.String()),
+							zap.String("simulator_fallback_reason", simulatorFallbackReason),
+						)
 						return nil, domainerrors.BadRequest(fmt.Sprintf("accurate quote unavailable for selected pair: swapper returned 1:1 placeholder quote (simulator fallback failed: %s)", simulatorFallbackReason))
 					}
 					return nil, domainerrors.BadRequest("accurate quote unavailable for selected pair: swapper returned 1:1 placeholder quote")
@@ -357,6 +417,12 @@ func (u *PartnerQuoteUsecase) createQuoteCore(ctx context.Context, input *Create
 				quotedAmount.Cmp(amountIn) == 0 &&
 				!strings.EqualFold(invoiceToken.ContractAddress, selectedToken.ContractAddress) {
 				if simulatorFallbackReason != "" {
+					createPaymentTraceWarn(ctx, "partner_quote.placeholder_quote_rejected",
+						zap.String("chain", chainCAIP2),
+						zap.String("pair", fmt.Sprintf("%s->%s", strings.TrimSpace(invoiceToken.Symbol), strings.TrimSpace(selectedToken.Symbol))),
+						zap.String("amount_in_atomic", amountIn.String()),
+						zap.String("simulator_fallback_reason", simulatorFallbackReason),
+					)
 					return nil, domainerrors.BadRequest(fmt.Sprintf("accurate quote unavailable for selected pair: swapper returned 1:1 placeholder quote (simulator fallback failed: %s)", simulatorFallbackReason))
 				}
 				return nil, domainerrors.BadRequest("accurate quote unavailable for selected pair: swapper returned 1:1 placeholder quote")
@@ -364,6 +430,11 @@ func (u *PartnerQuoteUsecase) createQuoteCore(ctx context.Context, input *Create
 		}
 	}
 	if quotedAmount == nil || quotedAmount.Sign() <= 0 {
+		createPaymentTraceWarn(ctx, "partner_quote.invalid_quoted_amount",
+			zap.String("chain", chainCAIP2),
+			zap.String("pair", fmt.Sprintf("%s->%s", strings.TrimSpace(invoiceToken.Symbol), strings.TrimSpace(selectedToken.Symbol))),
+			zap.String("amount_in_atomic", amountIn.String()),
+		)
 		return nil, domainerrors.InternalServerError("invalid on-chain quote amount")
 	}
 
@@ -397,6 +468,15 @@ func (u *PartnerQuoteUsecase) createQuoteCore(ctx context.Context, input *Create
 		QuoteExpiresAt:      expiresAt,
 	}
 	if !persist {
+		createPaymentTraceInfo(ctx, "partner_quote.preview_success",
+			zap.String("selected_chain", output.SelectedChain),
+			zap.String("invoice_currency", output.InvoiceCurrency),
+			zap.String("invoice_amount_atomic", output.InvoiceAmount),
+			zap.String("quoted_amount_atomic", output.QuotedAmount),
+			zap.String("price_source", output.PriceSource),
+			zap.String("route", output.Route),
+			zap.Duration("latency", time.Since(startedAt)),
+		)
 		return output, nil
 	}
 
@@ -424,6 +504,16 @@ func (u *PartnerQuoteUsecase) createQuoteCore(ctx context.Context, input *Create
 		return nil, domainerrors.InternalServerError(fmt.Sprintf("failed to persist quote: %v", err))
 	}
 	output.QuoteID = quote.ID.String()
+	createPaymentTraceInfo(ctx, "partner_quote.persist_success",
+		zap.String("quote_id", output.QuoteID),
+		zap.String("selected_chain", output.SelectedChain),
+		zap.String("invoice_currency", output.InvoiceCurrency),
+		zap.String("invoice_amount_atomic", output.InvoiceAmount),
+		zap.String("quoted_amount_atomic", output.QuotedAmount),
+		zap.String("price_source", output.PriceSource),
+		zap.String("route", output.Route),
+		zap.Duration("latency", time.Since(startedAt)),
+	)
 	return output, nil
 }
 
@@ -437,6 +527,14 @@ func (u *PartnerQuoteUsecase) quoteWithDryRunPreferred(
 	if invoiceToken == nil || selectedToken == nil || amountIn == nil || amountIn.Sign() <= 0 {
 		return nil, fmt.Errorf("invalid dry-run quote input")
 	}
+	createPaymentTraceDebug(ctx, "partner_quote.dry_run_engine_start",
+		zap.String("chain_uuid", chainID.String()),
+		zap.String("token_in", strings.TrimSpace(invoiceToken.ContractAddress)),
+		zap.String("token_out", strings.TrimSpace(selectedToken.ContractAddress)),
+		zap.String("token_in_symbol", strings.TrimSpace(invoiceToken.Symbol)),
+		zap.String("token_out_symbol", strings.TrimSpace(selectedToken.Symbol)),
+		zap.String("amount_in_atomic", amountIn.String()),
+	)
 
 	var reasons []string
 	// Swapper quote path is used as primary in dry-run mode because it reflects
@@ -445,14 +543,32 @@ func (u *PartnerQuoteUsecase) quoteWithDryRunPreferred(
 		quotedAmount, err := u.swapQuoteFn(ctx, chainID, invoiceToken.ContractAddress, selectedToken.ContractAddress, amountIn)
 		if err == nil && quotedAmount != nil && quotedAmount.Sign() > 0 {
 			if quotedAmount.Cmp(amountIn) != 0 || strings.EqualFold(invoiceToken.ContractAddress, selectedToken.ContractAddress) {
+				createPaymentTraceDebug(ctx, "partner_quote.dry_run_swapper_success",
+					zap.String("chain_uuid", chainID.String()),
+					zap.String("pair", fmt.Sprintf("%s->%s", strings.TrimSpace(invoiceToken.Symbol), strings.TrimSpace(selectedToken.Symbol))),
+					zap.String("amount_in_atomic", amountIn.String()),
+					zap.String("amount_out_atomic", quotedAmount.String()),
+				)
 				return &AccurateSwapQuoteResult{
 					AmountOut:   quotedAmount,
 					PriceSource: "",
 				}, nil
 			}
 			reasons = append(reasons, "swapper returned 1:1 placeholder quote")
+			createPaymentTraceWarn(ctx, "partner_quote.dry_run_swapper_placeholder",
+				zap.String("chain_uuid", chainID.String()),
+				zap.String("pair", fmt.Sprintf("%s->%s", strings.TrimSpace(invoiceToken.Symbol), strings.TrimSpace(selectedToken.Symbol))),
+				zap.String("amount_in_atomic", amountIn.String()),
+				zap.String("amount_out_atomic", quotedAmount.String()),
+			)
 		} else if err != nil {
 			reasons = append(reasons, fmt.Sprintf("swapper fallback failed: %v", err))
+			createPaymentTraceWarn(ctx, "partner_quote.dry_run_swapper_failed",
+				zap.String("chain_uuid", chainID.String()),
+				zap.String("pair", fmt.Sprintf("%s->%s", strings.TrimSpace(invoiceToken.Symbol), strings.TrimSpace(selectedToken.Symbol))),
+				zap.String("amount_in_atomic", amountIn.String()),
+				zap.Error(err),
+			)
 		}
 	}
 
@@ -460,16 +576,36 @@ func (u *PartnerQuoteUsecase) quoteWithDryRunPreferred(
 	if u.simulatorQuoteFn != nil {
 		simQuote, simErr := u.simulatorQuoteFn(ctx, chainID, invoiceToken.ContractAddress, selectedToken.ContractAddress, amountIn)
 		if simErr == nil && simQuote != nil && simQuote.AmountOut != nil && simQuote.AmountOut.Sign() > 0 {
+			createPaymentTraceDebug(ctx, "partner_quote.dry_run_simulator_success",
+				zap.String("chain_uuid", chainID.String()),
+				zap.String("pair", fmt.Sprintf("%s->%s", strings.TrimSpace(invoiceToken.Symbol), strings.TrimSpace(selectedToken.Symbol))),
+				zap.String("amount_in_atomic", amountIn.String()),
+				zap.String("amount_out_atomic", simQuote.AmountOut.String()),
+				zap.String("price_source", strings.TrimSpace(simQuote.PriceSource)),
+				zap.String("route_summary", strings.TrimSpace(simQuote.RouteSummary)),
+			)
 			return simQuote, nil
 		}
 		if simErr != nil {
 			reasons = append(reasons, fmt.Sprintf("dry-run simulator failed: %v", simErr))
+			createPaymentTraceWarn(ctx, "partner_quote.dry_run_simulator_failed",
+				zap.String("chain_uuid", chainID.String()),
+				zap.String("pair", fmt.Sprintf("%s->%s", strings.TrimSpace(invoiceToken.Symbol), strings.TrimSpace(selectedToken.Symbol))),
+				zap.String("amount_in_atomic", amountIn.String()),
+				zap.Error(simErr),
+			)
 		}
 	}
 
 	if len(reasons) == 0 {
 		return nil, fmt.Errorf("no quote engine available")
 	}
+	createPaymentTraceWarn(ctx, "partner_quote.dry_run_engine_exhausted",
+		zap.String("chain_uuid", chainID.String()),
+		zap.String("pair", fmt.Sprintf("%s->%s", strings.TrimSpace(invoiceToken.Symbol), strings.TrimSpace(selectedToken.Symbol))),
+		zap.String("amount_in_atomic", amountIn.String()),
+		zap.String("reasons", strings.Join(reasons, "; ")),
+	)
 	return nil, fmt.Errorf("%s", strings.Join(reasons, "; "))
 }
 
