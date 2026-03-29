@@ -7,8 +7,8 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
-	"encoding/json"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -235,10 +235,17 @@ func TestDualAuthMiddleware_JWTWithSignature(t *testing.T) {
 	jwtService := jwt.NewJWTService("secret", time.Hour, time.Hour*24)
 
 	r := gin.New()
-	r.Use(middleware.DualAuthMiddleware(jwtService, apiKeyUsecase, new(MockMerchantRepository), nil))
-	r.GET("/test", func(c *gin.Context) {
+	mockMerchantRepo := new(MockMerchantRepository)
+	r.Use(middleware.DualAuthMiddleware(jwtService, apiKeyUsecase, mockMerchantRepo, nil))
+	r.GET("/api/v1/merchants/create-payment", func(c *gin.Context) {
 		userID, _ := c.Get(middleware.UserIDKey)
-		c.JSON(http.StatusOK, gin.H{"userId": userID})
+		merchantID, _ := c.Get(middleware.MerchantIDKey)
+		isMerchant, _ := c.Get(middleware.IsMerchantAuthenticatedKey)
+		c.JSON(http.StatusOK, gin.H{
+			"userId":     userID,
+			"merchantId": merchantID,
+			"isMerchant": isMerchant,
+		})
 	})
 
 	userID := uuid.New()
@@ -258,15 +265,17 @@ func TestDualAuthMiddleware_JWTWithSignature(t *testing.T) {
 		},
 	}
 
+	merchantID := uuid.New()
 	timestamp := fmt.Sprintf("%d", time.Now().Unix())
 	bodyHash := sha256Hex([]byte(""))
-	stringToSign := fmt.Sprintf("%s%s%s%s", timestamp, "GET", "/test", bodyHash)
+	stringToSign := fmt.Sprintf("%s%s%s%s", timestamp, "GET", "/api/v1/merchants/create-payment", bodyHash)
 	signature := hmacSha256Hex(secretKey, stringToSign)
 
 	mockApiKeyRepo.On("FindByUserID", mock.Anything, userID).Return(activeKeys, nil)
 	mockApiKeyRepo.On("Update", mock.Anything, mock.Anything).Return(nil)
+	mockMerchantRepo.On("GetByUserID", mock.Anything, userID).Return(&entities.Merchant{ID: merchantID}, nil)
 
-	req, _ := http.NewRequest("GET", "/test", nil)
+	req, _ := http.NewRequest("GET", "/api/v1/merchants/create-payment", nil)
 	req.Header.Set("Authorization", "Bearer "+tokens.AccessToken)
 	req.Header.Set("X-Signature", signature)
 	req.Header.Set("X-Timestamp", timestamp)
@@ -275,7 +284,11 @@ func TestDualAuthMiddleware_JWTWithSignature(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Contains(t, w.Body.String(), userID.String())
+	var resp map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.Equal(t, userID.String(), resp["userId"])
+	assert.Equal(t, merchantID.String(), resp["merchantId"])
+	assert.True(t, resp["isMerchant"].(bool))
 }
 
 func TestDualAuthMiddleware_RequestBodyReadError(t *testing.T) {
@@ -475,6 +488,63 @@ func TestDualAuthMiddleware_TrustedSessionFlow_AndOptionalSignature(t *testing.T
 	r2.ServeHTTP(w2, req2)
 	assert.Equal(t, http.StatusUnauthorized, w2.Code)
 	assert.Contains(t, w2.Body.String(), "Invalid Signature for JWT user")
+}
+
+func TestDualAuthMiddleware_TrustedSessionFlow_MerchantRouteSetsMerchantContext(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	_ = os.Setenv("INTERNAL_PROXY_SECRET", "proxy-secret")
+	defer os.Unsetenv("INTERNAL_PROXY_SECRET")
+
+	srv, err := miniredis.Run()
+	if err != nil {
+		t.Skipf("miniredis unavailable: %v", err)
+	}
+	defer srv.Close()
+
+	cli := goredis.NewClient(&goredis.Options{Addr: srv.Addr()})
+	redispkg.SetClient(cli)
+	defer cli.Close()
+
+	sessionStore, err := redispkg.NewSessionStore("0000000000000000000000000000000000000000000000000000000000000000")
+	assert.NoError(t, err)
+
+	jwtService := jwt.NewJWTService("secret", time.Hour, time.Hour*24)
+	userID := uuid.New()
+	merchantID := uuid.New()
+	tokens, _ := jwtService.GenerateTokenPair(userID, "merchant@session.test", "USER")
+	assert.NoError(t, sessionStore.CreateSession(context.Background(), "sid-merchant", &redispkg.SessionData{
+		AccessToken:  tokens.AccessToken,
+		RefreshToken: tokens.RefreshToken,
+	}, time.Minute))
+
+	mockMerchantRepo := new(MockMerchantRepository)
+	mockMerchantRepo.On("GetByUserID", mock.Anything, userID).Return(&entities.Merchant{ID: merchantID}, nil).Once()
+
+	r := gin.New()
+	r.Use(middleware.DualAuthMiddleware(jwtService, nil, mockMerchantRepo, sessionStore))
+	r.GET("/api/v1/merchants/create-payment", func(c *gin.Context) {
+		gotUserID, _ := c.Get(middleware.UserIDKey)
+		gotMerchantID, _ := c.Get(middleware.MerchantIDKey)
+		gotIsMerchant, _ := c.Get(middleware.IsMerchantAuthenticatedKey)
+		c.JSON(http.StatusOK, gin.H{
+			"userId":     gotUserID,
+			"merchantId": gotMerchantID,
+			"isMerchant": gotIsMerchant,
+		})
+	})
+
+	req, _ := http.NewRequest(http.MethodGet, "/api/v1/merchants/create-payment", nil)
+	req.Header.Set("X-Internal-Proxy-Secret", "proxy-secret")
+	req.Header.Set("x-session-id", "sid-merchant")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp map[string]interface{}
+	_ = json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.Equal(t, userID.String(), resp["userId"])
+	assert.Equal(t, merchantID.String(), resp["merchantId"])
+	assert.True(t, resp["isMerchant"].(bool))
 }
 
 // Helpers

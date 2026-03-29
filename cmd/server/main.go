@@ -150,7 +150,7 @@ func runMainProcess() error {
 	clientFactory := blockchain.NewClientFactory()
 
 	// Initialize usecases
-	authUsecase := usecases.NewAuthUsecase(userRepo, emailVerifRepo, walletRepo, chainRepo, jwtService)
+	authUsecase := usecases.NewAuthUsecase(userRepo, emailVerifRepo, walletRepo, chainRepo, merchantRepo, uow, jwtService)
 	// ApiKeyUsecase needs Config for Encryption Key
 	apiKeyUsecase := usecases.NewApiKeyUsecase(apiKeyRepo, userRepo, cfg.Security.ApiKeyEncryptionKey)
 	paymentUsecase := usecases.NewPaymentUsecase(paymentRepo, paymentEventRepo, walletRepo, merchantRepo, smartContractRepo, chainRepo, tokenRepo, bridgeConfigRepo, feeConfigRepo, routePolicyRepo, uow, clientFactory)

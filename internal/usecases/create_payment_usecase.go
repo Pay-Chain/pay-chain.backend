@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 	"payment-kita.backend/internal/domain/entities"
 	domainerrors "payment-kita.backend/internal/domain/errors"
 	domainrepos "payment-kita.backend/internal/domain/repositories"
@@ -26,7 +27,15 @@ const (
 
 	defaultCreatePaymentQuoteStageTimeout   = 20 * time.Second
 	defaultCreatePaymentSessionStageTimeout = 8 * time.Second
+	defaultCreatePaymentTTL                 = 3 * time.Minute
+	minCreatePaymentTTL                     = 30 * time.Second
+	maxCreatePaymentTTL                     = 24 * time.Hour
+	createPaymentUnlimitedValue             = "unlimited"
+	maxCreatePaymentUpperBoundDoublings     = 32
+	maxCreatePaymentBinarySearchIterations  = 64
 )
+
+var createPaymentUnlimitedExpiryAt = time.Date(9999, time.December, 31, 23, 59, 59, 0, time.UTC)
 
 type CreatePaymentInput struct {
 	MerchantContextID uuid.UUID
@@ -35,6 +44,7 @@ type CreatePaymentInput struct {
 	SelectedToken     string
 	PricingType       string
 	RequestedAmount   string
+	ExpiresIn         string
 }
 
 type CreatePaymentOutput struct {
@@ -53,6 +63,7 @@ type CreatePaymentOutput struct {
 	QuoteRate                string    `json:"quote_rate"`
 	QuoteSource              string    `json:"quote_source"`
 	QuoteExpiresAt           time.Time `json:"quote_expires_at"`
+	IsUnlimitedExpiry        bool      `json:"is_unlimited_expiry"`
 	DestChain                string    `json:"dest_chain"`
 	DestToken                string    `json:"dest_token"`
 	DestWallet               string    `json:"dest_wallet"`
@@ -147,7 +158,21 @@ func NewCreatePaymentUsecase(
 }
 
 func (u *CreatePaymentUsecase) CreatePayment(ctx context.Context, input *CreatePaymentInput) (*CreatePaymentOutput, error) {
+	startedAt := time.Now()
 	ctx = withQuoteRequestCache(ctx)
+	ctx = withPreferDryRunQuote(ctx)
+	if input != nil {
+		createPaymentTraceInfo(ctx, "create_payment.start",
+			zap.String("merchant_context_id", input.MerchantContextID.String()),
+			zap.String("merchant_id", input.MerchantID.String()),
+			zap.String("chain_id", strings.TrimSpace(input.ChainID)),
+			zap.String("selected_token", strings.TrimSpace(input.SelectedToken)),
+			zap.String("pricing_type", strings.TrimSpace(input.PricingType)),
+			zap.String("requested_amount", strings.TrimSpace(input.RequestedAmount)),
+			zap.String("expires_in", strings.TrimSpace(input.ExpiresIn)),
+			zap.Bool("prefer_dry_run_quote", preferDryRunQuote(ctx)),
+		)
+	}
 	if input == nil {
 		return nil, domainerrors.BadRequest("input is required")
 	}
@@ -174,6 +199,10 @@ func (u *CreatePaymentUsecase) CreatePayment(ctx context.Context, input *CreateP
 	if u.quoteUC == nil || u.sessionUC == nil || u.quoteRepo == nil || u.merchantRepo == nil || u.walletRepo == nil || u.tokenRepo == nil || u.chainRepo == nil || u.settlementRepo == nil {
 		return nil, domainerrors.InternalServerError("create payment orchestrator is not configured")
 	}
+	createPaymentTraceDebug(ctx, "create_payment.validated_input",
+		zap.String("merchant_id", merchantID.String()),
+		zap.String("pricing_type", string(pricingType)),
+	)
 
 	merchant, err := u.merchantRepo.GetByID(ctx, merchantID)
 	if err != nil || merchant == nil {
@@ -186,6 +215,10 @@ func (u *CreatePaymentUsecase) CreatePayment(ctx context.Context, input *CreateP
 	config := u.resolveMerchantCreatePaymentConfig(ctx, merchant)
 	settlement, err := u.resolveMerchantSettlementConfig(ctx, config)
 	if err != nil {
+		createPaymentTraceWarn(ctx, "create_payment.settlement_config_failed",
+			zap.String("merchant_id", merchantID.String()),
+			zap.Error(err),
+		)
 		return nil, err
 	}
 	chainUUID, chainCAIP2, err := u.chainResolver.ResolveFromAny(ctx, input.ChainID)
@@ -200,26 +233,70 @@ func (u *CreatePaymentUsecase) CreatePayment(ctx context.Context, input *CreateP
 	if err != nil {
 		return nil, err
 	}
-
-	var quoteOut *CreatePartnerQuoteOutput
-	quoteCtx, quoteCancel := context.WithTimeout(ctx, createPaymentStageTimeoutFromEnv("CREATE_PAYMENT_QUOTE_STAGE_TIMEOUT_MS", defaultCreatePaymentQuoteStageTimeout))
-	defer quoteCancel()
-	switch pricingType {
-	case CreatePaymentPricingTypeInvoiceCurrency:
-		quoteOut, err = u.createInvoiceCurrencyQuote(quoteCtx, merchantID, chainCAIP2, selectedToken, settlement, strings.TrimSpace(input.RequestedAmount), walletAddress)
-	default:
-		quoteOut, err = u.createSyntheticSelectedTokenQuote(quoteCtx, merchantID, chainCAIP2, selectedToken, pricingType, strings.TrimSpace(input.RequestedAmount), settlement)
-	}
+	now := time.Now().UTC()
+	expiresAt, isUnlimitedExpiry, err := resolveCreatePaymentExpiresAt(strings.TrimSpace(input.ExpiresIn), now)
 	if err != nil {
 		return nil, err
 	}
+	createPaymentTraceInfo(ctx, "create_payment.context_resolved",
+		zap.String("merchant_id", merchantID.String()),
+		zap.String("selected_chain_caip2", chainCAIP2),
+		zap.String("selected_token_symbol", strings.TrimSpace(selectedToken.Symbol)),
+		zap.String("selected_token_address", strings.TrimSpace(selectedToken.ContractAddress)),
+		zap.String("settlement_chain_caip2", settlement.DestChainCAIP2),
+		zap.String("settlement_token_symbol", strings.TrimSpace(settlement.DestToken.Symbol)),
+		zap.String("settlement_token_address", strings.TrimSpace(settlement.DestToken.ContractAddress)),
+		zap.String("bridge_token_symbol", strings.TrimSpace(settlement.BridgeTokenSymbol)),
+		zap.String("merchant_dest_wallet", walletAddress),
+		zap.String("expires_at", expiresAt.Format(time.RFC3339)),
+		zap.Bool("is_unlimited_expiry", isUnlimitedExpiry),
+	)
+
+	var quoteOut *CreatePartnerQuoteOutput
+	quoteStartedAt := time.Now()
+	quoteStageTimeout := createPaymentStageTimeoutFromEnv("CREATE_PAYMENT_QUOTE_STAGE_TIMEOUT_MS", defaultCreatePaymentQuoteStageTimeout)
+	quoteCtx, quoteCancel := context.WithTimeout(ctx, createPaymentStageTimeoutFromEnv("CREATE_PAYMENT_QUOTE_STAGE_TIMEOUT_MS", defaultCreatePaymentQuoteStageTimeout))
+	defer quoteCancel()
+	createPaymentTraceInfo(ctx, "create_payment.quote_stage_start",
+		zap.String("pricing_type", string(pricingType)),
+		zap.Duration("timeout", quoteStageTimeout),
+	)
+	switch pricingType {
+	case CreatePaymentPricingTypeInvoiceCurrency:
+		quoteOut, err = u.createInvoiceCurrencyQuote(quoteCtx, merchantID, chainCAIP2, selectedToken, settlement, strings.TrimSpace(input.RequestedAmount), walletAddress, expiresAt)
+	default:
+		quoteOut, err = u.createSyntheticSelectedTokenQuote(quoteCtx, merchantID, chainCAIP2, selectedToken, pricingType, strings.TrimSpace(input.RequestedAmount), settlement, expiresAt)
+	}
+	if err != nil {
+		createPaymentTraceWarn(ctx, "create_payment.quote_stage_failed",
+			zap.String("pricing_type", string(pricingType)),
+			zap.Duration("latency", time.Since(quoteStartedAt)),
+			zap.Error(err),
+		)
+		return nil, err
+	}
+	createPaymentTraceInfo(ctx, "create_payment.quote_stage_success",
+		zap.Duration("latency", time.Since(quoteStartedAt)),
+		zap.String("quote_id", strings.TrimSpace(quoteOut.QuoteID)),
+		zap.String("quoted_amount_atomic", strings.TrimSpace(quoteOut.QuotedAmount)),
+		zap.Int("quoted_decimals", quoteOut.QuoteDecimals),
+		zap.String("route", strings.TrimSpace(quoteOut.Route)),
+		zap.String("price_source", strings.TrimSpace(quoteOut.PriceSource)),
+		zap.String("quote_expires_at", quoteOut.QuoteExpiresAt.UTC().Format(time.RFC3339)),
+	)
 
 	quoteID, err := uuid.Parse(quoteOut.QuoteID)
 	if err != nil {
 		return nil, domainerrors.InternalServerError("invalid quote id generated")
 	}
-	sessionCtx, sessionCancel := context.WithTimeout(ctx, createPaymentStageTimeoutFromEnv("CREATE_PAYMENT_SESSION_STAGE_TIMEOUT_MS", defaultCreatePaymentSessionStageTimeout))
+	sessionStartedAt := time.Now()
+	sessionStageTimeout := createPaymentStageTimeoutFromEnv("CREATE_PAYMENT_SESSION_STAGE_TIMEOUT_MS", defaultCreatePaymentSessionStageTimeout)
+	sessionCtx, sessionCancel := context.WithTimeout(ctx, sessionStageTimeout)
 	defer sessionCancel()
+	createPaymentTraceInfo(ctx, "create_payment.session_stage_start",
+		zap.String("quote_id", quoteID.String()),
+		zap.Duration("timeout", sessionStageTimeout),
+	)
 	sessionOut, err := u.sessionUC.CreateSession(sessionCtx, &CreatePartnerPaymentSessionInput{
 		MerchantID:        merchantID,
 		QuoteID:           quoteID,
@@ -228,8 +305,22 @@ func (u *CreatePaymentUsecase) CreatePayment(ctx context.Context, input *CreateP
 		DestTokenOverride: settlement.DestToken.ContractAddress,
 	})
 	if err != nil {
+		createPaymentTraceWarn(ctx, "create_payment.session_stage_failed",
+			zap.String("quote_id", quoteID.String()),
+			zap.Duration("latency", time.Since(sessionStartedAt)),
+			zap.Error(err),
+		)
 		return nil, err
 	}
+	createPaymentTraceInfo(ctx, "create_payment.session_stage_success",
+		zap.Duration("latency", time.Since(sessionStartedAt)),
+		zap.String("payment_id", strings.TrimSpace(sessionOut.PaymentID)),
+		zap.String("session_dest_chain", strings.TrimSpace(sessionOut.DestChain)),
+		zap.String("session_dest_token", strings.TrimSpace(sessionOut.DestToken)),
+		zap.String("instruction_chain", strings.TrimSpace(sessionOut.PaymentInstruction.ChainID)),
+		zap.String("instruction_to", strings.TrimSpace(sessionOut.PaymentInstruction.To)),
+		zap.String("instruction_value", strings.TrimSpace(sessionOut.PaymentInstruction.Value)),
+	)
 
 	out := &CreatePaymentOutput{
 		PaymentID:                sessionOut.PaymentID,
@@ -247,6 +338,7 @@ func (u *CreatePaymentUsecase) CreatePayment(ctx context.Context, input *CreateP
 		QuoteRate:                quoteOut.QuoteRate,
 		QuoteSource:              quoteOut.PriceSource,
 		QuoteExpiresAt:           quoteOut.QuoteExpiresAt,
+		IsUnlimitedExpiry:        isUnlimitedExpiry,
 		DestChain:                sessionOut.DestChain,
 		DestToken:                sessionOut.DestToken,
 		DestWallet:               sessionOut.DestWallet,
@@ -266,6 +358,19 @@ func (u *CreatePaymentUsecase) CreatePayment(ctx context.Context, input *CreateP
 	out.PaymentInstruction.DataBase64 = sessionOut.PaymentInstruction.DataBase64
 	out.PaymentInstruction.ApprovalTo = sessionOut.PaymentInstruction.ApprovalTo
 	out.PaymentInstruction.ApprovalHex = sessionOut.PaymentInstruction.ApprovalHex
+	createPaymentTraceInfo(ctx, "create_payment.success",
+		zap.String("payment_id", out.PaymentID),
+		zap.String("quote_id", quoteOut.QuoteID),
+		zap.String("pricing_type", string(pricingType)),
+		zap.String("payer_selected_chain", out.PayerSelectedChain),
+		zap.String("payer_selected_token_symbol", out.PayerSelectedTokenSymbol),
+		zap.String("quoted_token_amount_atomic", out.QuotedTokenAmountAtomic),
+		zap.String("settlement_dest_chain", out.SettlementDestChain),
+		zap.String("settlement_dest_token", out.SettlementDestToken),
+		zap.String("payment_instruction_to", out.PaymentInstruction.To),
+		zap.String("payment_instruction_value", out.PaymentInstruction.Value),
+		zap.Duration("total_latency", time.Since(startedAt)),
+	)
 	return out, nil
 }
 
@@ -284,6 +389,36 @@ func createPaymentStageTimeoutFromEnv(envName string, fallback time.Duration) ti
 	return time.Duration(ms) * time.Millisecond
 }
 
+func resolveCreatePaymentExpiresAt(raw string, now time.Time) (time.Time, bool, error) {
+	value := strings.TrimSpace(strings.ToLower(raw))
+	if value == "" {
+		return now.Add(defaultCreatePaymentTTL), false, nil
+	}
+	if value == createPaymentUnlimitedValue {
+		return createPaymentUnlimitedExpiryAt, true, nil
+	}
+
+	seconds, err := strconv.Atoi(value)
+	if err != nil {
+		return time.Time{}, false, domainerrors.BadRequest("expires_in must be a positive integer (seconds) or \"unlimited\"")
+	}
+	if seconds <= 0 {
+		return time.Time{}, false, domainerrors.BadRequest("expires_in must be greater than 0 seconds")
+	}
+	ttl := time.Duration(seconds) * time.Second
+	if ttl < minCreatePaymentTTL {
+		return time.Time{}, false, domainerrors.BadRequest(fmt.Sprintf("expires_in must be at least %d seconds", int(minCreatePaymentTTL.Seconds())))
+	}
+	if ttl > maxCreatePaymentTTL {
+		return time.Time{}, false, domainerrors.BadRequest(fmt.Sprintf("expires_in must be at most %d seconds", int(maxCreatePaymentTTL.Seconds())))
+	}
+	return now.Add(ttl), false, nil
+}
+
+func isUnlimitedExpiryTime(value time.Time) bool {
+	return !value.IsZero() && value.Equal(createPaymentUnlimitedExpiryAt)
+}
+
 func (u *CreatePaymentUsecase) GetPayment(ctx context.Context, paymentID uuid.UUID) (*CreatePaymentOutput, error) {
 	if paymentID == uuid.Nil {
 		return nil, domainerrors.BadRequest("payment id is required")
@@ -296,7 +431,7 @@ func (u *CreatePaymentUsecase) GetPayment(ctx context.Context, paymentID uuid.UU
 	if err != nil || session == nil {
 		return nil, domainerrors.NotFound("payment not found")
 	}
-	if session.Status == entities.PartnerPaymentSessionStatusPending && time.Now().UTC().After(session.ExpiresAt) {
+	if session.Status == entities.PartnerPaymentSessionStatusPending && !isUnlimitedExpiryTime(session.ExpiresAt) && time.Now().UTC().After(session.ExpiresAt) {
 		_ = u.sessionRepo.UpdateStatus(ctx, paymentID, entities.PartnerPaymentSessionStatusExpired)
 		session.Status = entities.PartnerPaymentSessionStatusExpired
 	}
@@ -350,6 +485,7 @@ func (u *CreatePaymentUsecase) GetPayment(ctx context.Context, paymentID uuid.UU
 		QuoteRate:                quoteRate,
 		QuoteSource:              quoteSource,
 		QuoteExpiresAt:           quoteExpiresAt,
+		IsUnlimitedExpiry:        isUnlimitedExpiryTime(session.ExpiresAt),
 		DestChain:                session.DestChain,
 		DestToken:                session.DestToken,
 		DestWallet:               session.DestWallet,
@@ -441,13 +577,12 @@ func (u *CreatePaymentUsecase) resolveMerchantWallet(ctx context.Context, mercha
 	return strings.TrimSpace(wallets[0].Address), nil
 }
 
-func (u *CreatePaymentUsecase) createSyntheticSelectedTokenQuote(ctx context.Context, merchantID uuid.UUID, chainCAIP2 string, selectedToken *entities.Token, pricingType CreatePaymentPricingType, requestedAmount string, settlement *resolvedMerchantSettlementConfig) (*CreatePartnerQuoteOutput, error) {
+func (u *CreatePaymentUsecase) createSyntheticSelectedTokenQuote(ctx context.Context, merchantID uuid.UUID, chainCAIP2 string, selectedToken *entities.Token, pricingType CreatePaymentPricingType, requestedAmount string, settlement *resolvedMerchantSettlementConfig, expiresAt time.Time) (*CreatePartnerQuoteOutput, error) {
 	atomicAmount, err := convertToSmallestUnit(requestedAmount, selectedToken.Decimals)
 	if err != nil {
 		return nil, domainerrors.BadRequest(err.Error())
 	}
 	now := time.Now().UTC()
-	expiresAt := now.Add(partnerQuoteTTL)
 	invoiceCurrency := settlement.InvoiceToken.Symbol
 	priceSource := "merchant-fixed-selected-token"
 	if pricingType == CreatePaymentPricingTypePaymentTokenDyn {
@@ -501,20 +636,34 @@ func (u *CreatePaymentUsecase) createSyntheticSelectedTokenQuote(ctx context.Con
 	}, nil
 }
 
-func (u *CreatePaymentUsecase) createInvoiceCurrencyQuote(ctx context.Context, merchantID uuid.UUID, selectedChainCAIP2 string, selectedToken *entities.Token, settlement *resolvedMerchantSettlementConfig, requestedAmount string, destWallet string) (*CreatePartnerQuoteOutput, error) {
+func (u *CreatePaymentUsecase) createInvoiceCurrencyQuote(ctx context.Context, merchantID uuid.UUID, selectedChainCAIP2 string, selectedToken *entities.Token, settlement *resolvedMerchantSettlementConfig, requestedAmount string, destWallet string, expiresAt time.Time) (*CreatePartnerQuoteOutput, error) {
 	invoiceAtomic, err := convertToSmallestUnit(requestedAmount, settlement.InvoiceToken.Decimals)
 	if err != nil {
 		return nil, domainerrors.BadRequest(err.Error())
 	}
+	createPaymentTraceInfo(ctx, "create_payment.invoice_quote_start",
+		zap.String("merchant_id", merchantID.String()),
+		zap.String("selected_chain", selectedChainCAIP2),
+		zap.String("settlement_chain", settlement.DestChainCAIP2),
+		zap.String("selected_token", selectedToken.Symbol),
+		zap.String("invoice_token", settlement.InvoiceToken.Symbol),
+		zap.String("invoice_amount_atomic", invoiceAtomic),
+		zap.String("dest_wallet", destWallet),
+	)
 	if selectedChainCAIP2 == settlement.DestChainCAIP2 {
+		createPaymentTraceDebug(ctx, "create_payment.invoice_quote_same_chain_path",
+			zap.String("chain", selectedChainCAIP2),
+			zap.String("pair", fmt.Sprintf("%s->%s", settlement.InvoiceToken.Symbol, selectedToken.Symbol)),
+		)
 		return u.quoteUC.CreateQuote(ctx, &CreatePartnerQuoteInput{
-			MerchantID:      merchantID,
-			InvoiceCurrency: settlement.InvoiceToken.Symbol,
-			InvoiceToken:    settlement.InvoiceToken.ContractAddress,
-			InvoiceAmount:   invoiceAtomic,
-			SelectedChain:   selectedChainCAIP2,
-			SelectedToken:   selectedToken.ContractAddress,
-			DestWallet:      destWallet,
+			MerchantID:        merchantID,
+			InvoiceCurrency:   settlement.InvoiceToken.Symbol,
+			InvoiceToken:      settlement.InvoiceToken.ContractAddress,
+			InvoiceAmount:     invoiceAtomic,
+			SelectedChain:     selectedChainCAIP2,
+			SelectedToken:     selectedToken.ContractAddress,
+			DestWallet:        destWallet,
+			ExpiresAtOverride: &expiresAt,
 		})
 	}
 
@@ -522,8 +671,16 @@ func (u *CreatePaymentUsecase) createInvoiceCurrencyQuote(ctx context.Context, m
 	if err != nil {
 		return nil, err
 	}
+	createPaymentTraceInfo(ctx, "create_payment.invoice_quote_bridge_amount_resolved",
+		zap.String("dest_bridge_amount_atomic", destBridgeAmount),
+		zap.String("bridge_route", routeSummary),
+		zap.String("bridge_symbol", settlement.BridgeTokenSymbol),
+	)
 	if strings.EqualFold(selectedToken.Symbol, settlement.BridgeTokenSymbol) {
-		return u.createCompositeQuote(ctx, merchantID, selectedChainCAIP2, selectedToken, settlement.InvoiceToken.Symbol, settlement.InvoiceToken.Decimals, invoiceAtomic, destBridgeAmount, fmt.Sprintf("cross-chain-bridge-token-direct-via-%s", strings.ToLower(settlement.BridgeTokenSymbol)), routeSummary)
+		createPaymentTraceDebug(ctx, "create_payment.invoice_quote_bridge_direct_source_token",
+			zap.String("token_symbol", selectedToken.Symbol),
+		)
+		return u.createCompositeQuote(ctx, merchantID, selectedChainCAIP2, selectedToken, settlement.InvoiceToken.Symbol, settlement.InvoiceToken.Decimals, invoiceAtomic, destBridgeAmount, fmt.Sprintf("cross-chain-bridge-token-direct-via-%s", strings.ToLower(settlement.BridgeTokenSymbol)), routeSummary, expiresAt)
 	}
 
 	sourceBridgeToken, err := u.tokenRepo.GetBySymbol(ctx, settlement.BridgeTokenSymbol, selectedToken.ChainUUID)
@@ -540,8 +697,14 @@ func (u *CreatePaymentUsecase) createInvoiceCurrencyQuote(ctx context.Context, m
 		destWallet,
 	)
 	if err != nil {
-		return nil, err
+		return nil, annotateCreatePaymentEstimateError("unable to estimate source amount from selected token to bridge token", err)
 	}
+	createPaymentTraceInfo(ctx, "create_payment.invoice_quote_source_amount_resolved",
+		zap.String("source_token", selectedToken.Symbol),
+		zap.String("bridge_token", sourceBridgeToken.Symbol),
+		zap.String("required_source_amount_atomic", requiredSourceAmount),
+		zap.String("source_leg_route", sourceLegRoute),
+	)
 
 	return u.createCompositeQuote(
 		ctx,
@@ -554,11 +717,24 @@ func (u *CreatePaymentUsecase) createInvoiceCurrencyQuote(ctx context.Context, m
 		requiredSourceAmount,
 		fmt.Sprintf("cross-chain-normalized-via-%s", strings.ToLower(settlement.BridgeTokenSymbol)),
 		fmt.Sprintf("%s | %s", sourceLegRoute, routeSummary),
+		expiresAt,
 	)
 }
 
 func (u *CreatePaymentUsecase) resolveCrossChainBridgeAmount(ctx context.Context, merchantID uuid.UUID, settlement *resolvedMerchantSettlementConfig, invoiceAtomic string, destWallet string) (string, string, string, error) {
+	createPaymentTraceInfo(ctx, "create_payment.bridge_amount_start",
+		zap.String("merchant_id", merchantID.String()),
+		zap.String("dest_chain", settlement.DestChainCAIP2),
+		zap.String("invoice_token_symbol", settlement.InvoiceToken.Symbol),
+		zap.String("dest_bridge_token_symbol", settlement.DestBridgeToken.Symbol),
+		zap.String("invoice_atomic", invoiceAtomic),
+		zap.String("dest_wallet", destWallet),
+	)
 	if strings.EqualFold(settlement.InvoiceToken.ContractAddress, settlement.DestBridgeToken.ContractAddress) {
+		createPaymentTraceDebug(ctx, "create_payment.bridge_amount_direct",
+			zap.String("bridge_amount_atomic", invoiceAtomic),
+			zap.String("route", fmt.Sprintf("%s->%s", settlement.InvoiceToken.Symbol, settlement.DestBridgeToken.Symbol)),
+		)
 		return invoiceAtomic, fmt.Sprintf("%s->%s", settlement.InvoiceToken.Symbol, settlement.DestBridgeToken.Symbol), fmt.Sprintf("cross-chain-bridge-token-direct-via-%s", strings.ToLower(settlement.BridgeTokenSymbol)), nil
 	}
 	requiredBridgeAmount, route, source, err := u.solveRequiredInputForTargetOutput(
@@ -571,8 +747,19 @@ func (u *CreatePaymentUsecase) resolveCrossChainBridgeAmount(ctx context.Context
 		destWallet,
 	)
 	if err != nil {
-		return "", "", "", err
+		createPaymentTraceWarn(ctx, "create_payment.bridge_amount_failed",
+			zap.String("dest_chain", settlement.DestChainCAIP2),
+			zap.String("pair", fmt.Sprintf("%s->%s", settlement.DestBridgeToken.Symbol, settlement.InvoiceToken.Symbol)),
+			zap.String("target_invoice_atomic", invoiceAtomic),
+			zap.Error(err),
+		)
+		return "", "", "", annotateCreatePaymentEstimateError("unable to estimate destination bridge amount from invoice token", err)
 	}
+	createPaymentTraceInfo(ctx, "create_payment.bridge_amount_success",
+		zap.String("required_bridge_amount_atomic", requiredBridgeAmount),
+		zap.String("route", route),
+		zap.String("price_source", source),
+	)
 	return requiredBridgeAmount, route, source, nil
 }
 
@@ -585,29 +772,64 @@ func (u *CreatePaymentUsecase) solveRequiredInputForTargetOutput(
 	targetOutputAtomic string,
 	destWallet string,
 ) (string, string, string, error) {
+	startedAt := time.Now()
 	ctx = withQuoteRequestCache(ctx)
 	target, ok := new(big.Int).SetString(strings.TrimSpace(targetOutputAtomic), 10)
 	if !ok || target == nil || target.Sign() <= 0 {
 		return "", "", "", domainerrors.BadRequest("target output amount must be a positive integer string")
 	}
+	probeContext := fmt.Sprintf("chain=%s pair=%s->%s", chainCAIP2, strings.TrimSpace(inputToken.Symbol), strings.TrimSpace(outputToken.Symbol))
+	createPaymentTraceInfo(ctx, "create_payment.inverse_estimation_start",
+		zap.String("probe_context", probeContext),
+		zap.String("target_output_atomic", target.String()),
+		zap.String("target_output", smallestUnitToDecimalString(target.String(), outputToken.Decimals)),
+		zap.String("input_token_address", inputToken.ContractAddress),
+		zap.String("output_token_address", outputToken.ContractAddress),
+	)
 
-	if inverseUC, ok := u.quoteUC.(createPaymentQuoteInversePreviewEngine); ok {
-		inverseOut, inverseErr := inverseUC.PreviewRequiredInputForOutput(ctx, &PreviewRequiredInputForOutputInput{
-			MerchantID:         merchantID,
-			SelectedChain:      chainCAIP2,
-			InputToken:         inputToken.ContractAddress,
-			OutputToken:        outputToken.ContractAddress,
-			TargetOutputAmount: target.String(),
-		})
-		if inverseErr == nil && inverseOut != nil {
-			required, parsed := new(big.Int).SetString(strings.TrimSpace(inverseOut.RequiredInputAmount), 10)
-			if parsed && required != nil && required.Sign() > 0 {
-				return required.String(), strings.TrimSpace(inverseOut.Route), strings.TrimSpace(inverseOut.PriceSource), nil
+	inversePreviewHint := ""
+	if !preferDryRunQuote(ctx) {
+		if inverseUC, ok := u.quoteUC.(createPaymentQuoteInversePreviewEngine); ok {
+			inverseOut, inverseErr := inverseUC.PreviewRequiredInputForOutput(ctx, &PreviewRequiredInputForOutputInput{
+				MerchantID:         merchantID,
+				SelectedChain:      chainCAIP2,
+				InputToken:         inputToken.ContractAddress,
+				OutputToken:        outputToken.ContractAddress,
+				TargetOutputAmount: target.String(),
+			})
+			if inverseErr != nil {
+				inversePreviewHint = strings.TrimSpace(inverseErr.Error())
+				createPaymentTraceWarn(ctx, "create_payment.inverse_preview_failed",
+					zap.String("probe_context", probeContext),
+					zap.Error(inverseErr),
+				)
+			}
+			if inverseErr == nil && inverseOut != nil {
+				required, parsed := new(big.Int).SetString(strings.TrimSpace(inverseOut.RequiredInputAmount), 10)
+				if parsed && required != nil && required.Sign() > 0 {
+					createPaymentTraceInfo(ctx, "create_payment.inverse_preview_success",
+						zap.String("probe_context", probeContext),
+						zap.String("required_input_atomic", required.String()),
+						zap.String("route", strings.TrimSpace(inverseOut.Route)),
+						zap.String("price_source", strings.TrimSpace(inverseOut.PriceSource)),
+						zap.Duration("latency", time.Since(startedAt)),
+					)
+					return required.String(), strings.TrimSpace(inverseOut.Route), strings.TrimSpace(inverseOut.PriceSource), nil
+				}
 			}
 		}
+	} else {
+		createPaymentTraceDebug(ctx, "create_payment.inverse_preview_skipped_dry_run",
+			zap.String("probe_context", probeContext),
+		)
 	}
 
-	quoteForInput := func(inputAmount *big.Int) (*big.Int, string, string, error) {
+	lastProbeZeroReason := ""
+	lastProbeError := ""
+	upperBoundProbes := 0
+	binarySearchProbes := 0
+
+	quoteForInput := func(stage string, iteration int, inputAmount *big.Int) (*big.Int, string, string, error) {
 		if inputAmount == nil || inputAmount.Sign() <= 0 {
 			return nil, "", "", domainerrors.BadRequest("input amount must be positive")
 		}
@@ -630,11 +852,29 @@ func (u *CreatePaymentUsecase) solveRequiredInputForTargetOutput(
 			persistedQuote = true
 		}
 		if err != nil {
-			if shouldTreatQuoteProbeAsZero(err) {
+			if treatAsZero, reason := shouldTreatQuoteProbeAsZero(err); treatAsZero {
 				// Tiny probe amounts can legitimately be unquotable on quoter paths.
 				// Treat as zero output so the search can continue to larger amounts.
+				if strings.TrimSpace(reason) != "" {
+					lastProbeZeroReason = strings.TrimSpace(reason)
+				}
+				createPaymentTraceDebug(ctx, "create_payment.inverse_estimation_probe_zero",
+					zap.String("probe_context", probeContext),
+					zap.String("stage", stage),
+					zap.Int("iteration", iteration),
+					zap.String("probe_input_atomic", inputAmount.String()),
+					zap.String("reason", reason),
+				)
 				return big.NewInt(0), "", "", nil
 			}
+			lastProbeError = strings.TrimSpace(err.Error())
+			createPaymentTraceWarn(ctx, "create_payment.inverse_estimation_probe_failed",
+				zap.String("probe_context", probeContext),
+				zap.String("stage", stage),
+				zap.Int("iteration", iteration),
+				zap.String("probe_input_atomic", inputAmount.String()),
+				zap.Error(err),
+			)
 			return nil, "", "", err
 		}
 		if quoteOut == nil {
@@ -650,6 +890,16 @@ func (u *CreatePaymentUsecase) solveRequiredInputForTargetOutput(
 		if !parsed || quotedOut == nil || quotedOut.Sign() < 0 {
 			return nil, "", "", domainerrors.InternalServerError("invalid temporary quote amount")
 		}
+		createPaymentTraceDebug(ctx, "create_payment.inverse_estimation_probe_success",
+			zap.String("probe_context", probeContext),
+			zap.String("stage", stage),
+			zap.Int("iteration", iteration),
+			zap.String("probe_input_atomic", inputAmount.String()),
+			zap.String("quoted_output_atomic", quotedOut.String()),
+			zap.String("quoted_output", smallestUnitToDecimalString(quotedOut.String(), outputToken.Decimals)),
+			zap.String("route", strings.TrimSpace(quoteOut.Route)),
+			zap.String("price_source", strings.TrimSpace(quoteOut.PriceSource)),
+		)
 		return quotedOut, quoteOut.Route, quoteOut.PriceSource, nil
 	}
 
@@ -658,14 +908,27 @@ func (u *CreatePaymentUsecase) solveRequiredInputForTargetOutput(
 	bestRoute := ""
 	bestSource := ""
 	foundUpperBound := false
+	lastQuotedOut := big.NewInt(0)
 
 	// Anchor probe narrows the initial interval substantially for near-linear pools.
 	// This cuts binary-search probes while preserving exact integer output checks.
-	anchorOut, route, source, anchorErr := quoteForInput(target)
+	anchorOut, route, source, anchorErr := quoteForInput("anchor", 0, target)
 	if anchorErr == nil && anchorOut != nil && anchorOut.Sign() > 0 {
 		bestRoute = route
 		bestSource = source
+		createPaymentTraceDebug(ctx, "create_payment.inverse_estimation_anchor_probe",
+			zap.String("probe_context", probeContext),
+			zap.String("anchor_input_atomic", target.String()),
+			zap.String("anchor_output_atomic", anchorOut.String()),
+		)
 		if anchorOut.Cmp(target) == 0 {
+			createPaymentTraceInfo(ctx, "create_payment.inverse_estimation_anchor_exact",
+				zap.String("probe_context", probeContext),
+				zap.String("required_input_atomic", target.String()),
+				zap.String("route", bestRoute),
+				zap.String("price_source", bestSource),
+				zap.Duration("latency", time.Since(startedAt)),
+			)
 			return target.String(), bestRoute, bestSource, nil
 		}
 
@@ -688,32 +951,74 @@ func (u *CreatePaymentUsecase) solveRequiredInputForTargetOutput(
 		}
 	}
 
-	for i := 0; i < 16; i++ {
-		quotedOut, route, source, err := quoteForInput(high)
+	for i := 0; i < maxCreatePaymentUpperBoundDoublings; i++ {
+		upperBoundProbes++
+		quotedOut, route, source, err := quoteForInput("upper_bound", i, high)
 		if err != nil {
 			return "", "", "", err
+		}
+		if quotedOut != nil && quotedOut.Sign() >= 0 {
+			lastQuotedOut = new(big.Int).Set(quotedOut)
 		}
 		if quotedOut.Cmp(target) >= 0 {
 			bestRoute = route
 			bestSource = source
 			foundUpperBound = true
+			createPaymentTraceDebug(ctx, "create_payment.inverse_estimation_upper_bound_found",
+				zap.String("probe_context", probeContext),
+				zap.Int("iteration", i),
+				zap.String("high_atomic", high.String()),
+				zap.String("quoted_output_atomic", quotedOut.String()),
+			)
 			break
 		}
 		high = new(big.Int).Mul(high, big.NewInt(2))
 	}
 
 	if !foundUpperBound {
+		createPaymentTraceWarn(ctx, "create_payment.inverse_estimation_upper_bound_missing",
+			zap.String("probe_context", probeContext),
+			zap.String("last_probe_zero_reason", lastProbeZeroReason),
+			zap.String("last_probe_error", lastProbeError),
+			zap.String("last_quoted_output_atomic", lastQuotedOut.String()),
+			zap.String("target_output_atomic", target.String()),
+			zap.String("inverse_hint", inversePreviewHint),
+			zap.Int("upper_bound_probes", upperBoundProbes),
+			zap.Duration("latency", time.Since(startedAt)),
+		)
+		if lastProbeZeroReason != "" {
+			return "", "", "", domainerrors.BadRequest(fmt.Sprintf("unable to estimate required source amount for requested invoice: %s (%s)", lastProbeZeroReason, probeContext))
+		}
+		if lastProbeError != "" {
+			return "", "", "", domainerrors.BadRequest(fmt.Sprintf("unable to estimate required source amount for requested invoice: %s (%s)", lastProbeError, probeContext))
+		}
+		if lastQuotedOut != nil && lastQuotedOut.Sign() > 0 {
+			targetHuman := smallestUnitToDecimalString(target.String(), outputToken.Decimals)
+			maxHuman := smallestUnitToDecimalString(lastQuotedOut.String(), outputToken.Decimals)
+			outputSymbol := strings.TrimSpace(outputToken.Symbol)
+			if outputSymbol == "" {
+				outputSymbol = "output_token"
+			}
+			if inversePreviewHint != "" {
+				return "", "", "", domainerrors.BadRequest(fmt.Sprintf("unable to estimate required source amount for requested invoice: requested amount likely exceeds available route liquidity (%s, target_output=%s %s, max_preview_output=%s %s, target_output_atomic=%s, max_quoted_output_atomic=%s, inverse_hint=%s). Reduce requested_amount below %s %s or increase pool liquidity.", probeContext, targetHuman, outputSymbol, maxHuman, outputSymbol, target.String(), lastQuotedOut.String(), inversePreviewHint, maxHuman, outputSymbol))
+			}
+			return "", "", "", domainerrors.BadRequest(fmt.Sprintf("unable to estimate required source amount for requested invoice: requested amount likely exceeds available route liquidity (%s, target_output=%s %s, max_preview_output=%s %s, target_output_atomic=%s, max_quoted_output_atomic=%s). Reduce requested_amount below %s %s or increase pool liquidity.", probeContext, targetHuman, outputSymbol, maxHuman, outputSymbol, target.String(), lastQuotedOut.String(), maxHuman, outputSymbol))
+		}
+		if inversePreviewHint != "" {
+			return "", "", "", domainerrors.BadRequest(fmt.Sprintf("unable to estimate required source amount for requested invoice: %s (%s)", inversePreviewHint, probeContext))
+		}
 		return "", "", "", domainerrors.BadRequest("unable to estimate required source amount for requested invoice")
 	}
 
-	for i := 0; i < 48 && low.Cmp(high) < 0; i++ {
+	for i := 0; i < maxCreatePaymentBinarySearchIterations && low.Cmp(high) < 0; i++ {
+		binarySearchProbes++
 		mid := new(big.Int).Add(low, high)
 		mid.Div(mid, big.NewInt(2))
 		if mid.Sign() <= 0 {
 			mid = big.NewInt(1)
 		}
 
-		quotedOut, route, source, err := quoteForInput(mid)
+		quotedOut, route, source, err := quoteForInput("binary_search", i, mid)
 		if err != nil {
 			return "", "", "", err
 		}
@@ -726,37 +1031,70 @@ func (u *CreatePaymentUsecase) solveRequiredInputForTargetOutput(
 		}
 	}
 
+	createPaymentTraceInfo(ctx, "create_payment.inverse_estimation_success",
+		zap.String("probe_context", probeContext),
+		zap.String("required_input_atomic", high.String()),
+		zap.String("required_input", smallestUnitToDecimalString(high.String(), inputToken.Decimals)),
+		zap.String("target_output_atomic", target.String()),
+		zap.String("target_output", smallestUnitToDecimalString(target.String(), outputToken.Decimals)),
+		zap.String("route", bestRoute),
+		zap.String("price_source", bestSource),
+		zap.Int("upper_bound_probes", upperBoundProbes),
+		zap.Int("binary_search_probes", binarySearchProbes),
+		zap.Duration("latency", time.Since(startedAt)),
+	)
 	return high.String(), bestRoute, bestSource, nil
 }
 
-func shouldTreatQuoteProbeAsZero(err error) bool {
+func shouldTreatQuoteProbeAsZero(err error) (bool, string) {
 	if err == nil {
-		return false
+		return false, ""
 	}
 	var appErr *domainerrors.AppError
 	if !errors.As(err, &appErr) {
-		return false
+		return false, ""
 	}
 	if appErr.Status != 400 {
-		return false
+		return false, ""
 	}
 	message := strings.ToLower(strings.TrimSpace(appErr.Message))
 	if message == "" {
-		return false
+		return false, ""
 	}
 	if strings.Contains(message, "placeholder quote") {
-		return true
+		return true, "accurate quote unavailable for selected pair"
 	}
 	if strings.Contains(message, "no usable v3 fee tier found") {
-		return true
+		return true, "selected token pair has no usable route on selected chain"
 	}
 	if strings.Contains(message, "amountout <= 0") {
-		return true
+		return true, "selected token pair returned zero output for probed amounts"
 	}
-	return false
+	return false, ""
 }
 
-func (u *CreatePaymentUsecase) createCompositeQuote(ctx context.Context, merchantID uuid.UUID, selectedChainCAIP2 string, selectedToken *entities.Token, invoiceCurrency string, invoiceDecimals int, invoiceAtomic string, quotedAmount string, priceSource string, route string) (*CreatePartnerQuoteOutput, error) {
+func annotateCreatePaymentEstimateError(prefix string, err error) error {
+	if err == nil {
+		return nil
+	}
+	prefix = strings.TrimSpace(prefix)
+	if prefix == "" {
+		return err
+	}
+
+	var appErr *domainerrors.AppError
+	if errors.As(err, &appErr) {
+		message := strings.TrimSpace(appErr.Message)
+		if message == "" {
+			message = strings.TrimSpace(err.Error())
+		}
+		return domainerrors.NewAppError(appErr.Status, appErr.Code, fmt.Sprintf("%s: %s", prefix, message), appErr.Err)
+	}
+
+	return domainerrors.BadRequest(fmt.Sprintf("%s: %s", prefix, strings.TrimSpace(err.Error())))
+}
+
+func (u *CreatePaymentUsecase) createCompositeQuote(ctx context.Context, merchantID uuid.UUID, selectedChainCAIP2 string, selectedToken *entities.Token, invoiceCurrency string, invoiceDecimals int, invoiceAtomic string, quotedAmount string, priceSource string, route string, expiresAt time.Time) (*CreatePartnerQuoteOutput, error) {
 	now := time.Now().UTC()
 	quote := &entities.PaymentQuote{
 		ID:                    utils.GenerateUUIDv7(),
@@ -773,7 +1111,7 @@ func (u *CreatePaymentUsecase) createCompositeQuote(ctx context.Context, merchan
 		Route:                 route,
 		SlippageBps:           partnerQuoteSlippage,
 		RateTimestamp:         now,
-		ExpiresAt:             now.Add(partnerQuoteTTL),
+		ExpiresAt:             expiresAt,
 		Status:                entities.PaymentQuoteStatusActive,
 		CreatedAt:             now,
 		UpdatedAt:             now,

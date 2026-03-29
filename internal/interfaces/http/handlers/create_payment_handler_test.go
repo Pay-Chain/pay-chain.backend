@@ -17,11 +17,13 @@ import (
 )
 
 type createPaymentUsecaseStub struct {
-	out *usecases.CreatePaymentOutput
-	err error
+	out       *usecases.CreatePaymentOutput
+	err       error
+	lastInput *usecases.CreatePaymentInput
 }
 
 func (s *createPaymentUsecaseStub) CreatePayment(ctx context.Context, input *usecases.CreatePaymentInput) (*usecases.CreatePaymentOutput, error) {
+	s.lastInput = input
 	return s.out, s.err
 }
 
@@ -60,7 +62,8 @@ func TestCreatePaymentHandler_ResponseShape(t *testing.T) {
 	out.PaymentInstruction.Value = "0"
 	out.PaymentInstruction.Data = "0xafc93ccd"
 
-	handler := NewCreatePaymentHandler(&createPaymentUsecaseStub{out: out})
+	stub := &createPaymentUsecaseStub{out: out}
+	handler := NewCreatePaymentHandler(stub)
 	r := gin.New()
 	r.POST("/api/v1/create-payment", func(c *gin.Context) {
 		c.Set(middleware.MerchantIDKey, uuid.MustParse("0195d4b4-1e2c-7f2f-9aa1-123456789012"))
@@ -71,7 +74,8 @@ func TestCreatePaymentHandler_ResponseShape(t *testing.T) {
 		"chain_id":"eip155:8453",
 		"selected_token":"0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
 		"pricing_type":"invoice_currency",
-		"requested_amount":"50000"
+		"requested_amount":"50000",
+		"expires_in":"unlimited"
 	}`))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -94,6 +98,88 @@ func TestCreatePaymentHandler_ResponseShape(t *testing.T) {
 	require.Equal(t, float64(6), got["quoted_token_decimals"])
 	require.Equal(t, "eyJ.mock", got["payment_code"])
 	require.NotEmpty(t, got["payment_instruction"])
+	require.NotNil(t, stub.lastInput)
+	require.Equal(t, "unlimited", stub.lastInput.ExpiresIn)
+}
+
+func TestCreatePaymentHandler_CreatePaymentAdmin_UsesPathMerchantID(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	out := &usecases.CreatePaymentOutput{PaymentID: "0195-payment"}
+	stub := &createPaymentUsecaseStub{out: out}
+	handler := NewCreatePaymentHandler(stub)
+
+	r := gin.New()
+	r.POST("/api/v1/admin/merchants/:id/create-payment", handler.CreatePaymentAdmin)
+
+	merchantID := "0195d4b4-1e2c-7f2f-9aa1-123456789012"
+	req, _ := http.NewRequest("POST", "/api/v1/admin/merchants/"+merchantID+"/create-payment", strings.NewReader(`{
+		"merchant_id":"0195d4b4-1e2c-7f2f-9aa1-123456789012",
+		"chain_id":"eip155:8453",
+		"selected_token":"0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+		"pricing_type":"invoice_currency",
+		"requested_amount":"50000",
+		"expires_in":"180"
+	}`))
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	require.NotNil(t, stub.lastInput)
+	require.Equal(t, uuid.MustParse(merchantID), stub.lastInput.MerchantContextID)
+	require.Equal(t, uuid.MustParse(merchantID), stub.lastInput.MerchantID)
+	require.Equal(t, "180", stub.lastInput.ExpiresIn)
+}
+
+func TestCreatePaymentHandler_CreatePaymentAdmin_MerchantIDMismatch(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	stub := &createPaymentUsecaseStub{out: &usecases.CreatePaymentOutput{PaymentID: "0195-payment"}}
+	handler := NewCreatePaymentHandler(stub)
+
+	r := gin.New()
+	r.POST("/api/v1/admin/merchants/:id/create-payment", handler.CreatePaymentAdmin)
+
+	req, _ := http.NewRequest("POST", "/api/v1/admin/merchants/0195d4b4-1e2c-7f2f-9aa1-123456789012/create-payment", strings.NewReader(`{
+		"merchant_id":"0195d4b4-1e2c-7f2f-9aa1-000000000000",
+		"chain_id":"eip155:8453",
+		"selected_token":"0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+		"pricing_type":"invoice_currency",
+		"requested_amount":"50000"
+	}`))
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusBadRequest, w.Code)
+	require.Nil(t, stub.lastInput)
+}
+
+func TestCreatePaymentHandler_CreatePaymentAdmin_InvalidPathMerchantID(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	stub := &createPaymentUsecaseStub{out: &usecases.CreatePaymentOutput{PaymentID: "0195-payment"}}
+	handler := NewCreatePaymentHandler(stub)
+
+	r := gin.New()
+	r.POST("/api/v1/admin/merchants/:id/create-payment", handler.CreatePaymentAdmin)
+
+	req, _ := http.NewRequest("POST", "/api/v1/admin/merchants/not-a-uuid/create-payment", strings.NewReader(`{
+		"chain_id":"eip155:8453",
+		"selected_token":"0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+		"pricing_type":"invoice_currency",
+		"requested_amount":"50000"
+	}`))
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusBadRequest, w.Code)
+	require.Nil(t, stub.lastInput)
 }
 
 func TestCreatePaymentHandler_GetPayment_ResponseShape(t *testing.T) {

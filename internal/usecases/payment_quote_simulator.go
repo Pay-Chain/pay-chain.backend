@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 	"payment-kita.backend/internal/domain/entities"
 	"payment-kita.backend/internal/infrastructure/blockchain"
 )
@@ -41,6 +42,12 @@ func (u *PaymentUsecase) getSimulatorBackedPartnerQuote(
 	tokenIn, tokenOut string,
 	amountIn *big.Int,
 ) (*AccurateSwapQuoteResult, error) {
+	createPaymentTraceDebug(ctx, "payment_quote_simulator.start",
+		zap.String("chain_uuid", chainID.String()),
+		zap.String("token_in", normalizeEvmAddress(tokenIn)),
+		zap.String("token_out", normalizeEvmAddress(tokenOut)),
+		zap.String("amount_in_atomic", safeBigIntString(amountIn)),
+	)
 	if amountIn == nil || amountIn.Sign() <= 0 {
 		return nil, fmt.Errorf("amountIn must be positive")
 	}
@@ -54,9 +61,25 @@ func (u *PaymentUsecase) getSimulatorBackedPartnerQuote(
 	// Primary free fallback: use RPC dry-run quote path (no external simulator service required).
 	var rpcDryRunErr error
 	if rpcQuote, rpcErr := u.getRPCDryRunPartnerQuote(ctx, chainID, tokenIn, tokenOut, amountIn); rpcErr == nil && rpcQuote != nil {
+		createPaymentTraceDebug(ctx, "payment_quote_simulator.rpc_dry_run_success",
+			zap.String("chain_uuid", chainID.String()),
+			zap.String("token_in", normalizeEvmAddress(tokenIn)),
+			zap.String("token_out", normalizeEvmAddress(tokenOut)),
+			zap.String("amount_in_atomic", amountIn.String()),
+			zap.String("amount_out_atomic", safeBigIntString(rpcQuote.AmountOut)),
+			zap.String("price_source", strings.TrimSpace(rpcQuote.PriceSource)),
+			zap.String("route_summary", strings.TrimSpace(rpcQuote.RouteSummary)),
+		)
 		return rpcQuote, nil
 	} else if rpcErr != nil {
 		rpcDryRunErr = rpcErr
+		createPaymentTraceWarn(ctx, "payment_quote_simulator.rpc_dry_run_failed",
+			zap.String("chain_uuid", chainID.String()),
+			zap.String("token_in", normalizeEvmAddress(tokenIn)),
+			zap.String("token_out", normalizeEvmAddress(tokenOut)),
+			zap.String("amount_in_atomic", amountIn.String()),
+			zap.Error(rpcErr),
+		)
 	}
 
 	// Optional secondary fallback: external simulator service (if configured).
@@ -80,6 +103,16 @@ func (u *PaymentUsecase) getSimulatorBackedPartnerQuote(
 	if contract, contractErr := u.contractRepo.GetActiveContract(ctx, chain.ID, entities.ContractTypeTokenSwapper); contractErr == nil && contract != nil {
 		swapperAddress = contract.ContractAddress
 	}
+	createPaymentTraceDebug(ctx, "payment_quote_simulator.external_request_start",
+		zap.String("chain_caip2", chain.GetCAIP2ID()),
+		zap.String("chain_uuid", chain.ID.String()),
+		zap.String("token_in", normalizeEvmAddress(tokenIn)),
+		zap.String("token_out", normalizeEvmAddress(tokenOut)),
+		zap.String("amount_in_atomic", amountIn.String()),
+		zap.String("rpc_url", strings.TrimSpace(chain.RPCURL)),
+		zap.String("swapper_address", strings.TrimSpace(swapperAddress)),
+		zap.String("simulator_endpoint", endpoint),
+	)
 
 	requestPayload := simulatorQuoteRequest{
 		ChainID:        chain.GetCAIP2ID(),
@@ -120,6 +153,10 @@ func (u *PaymentUsecase) getSimulatorBackedPartnerQuote(
 
 	respBody, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		createPaymentTraceWarn(ctx, "payment_quote_simulator.external_request_failed",
+			zap.String("simulator_endpoint", endpoint),
+			zap.Int("status_code", resp.StatusCode),
+		)
 		return nil, fmt.Errorf("simulator quote failed with status %d", resp.StatusCode)
 	}
 
@@ -134,6 +171,15 @@ func (u *PaymentUsecase) getSimulatorBackedPartnerQuote(
 	if amountOut.Cmp(amountIn) == 0 && !strings.EqualFold(tokenIn, tokenOut) {
 		return nil, fmt.Errorf("simulator quote returned 1:1 placeholder amount")
 	}
+	createPaymentTraceDebug(ctx, "payment_quote_simulator.external_request_success",
+		zap.String("chain_caip2", chain.GetCAIP2ID()),
+		zap.String("token_in", normalizeEvmAddress(tokenIn)),
+		zap.String("token_out", normalizeEvmAddress(tokenOut)),
+		zap.String("amount_in_atomic", amountIn.String()),
+		zap.String("amount_out_atomic", amountOut.String()),
+		zap.String("price_source", strings.TrimSpace(priceSource)),
+		zap.String("route_summary", strings.TrimSpace(routeSummary)),
+	)
 
 	return &AccurateSwapQuoteResult{
 		AmountOut:    amountOut,
@@ -149,6 +195,12 @@ func (u *PaymentUsecase) getRPCDryRunPartnerQuote(
 	amountIn *big.Int,
 ) (*AccurateSwapQuoteResult, error) {
 	ctx = withQuoteRequestCache(ctx)
+	createPaymentTraceDebug(ctx, "payment_quote_simulator.rpc_dry_run_start",
+		zap.String("chain_uuid", chainID.String()),
+		zap.String("token_in", normalizeEvmAddress(tokenIn)),
+		zap.String("token_out", normalizeEvmAddress(tokenOut)),
+		zap.String("amount_in_atomic", safeBigIntString(amountIn)),
+	)
 	chain, err := u.chainRepo.GetByID(ctx, chainID)
 	if err != nil {
 		return nil, err
@@ -161,6 +213,11 @@ func (u *PaymentUsecase) getRPCDryRunPartnerQuote(
 	if err != nil {
 		return nil, err
 	}
+	createPaymentTraceDebug(ctx, "payment_quote_simulator.rpc_dry_run_contracts",
+		zap.String("chain_caip2", chain.GetCAIP2ID()),
+		zap.String("chain_name", chain.Name),
+		zap.String("swapper_address", strings.TrimSpace(swapper.ContractAddress)),
+	)
 	swapperABI, err := u.getCachedResolvedABI(ctx, chain.ID, entities.ContractTypeTokenSwapper)
 	if err != nil {
 		return nil, err
@@ -173,11 +230,19 @@ func (u *PaymentUsecase) getRPCDryRunPartnerQuote(
 	if len(routePath) < 2 {
 		return nil, fmt.Errorf("rpc dry-run quote unavailable because route path is empty")
 	}
+	createPaymentTraceDebug(ctx, "payment_quote_simulator.rpc_dry_run_route",
+		zap.String("chain_caip2", chain.GetCAIP2ID()),
+		zap.Strings("route_path", routePath),
+	)
 
 	quoterV3, err := u.getCachedQuoterV3(ctx, client, chain.ID, chain, swapper.ContractAddress)
 	if err != nil {
 		return nil, err
 	}
+	createPaymentTraceDebug(ctx, "payment_quote_simulator.rpc_dry_run_quoter",
+		zap.String("chain_caip2", chain.GetCAIP2ID()),
+		zap.String("quoter_v3", quoterV3.Hex()),
+	)
 
 	currentAmount := new(big.Int).Set(amountIn)
 	for i := 0; i < len(routePath)-1; i++ {
@@ -185,6 +250,15 @@ func (u *PaymentUsecase) getRPCDryRunPartnerQuote(
 		hopOut := normalizeEvmAddress(routePath[i+1])
 
 		active, feeTier, _ := u.getCachedV3PoolConfig(ctx, client, chain.ID, swapper.ContractAddress, hopIn, hopOut)
+		createPaymentTraceDebug(ctx, "payment_quote_simulator.rpc_dry_run_hop_start",
+			zap.String("chain_caip2", chain.GetCAIP2ID()),
+			zap.Int("hop_index", i),
+			zap.String("hop_in", hopIn),
+			zap.String("hop_out", hopOut),
+			zap.Bool("configured_active", active),
+			zap.Uint32("configured_fee_tier", feeTier),
+			zap.String("amount_in_atomic", currentAmount.String()),
+		)
 		quotedHopAmount, quoteErr := quoteHopV3WithDryRunFees(ctx, client, quoterV3.Hex(), hopIn, hopOut, currentAmount, active, feeTier)
 		if quoteErr != nil {
 			return nil, fmt.Errorf("rpc dry-run quote unavailable for hop %s -> %s: %w", hopIn, hopOut, quoteErr)
@@ -192,6 +266,14 @@ func (u *PaymentUsecase) getRPCDryRunPartnerQuote(
 		if quotedHopAmount == nil || quotedHopAmount.Sign() <= 0 {
 			return nil, fmt.Errorf("rpc dry-run quote returned invalid hop amount")
 		}
+		createPaymentTraceDebug(ctx, "payment_quote_simulator.rpc_dry_run_hop_success",
+			zap.String("chain_caip2", chain.GetCAIP2ID()),
+			zap.Int("hop_index", i),
+			zap.String("hop_in", hopIn),
+			zap.String("hop_out", hopOut),
+			zap.String("amount_in_atomic", currentAmount.String()),
+			zap.String("amount_out_atomic", quotedHopAmount.String()),
+		)
 		currentAmount = quotedHopAmount
 	}
 
@@ -219,8 +301,21 @@ func quoteHopV3WithDryRunFees(
 	// Respect on-chain configured fee tier first to avoid accidentally selecting
 	// a different pool tier that yields unstable/unintended quotes.
 	if configuredActive && configuredFee > 0 {
+		createPaymentTraceDebug(ctx, "payment_quote_simulator.rpc_dry_run_fee_probe",
+			zap.String("token_in", tokenIn),
+			zap.String("token_out", tokenOut),
+			zap.Uint32("fee_tier", configuredFee),
+			zap.String("amount_in_atomic", safeBigIntString(amountIn)),
+			zap.Bool("configured_fee", true),
+		)
 		amountOut, err := callQuoterV3ExactInputSingle(ctx, client, quoterAddress, tokenIn, tokenOut, amountIn, configuredFee)
 		if err == nil && amountOut != nil && amountOut.Sign() > 0 {
+			createPaymentTraceDebug(ctx, "payment_quote_simulator.rpc_dry_run_fee_probe_success",
+				zap.String("token_in", tokenIn),
+				zap.String("token_out", tokenOut),
+				zap.Uint32("fee_tier", configuredFee),
+				zap.String("amount_out_atomic", amountOut.String()),
+			)
 			return amountOut, nil
 		}
 		if err != nil {
@@ -235,8 +330,21 @@ func quoteHopV3WithDryRunFees(
 		if configuredFee > 0 && fee == configuredFee {
 			continue
 		}
+		createPaymentTraceDebug(ctx, "payment_quote_simulator.rpc_dry_run_fee_probe",
+			zap.String("token_in", tokenIn),
+			zap.String("token_out", tokenOut),
+			zap.Uint32("fee_tier", fee),
+			zap.String("amount_in_atomic", safeBigIntString(amountIn)),
+			zap.Bool("configured_fee", false),
+		)
 		amountOut, err := callQuoterV3ExactInputSingle(ctx, client, quoterAddress, tokenIn, tokenOut, amountIn, fee)
 		if err == nil && amountOut != nil && amountOut.Sign() > 0 {
+			createPaymentTraceDebug(ctx, "payment_quote_simulator.rpc_dry_run_fee_probe_success",
+				zap.String("token_in", tokenIn),
+				zap.String("token_out", tokenOut),
+				zap.Uint32("fee_tier", fee),
+				zap.String("amount_out_atomic", amountOut.String()),
+			)
 			return amountOut, nil
 		}
 		if err != nil {
@@ -339,4 +447,11 @@ func extractStringFromAny(payload map[string]interface{}, keys ...string) string
 		}
 	}
 	return ""
+}
+
+func safeBigIntString(v *big.Int) string {
+	if v == nil {
+		return ""
+	}
+	return v.String()
 }

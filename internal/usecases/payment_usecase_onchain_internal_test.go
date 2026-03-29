@@ -169,7 +169,7 @@ func TestPaymentUsecase_CalculateOnchainApprovalAmount_FallbackFeePath(t *testin
 	payment := &entities.Payment{SourceChainID: chainID, SourceAmount: "1000", TotalCharged: "1000"}
 	amount, err := u.CalculateOnchainApprovalAmount(payment, "0x1111111111111111111111111111111111111111")
 	require.NoError(t, err)
-	require.Equal(t, "1010", amount)
+	require.Equal(t, "2010", amount)
 }
 
 func TestPaymentUsecase_ResolveVaultAddressForApproval_FromGatewayView(t *testing.T) {
@@ -395,6 +395,6 @@ func TestPaymentUsecase_CalculateOnchainApprovalAmount_ErrorBranches(t *testing.
 			TotalCharged:  "invalid",
 		}, "0x1111111111111111111111111111111111111111")
 		require.NoError(t, err)
-		require.Equal(t, "1005", amount)
+		require.Equal(t, "2005", amount)
 	})
 }

@@ -10,9 +10,9 @@ import (
 )
 
 var (
-	log  *zap.Logger
-	once sync.Once
-	atom zap.AtomicLevel
+	log         *zap.Logger
+	once        sync.Once
+	atom        zap.AtomicLevel
 	buildLogger = func(config zap.Config) (*zap.Logger, error) {
 		return config.Build(zap.AddCallerSkip(1))
 	}
@@ -53,8 +53,13 @@ func GetLogger() *zap.Logger {
 
 // WithContext adds context fields (request_id) to the logger
 func WithContext(ctx context.Context) *zap.Logger {
+	base := log
+	if base == nil {
+		base = zap.NewNop()
+	}
+
 	if ctx == nil {
-		return log
+		return base
 	}
 
 	var fields []zap.Field
@@ -67,9 +72,9 @@ func WithContext(ctx context.Context) *zap.Logger {
 	}
 
 	if len(fields) > 0 {
-		return log.With(fields...)
+		return base.With(fields...)
 	}
-	return log
+	return base
 }
 
 // Info logs a message at InfoLevel

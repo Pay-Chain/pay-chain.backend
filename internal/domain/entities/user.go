@@ -49,6 +49,11 @@ type CreateUserInput struct {
 	WalletAddress   string `json:"walletAddress" binding:"required"`
 	WalletChainID   string `json:"walletChainId" binding:"required"` // The NetworkID (e.g. "84532")
 	WalletSignature string `json:"walletSignature" binding:"required"`
+
+	// Merchant fields (unified registration)
+	IsMerchant   bool   `json:"isMerchant"`
+	BusinessName string `json:"businessName"`
+	MerchantType string `json:"merchantType"`
 }
 
 // LoginInput represents input for user login

@@ -573,6 +573,8 @@ func createPartnerHTTPFlowTables(t *testing.T, db *gorm.DB) {
 		instruction_data_hex TEXT,
 		instruction_data_base58 TEXT,
 		instruction_data_base64 TEXT,
+		instruction_approval_to TEXT,
+		instruction_approval_data_hex TEXT,
 		quote_rate TEXT,
 		quote_source TEXT,
 		quote_route TEXT,

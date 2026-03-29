@@ -34,6 +34,8 @@ type AuthUsecase struct {
 	emailVerifRepo repositories.EmailVerificationRepository
 	walletRepo     repositories.WalletRepository
 	chainRepo      repositories.ChainRepository
+	merchantRepo   repositories.MerchantRepository
+	uow            repositories.UnitOfWork
 	chainResolver  *ChainResolver
 	jwtService     *jwt.JWTService
 }
@@ -44,6 +46,8 @@ func NewAuthUsecase(
 	emailVerifRepo repositories.EmailVerificationRepository,
 	walletRepo repositories.WalletRepository,
 	chainRepo repositories.ChainRepository,
+	merchantRepo repositories.MerchantRepository,
+	uow repositories.UnitOfWork,
 	jwtService *jwt.JWTService,
 ) *AuthUsecase {
 	return &AuthUsecase{
@@ -51,6 +55,8 @@ func NewAuthUsecase(
 		emailVerifRepo: emailVerifRepo,
 		walletRepo:     walletRepo,
 		chainRepo:      chainRepo,
+		merchantRepo:   merchantRepo,
+		uow:            uow,
 		chainResolver:  NewChainResolver(chainRepo),
 		jwtService:     jwtService,
 	}
@@ -98,41 +104,71 @@ func (u *AuthUsecase) Register(ctx context.Context, input *entities.CreateUserIn
 		return nil, "", err
 	}
 
-	// Create user
-	user := &entities.User{
-		Email:        input.Email,
-		Name:         input.Name,
-		PasswordHash: passwordHash,
-		Role:         entities.UserRoleUser,
-		KYCStatus:    entities.KYCNotStarted,
-	}
+	var user *entities.User
+	var token string
 
-	if err := u.userRepo.Create(ctx, user); err != nil {
-		return nil, "", err
-	}
+	// Execute User + Wallet + Merchant creation in a transaction
+	err = u.uow.Do(ctx, func(txCtx context.Context) error {
+		userRole := entities.UserRoleUser
+		if input.IsMerchant {
+			userRole = entities.UserRolePartner
+		}
 
-	// Create wallet linked to user (as primary)
-	wallet := &entities.Wallet{
-		UserID:    &user.ID,
-		ChainID:   chainUUID,
-		Address:   input.WalletAddress,
-		IsPrimary: true,
-	}
+		// Create user
+		user = &entities.User{
+			Email:        input.Email,
+			Name:         input.Name,
+			PasswordHash: passwordHash,
+			Role:         userRole,
+			KYCStatus:    entities.KYCNotStarted,
+		}
 
-	if err := u.walletRepo.Create(ctx, wallet); err != nil {
-		// Rollback user creation would be ideal here
-		// For now, log and continue (user exists but wallet failed)
-		return nil, "", err
-	}
+		if err := u.userRepo.Create(txCtx, user); err != nil {
+			return err
+		}
 
-	// Generate verification token
-	token, err := authGenerateVerificationToken()
+		// Create wallet linked to user (as primary)
+		wallet := &entities.Wallet{
+			UserID:    &user.ID,
+			ChainID:   chainUUID,
+			Address:   input.WalletAddress,
+			IsPrimary: true,
+		}
+
+		if err := u.walletRepo.Create(txCtx, wallet); err != nil {
+			return err
+		}
+
+		// Create Merchant record if applicable
+		if input.IsMerchant {
+			merchant := &entities.Merchant{
+				UserID:        user.ID,
+				BusinessName:  input.BusinessName,
+				BusinessEmail: input.Email,
+				MerchantType:  entities.MerchantType(input.MerchantType),
+				Status:        entities.MerchantStatusPending,
+			}
+			if err := u.merchantRepo.Create(txCtx, merchant); err != nil {
+				return err
+			}
+		}
+
+		// Generate verification token
+		var genErr error
+		token, genErr = authGenerateVerificationToken()
+		if genErr != nil {
+			return genErr
+		}
+
+		// Save verification token
+		if err := u.emailVerifRepo.Create(txCtx, user.ID, token); err != nil {
+			return err
+		}
+
+		return nil
+	})
+
 	if err != nil {
-		return nil, "", err
-	}
-
-	// Save verification token
-	if err := u.emailVerifRepo.Create(ctx, user.ID, token); err != nil {
 		return nil, "", err
 	}
 

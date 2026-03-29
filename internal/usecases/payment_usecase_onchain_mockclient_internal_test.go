@@ -115,8 +115,8 @@ func TestPaymentUsecase_CalculateOnchainApprovalAmount_MockClientBranches(t *tes
 			TotalCharged:  "1200",
 		}, "0x1111111111111111111111111111111111111111")
 		require.NoError(t, err)
-		// amount + max(fixed=10, percentage=100) => 1100, then max(totalCharged=1200)
-		require.Equal(t, "1200", val)
+		// amount + max(fixed=10, percentage=100) => 1100, then max(totalCharged=1200), then safety buffer min 1000.
+		require.Equal(t, "2200", val)
 	})
 
 	t.Run("quote call error then fallback succeeds", func(t *testing.T) {
@@ -136,7 +136,7 @@ func TestPaymentUsecase_CalculateOnchainApprovalAmount_MockClientBranches(t *tes
 			TotalCharged:  "1000",
 		}, "0x1111111111111111111111111111111111111111")
 		require.NoError(t, err)
-		require.Equal(t, "1010", val)
+		require.Equal(t, "2010", val)
 	})
 
 	t.Run("totalCharged parse fallback and RPC list resolution", func(t *testing.T) {
